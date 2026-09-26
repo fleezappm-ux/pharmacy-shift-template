@@ -1,7 +1,7 @@
 import { CommentVisibility, LeaveRequest, LeaveRequestStatus, LeaveRequestType, PaidLeaveBalance } from "../types";
 import { getEmployeeToken, getManagementApiKey, getShiftSession } from "./auth-sync";
-
 import { getGasUrl } from "./gas-config";
+
 const SHIFT_API_KEY_STORAGE = "shift_api_key";
 
 async function request(action: string, payload: Record<string, unknown>, requireKey = false) {
@@ -55,6 +55,10 @@ export async function cancelLeaveRequest(id: string): Promise<LeaveRequest> {
 export async function updateLeaveRequestStatus(id: string, status: LeaveRequestStatus, rejectionReason = ""): Promise<LeaveRequest> {
   const json = await request("updateShiftLeaveRequestStatus", { shiftApiKey: getManagementApiKey(), id, status, rejectionReason });
   return json.request as LeaveRequest;
+}
+
+export async function deleteLeaveRequest(id: string): Promise<void> {
+  await request("deleteShiftLeaveRequest", { shiftApiKey: getManagementApiKey(), id }, true);
 }
 
 export async function updateLeaveRequestWorkTime(id: string, desiredWorkStart: string, desiredWorkEnd: string): Promise<LeaveRequest> {
