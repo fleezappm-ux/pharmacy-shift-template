@@ -64,7 +64,7 @@ import { HomeView, sortEmployeesForDisplay } from "./components/HomeView";
 import { LeaveRequestView } from "./components/LeaveRequestView";
 import { LeaveRequestManager } from "./components/LeaveRequestManager";
 import { PersonalShiftList } from "./components/PersonalShiftList";
-import { cancelLeaveRequest, fetchLeaveRequests, fetchPaidLeaveBalance, savePaidLeaveBalance, submitLeaveRequest, updateLeaveRequestStatus, updateLeaveRequestWorkTime } from "./lib/leave-request-sync";
+import { cancelLeaveRequest, deleteLeaveRequest, fetchLeaveRequests, fetchPaidLeaveBalance, savePaidLeaveBalance, submitLeaveRequest, updateLeaveRequestStatus, updateLeaveRequestWorkTime } from "./lib/leave-request-sync";
 import { SpecialDaySettings } from "./components/SpecialDaySettings";
 import { fetchSpecialDayRules, saveSpecialDayRules } from "./lib/special-day-sync";
 import { buildDisplayRemarks, colorForRemark, DEFAULT_SPECIAL_DAY_RULES, findSpecialDayRule, withDefaultSpecialDayRules } from "./lib/special-day-utils";
@@ -234,6 +234,7 @@ export default function App() {
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [leaveRequestLoading, setLeaveRequestLoading] = useState(false);
   const [homeBoardRequests, setHomeBoardRequests] = useState<LeaveRequest[]>([]);
+  const [homePendingCorrections, setHomePendingCorrections] = useState<LeaveRequest[]>([]);
   const [boardPeriods, setBoardPeriods] = useState<BoardPeriod[]>([]);
   const [boardAnchor, setBoardAnchor] = useState(() => getCurrentShiftMonth(new Date(), { startDay: 21, endDay: 20 }));
   const [correctionVisibility, setCorrectionVisibility] = useState<"all" | "private">("all");
@@ -364,9 +365,23 @@ export default function App() {
 
   useEffect(() => {
     if (!appSession?.token) return;
+    let cancelled = false;
     const range = generateConfiguredDateRange(homeBoardMonth.getFullYear(), homeBoardMonth.getMonth() + 1, calendarPeriodSettings.startDay, calendarPeriodSettings.endDay);
-    fetchLeaveRequests(getDateStr(range[0]), getDateStr(range[range.length - 1])).then(setHomeBoardRequests).catch(() => setHomeBoardRequests([]));
-  }, [appSession?.token, leaveRequests, isLocked, currentMonthKey, calendarPeriodSettings.startDay, calendarPeriodSettings.endDay]);
+    const requestsFor = (start: Date, end: Date) => fetchLeaveRequests(getDateStr(start), getDateStr(end));
+    const load = async () => {
+      const current = await requestsFor(range[0], range[range.length - 1]);
+      if (cancelled) return;
+      setHomeBoardRequests(current);
+      const earlier = await Promise.all([-2, -1].map(offset => {
+        const anchor = addMonths(homeBoardMonth, offset);
+        const dates = generateConfiguredDateRange(anchor.getFullYear(), anchor.getMonth() + 1, calendarPeriodSettings.startDay, calendarPeriodSettings.endDay);
+        return requestsFor(dates[0], dates[dates.length - 1]);
+      }));
+      if (!cancelled) setHomePendingCorrections([...earlier.flat(), ...current].filter(item => item.type === "訂正依頼" && item.status === "申請中"));
+    };
+    void load().catch(error => { console.error("ホームのお知らせ取得に失敗しました", error); if (!cancelled) { setHomeBoardRequests([]); setHomePendingCorrections([]); } });
+    return () => { cancelled = true; };
+  }, [appSession?.token, appSession?.role, leaveRequests, isLocked, currentMonthKey, calendarPeriodSettings.startDay, calendarPeriodSettings.endDay]);
 
   useEffect(() => {
     if (!appSession?.token || activeTab !== "board") return;
@@ -697,12 +712,14 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, appSession?.token]);
 
-  const handleLeaveRequestSubmit = async (input: { employeeId: string; employeeName: string; date: string; type: LeaveRequestType; comment: string; commentVisibility: CommentVisibility }) => {
-    if (!dateRange.length) throw new Error("対象期間がありません");
+  const handleLeaveRequestSubmit = async (input: { employeeId: string; employeeName: string; date: string; periodStart: string; periodEnd: string; type: LeaveRequestType; comment: string; commentVisibility: CommentVisibility }) => {
+    if (!input.periodStart || !input.periodEnd) throw new Error("対象期間がありません");
     setLeaveRequestLoading(true);
     try {
-      const saved = await submitLeaveRequest({ ...input, periodStart: getDateStr(dateRange[0]), periodEnd: getDateStr(dateRange[dateRange.length - 1]) });
-      setLeaveRequests(prev => [...prev.filter(item => item.id !== saved.id && !(item.employeeName === saved.employeeName && item.date === saved.date && (item.type === "訂正依頼") === (saved.type === "訂正依頼"))), saved]);
+      const saved = await submitLeaveRequest(input);
+      if (dateRange.length && input.periodStart === getDateStr(dateRange[0])) {
+        setLeaveRequests(prev => [...prev.filter(item => item.id !== saved.id && !(item.employeeName === saved.employeeName && item.date === saved.date && (item.type === "訂正依頼") === (saved.type === "訂正依頼"))), saved]);
+      }
       toast.success(input.type === "訂正依頼" ? "訂正依頼を提出しました" : "希望を提出しました");
       return saved;
     } catch (error) {
@@ -734,13 +751,30 @@ export default function App() {
     try {
       const saved = await updateLeaveRequestStatus(request.id, status, rejectionReason);
       setLeaveRequests(prev => prev.map(item => item.id === saved.id ? saved : item));
-      if (status === "承認" && request.date) {
+      setBoardPeriods(prev => prev.map(period => ({ ...period, requests: period.requests.map(item => item.id === saved.id ? saved : item) })));
+      setHomeBoardRequests(prev => prev.map(item => item.id === saved.id ? saved : item));
+      if (status === "承認" && request.status !== "承認" && request.date) {
         const shift: ShiftType | null = request.type === "有給希望" ? "有休" : request.type === "休み希望" ? "休み" : null;
         if (shift) handleShiftChange(employees.find(item => item.name === request.employeeName)?.id || "", request.date, shift);
       }
-      toast.success(status === "承認" ? "承認しました" : "却下しました");
+      toast.success(status === "申請中" ? "申請中に戻しました" : status === "承認" ? "承認しました" : "却下しました");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "状態を更新できませんでした");
+      throw error;
+    } finally { setLeaveRequestLoading(false); }
+  };
+
+  const handleLeaveRequestDelete = async (request: LeaveRequest) => {
+    setLeaveRequestLoading(true);
+    try {
+      await deleteLeaveRequest(request.id);
+      setLeaveRequests(prev => prev.filter(item => item.id !== request.id));
+      setBoardPeriods(prev => prev.map(period => ({ ...period, requests: period.requests.filter(item => item.id !== request.id) })));
+      setHomeBoardRequests(prev => prev.filter(item => item.id !== request.id));
+      toast.success("申請とお知らせを削除しました");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "申請を削除できませんでした");
+      throw error;
     } finally { setLeaveRequestLoading(false); }
   };
 
@@ -822,7 +856,7 @@ export default function App() {
       const rule = findSpecialDayRule(date, specialDayRules);
       return date.getDay() === 0 || holidaySet.has(getDateStr(date)) || remark?.color === "red" || remark?.type === "祝日" || remark?.type === "店休日" || rule?.color === "red" || rule?.behavior === "all-off";
     };
-    const isBlue = (date: Date) => remarkMap.get(getDateStr(date))?.color === "blue" || findSpecialDayRule(date, specialDayRules)?.color === "blue";
+    const isBlue = (date: Date) => remarkMap.get(getDateStr(date))?.color === "blue" || remarkMap.get(getDateStr(date))?.type === "谷川整形休診" || findSpecialDayRule(date, specialDayRules)?.color === "blue";
     const mondayOf = (date: Date) => { const result = new Date(date); result.setDate(date.getDate() + (date.getDay() === 0 ? -6 : 1 - date.getDay())); result.setHours(0, 0, 0, 0); return result; };
     const doubleRedWeek = (monday: Date) => { const thu = new Date(monday); thu.setDate(monday.getDate() + 3); const sat = new Date(monday); sat.setDate(monday.getDate() + 5); return isRed(thu) && isRed(sat); };
     const cycleWeekIndex = (date: Date, assignment: { cycleType: number; anchorDate: string }) => {
@@ -843,6 +877,7 @@ export default function App() {
         const weekIndex = cycleWeekIndex(date, assignment);
         let shift = resolveCycleShift(cyclePatterns, assignment.cycleType, date.getDay(), weekIndex);
         if (isRed(date)) shift = "休み";
+        else if (isBlue(date) && ["金井", "児玉"].includes(employee.name)) shift = "休み";
         if (!shift) return;
         const times = calculateTimes(shift);
         shifts.push({ date: key, shift, breakTime: times.breakTime, workTime: times.workTime, comment: "" });
@@ -1454,7 +1489,7 @@ export default function App() {
       const isSunday = day === 0;
       const isSaturday = day === 6;
       const isHoliday = gr?.type === "祝日" || gr?.type === "店休日";
-      const isClinicClosed = gr?.color === "blue";
+      const isClinicClosed = gr?.type === "谷川整形休診";
 
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
         cell.border = borderStyle;
@@ -1583,7 +1618,7 @@ export default function App() {
         const isSunday = day === 0;
         const isSaturday = day === 6;
         const isHoliday = gr?.type === "祝日" || gr?.type === "店休日";
-        const isClinicClosed = gr?.color === "blue";
+        const isClinicClosed = gr?.type === "谷川整形休診";
 
         row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
           cell.border = borderStyle;
@@ -1704,7 +1739,7 @@ export default function App() {
       <aside className="shift-sidebar hidden md:flex w-64 bg-card border-r border-border p-6 flex-col shrink-0 overflow-y-auto">
         <div className="text-xl font-bold text-primary mb-8 flex items-center justify-between gap-2">
           <div className="flex items-center gap-3">
-            <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" className="w-10 h-10 object-contain rounded-xl" />
+            <img src="${import.meta.env.BASE_URL}icon-192.png" alt="" className="w-10 h-10 object-contain rounded-xl" />
             <div className="leading-tight"><span className="block text-base">シフト管理</span><span className="block text-[10px] font-medium opacity-60 mt-1">PHARMACY SHIFT</span></div>
           </div>
           <div className="relative">
@@ -1948,7 +1983,7 @@ export default function App() {
 
       {/* Main Content */}
       <main className={`shift-main flex-1 flex flex-col overflow-hidden p-6 pb-24 md:pb-6 gap-6 ${activeTab === "dashboard" ? "dashboard-active" : ""}`}>
-        {(activeTab === "board" || activeTab === "mypage") && (
+        {activeTab === "mypage" && (
         <header className="shift-page-header period-navigation shrink-0">
           <Button variant="ghost" size="sm" className="period-back" onClick={goBack}><ArrowLeft className="w-4 h-4" />戻る</Button>
           <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, -1))}><ChevronLeft className="w-4 h-4" />前の期間</Button>
@@ -1978,6 +2013,7 @@ export default function App() {
                 installLabel={installLabel}
                 operatorName={appSession.employeeName || "未選択"}
                 requests={homeBoardRequests}
+                pendingCorrections={homePendingCorrections}
                 boardMonthLabel={(() => { const r = generateConfiguredDateRange(homeBoardMonth.getFullYear(), homeBoardMonth.getMonth() + 1, calendarPeriodSettings.startDay, calendarPeriodSettings.endDay); return r.length ? `${format(r[0], "M/d")}〜${format(r[r.length - 1], "M/d")}` : "期間未設定"; })()}
                 boardLocked={false}
                 boardVisibility={storeMaster.leaveRequestBoardVisibility || "immediate"}
@@ -1986,9 +2022,9 @@ export default function App() {
                 onOpenBoard={() => { setBoardAnchor(homeBoardMonth); setActiveTab("board"); setIsFromAdmin(false); }}
               />
             ) : activeTab === "requests" ? (
-              <LeaveRequestView employees={dashboardEmployees} dates={dateRange} remarks={displayRemarks} requests={leaveRequests} locked={isLocked} loading={leaveRequestLoading} operatorId={appSession.employeeId || ""} onSubmit={handleLeaveRequestSubmit} onCancel={handleLeaveRequestCancel} onSaveWorkTime={async (id, start, end) => { const saved = await updateLeaveRequestWorkTime(id, start, end); setLeaveRequests(prev => prev.map(item => item.id === id ? saved : item)); }} onPeriodChange={async direction => { if (appSession.role === "admin" && (syncState === "dirty" || syncState === "saving")) { try { await saveCurrentMonth(); } catch { return; } } setCurrentMonth(prev => addMonths(prev, direction)); }} />
+              <LeaveRequestView employees={dashboardEmployees} dates={dateRange} remarks={displayRemarks} requests={leaveRequests} locked={isLocked} loading={leaveRequestLoading || periodStatusLoading} operatorId={appSession.employeeId || ""} onCheckPeriodStatus={fetchShiftPeriodStatus} onSubmit={handleLeaveRequestSubmit} onCancel={handleLeaveRequestCancel} onSaveWorkTime={async (id, start, end) => { const saved = await updateLeaveRequestWorkTime(id, start, end); setLeaveRequests(prev => prev.map(item => item.id === id ? saved : item)); }} onPeriodChange={async direction => { if (appSession.role === "admin" && (syncState === "dirty" || syncState === "saving")) { try { await saveCurrentMonth(); } catch { return; } } setCurrentMonth(prev => addMonths(prev, direction)); }} />
             ) : activeTab === "board" ? (
-              <BulletinBoard periods={boardPeriods} isEditor={appSession.role === "admin"} visibility={storeMaster.leaveRequestBoardVisibility || "immediate"} correctionVisibility={correctionVisibility} operatorName={appSession.employeeName} onShiftPeriod={direction => setBoardAnchor(prev => addMonths(prev, direction))} onResolve={async item => { const saved = await updateLeaveRequestStatus(item.id, "対応済み"); setBoardPeriods(prev => prev.map(period => ({ ...period, requests: period.requests.map(request => request.id === saved.id ? saved : request) }))); setHomeBoardRequests(prev => prev.map(request => request.id === saved.id ? saved : request)); }} />
+              <BulletinBoard onBack={goBack} periods={boardPeriods} isEditor={appSession.role === "admin"} visibility={storeMaster.leaveRequestBoardVisibility || "immediate"} correctionVisibility={correctionVisibility} operatorName={appSession.employeeName} onShiftPeriod={direction => setBoardAnchor(prev => addMonths(prev, direction))} onResolve={async item => { const saved = await updateLeaveRequestStatus(item.id, "対応済み"); setBoardPeriods(prev => prev.map(period => ({ ...period, requests: period.requests.map(request => request.id === saved.id ? saved : request) }))); setHomeBoardRequests(prev => prev.map(request => request.id === saved.id ? saved : request)); setHomePendingCorrections(prev => prev.filter(request => request.id !== saved.id)); }} />
             ) : activeTab === "mypage" ? (
               <MyPage employee={operatorEmployee} requests={leaveRequests} locked={isLocked} initialBalance={paidLeaveBalance} onSaveBalance={async balance => { const saved = await savePaidLeaveBalance(balance); setPaidLeaveBalance(saved); }} onCancel={handleLeaveRequestCancel} onSaveWorkTime={async (id, start, end) => { const saved = await updateLeaveRequestWorkTime(id, start, end); setLeaveRequests(prev => prev.map(item => item.id === id ? saved : item)); }} onEdit={() => setActiveTab("requests")} />
             ) : activeTab === "dashboard" ? (
@@ -2004,8 +2040,8 @@ export default function App() {
                   <CardHeader className={`dashboard-card-header dashboard-blue-header page-blue-header border-b border-border ${isLocked ? "is-final" : "is-draft"}`}>
                     <div className="dashboard-blue-top">
                       <div className="dashboard-blue-brand">
-                        <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" />
-                        <div><small>PHARMACY SHIFT</small><CardTitle className={isFromAdmin ? "admin-shift-title" : ""}>{isFromAdmin ? "管理者シフト" : "薬局シフト"}</CardTitle><span><UserRound className="h-3.5 w-3.5" />操作員：{appSession.employeeName || "未選択"}</span></div>
+                        <img src="${import.meta.env.BASE_URL}icon-192.png" alt="" />
+                        <div><small>PHARMACY SHIFT</small><CardTitle className={appSession.role === "admin" ? "admin-shift-title" : ""}>{isFromAdmin ? "シフト作成" : appSession.role === "admin" ? "全体シフト管理者" : "薬局シフト"}</CardTitle><span><UserRound className="h-3.5 w-3.5" />操作員：{appSession.employeeName || "未選択"}</span></div>
                       </div>
                       <div className="dashboard-blue-period">
                         {dateRange.length > 0 ? `${format(dateRange[0], "yyyy年M月d日")}〜${format(dateRange[dateRange.length - 1], "M月d日")}` : "期間未設定"}
@@ -2052,7 +2088,7 @@ export default function App() {
                         {dashboardEmployees.map(employee => <option key={employee.id} value={employee.id}>{employee.displayName || employee.name}</option>)}
                       </select>
                     </div>}
-                    {isFromAdmin && <LeaveRequestManager requests={leaveRequests} loading={leaveRequestLoading} onStatusChange={handleLeaveRequestStatus} />}
+                    {isFromAdmin && <LeaveRequestManager requests={leaveRequests} loading={leaveRequestLoading} onStatusChange={handleLeaveRequestStatus} onDelete={handleLeaveRequestDelete} />}
                     <div className="dashboard-table-wrap overflow-x-auto">
                       <Table className="dashboard-table text-[13px]">
                         <TableHeader>
@@ -2187,7 +2223,7 @@ export default function App() {
               <motion.div key="settings-menu" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
                 <Card className="border-border shadow-sm">
                   <CardHeader className="settings-card-header page-blue-header rounded-t-xl border-b py-5">
-                    <CardTitle className="flex items-center gap-2 text-xl"><Settings className="h-5 w-5" />設定</CardTitle>
+                    <CardTitle className="admin-page-title flex items-center gap-2 text-xl"><Settings className="h-5 w-5" />設定管理者</CardTitle>
                     <CardDescription className="text-xs">変更したい項目を選んでください</CardDescription>
                   </CardHeader>
                   <CardContent className="grid gap-4 p-6 sm:grid-cols-2">
@@ -2205,26 +2241,26 @@ export default function App() {
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "store" ? (
               <motion.div key="settings-store" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle>店舗マスター</CardTitle><CardDescription>店舗全体の基本ルール</CardDescription></div></div></CardHeader><CardContent className="p-6 space-y-5"><StoreMasterSettings master={storeMaster} onMasterChange={setStoreMaster} period={calendarPeriodSettings} periodDraft={calendarPeriodDraft} saving={calendarPeriodSaving} onPeriodDraftChange={setCalendarPeriodDraft} onSavePeriod={handleSaveCalendarPeriod} onSaveBoardVisibility={handleSaveBoardVisibility} /><section className="rounded-2xl border-2 border-blue-100 bg-blue-50/50 p-5"><h4 className="font-black">APIキー設定</h4><p className="mt-1 text-xs text-slate-500">管理者操作とNotion連携に使用します。この端末だけに保存されます。</p><div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]"><Input type="password" value={managementApiKey} onChange={e => setManagementApiKey(e.target.value)} placeholder="管理者用GAS接続キー" /><Button onClick={() => { saveManagementApiKey(managementApiKey); toast.success("APIキーをこの端末に保存しました"); }}>APIキーを保存</Button></div></section></CardContent></Card>
+                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">店舗マスター管理者</CardTitle><CardDescription>店舗全体の基本ルール</CardDescription></div></div></CardHeader><CardContent className="p-6 space-y-5"><StoreMasterSettings master={storeMaster} onMasterChange={setStoreMaster} period={calendarPeriodSettings} periodDraft={calendarPeriodDraft} saving={calendarPeriodSaving} onPeriodDraftChange={setCalendarPeriodDraft} onSavePeriod={handleSaveCalendarPeriod} onSaveBoardVisibility={handleSaveBoardVisibility} /><section className="rounded-2xl border-2 border-blue-100 bg-blue-50/50 p-5"><h4 className="font-black">APIキー設定</h4><p className="mt-1 text-xs text-slate-500">管理者操作とNotion連携に使用します。この端末だけに保存されます。</p><div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]"><Input type="password" value={managementApiKey} onChange={e => setManagementApiKey(e.target.value)} placeholder="管理者用GAS接続キー" /><Button onClick={() => { saveManagementApiKey(managementApiKey); toast.success("APIキーをこの端末に保存しました"); }}>APIキーを保存</Button></div></section></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "board" ? (
               <motion.div key="settings-board" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle>お知らせ掲示板マスタ</CardTitle><CardDescription>承認済みの希望を従業員へ共有する設定</CardDescription></div></div></CardHeader>
+                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">お知らせ掲示板マスタ管理者</CardTitle><CardDescription>承認済みの希望を従業員へ共有する設定</CardDescription></div></div></CardHeader>
                 <CardContent className="p-6 space-y-4"><label className="block text-sm font-bold">休み希望の公開設定<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={storeMaster.leaveRequestBoardVisibility || "immediate"} onChange={e => setStoreMaster(v => ({...v, leaveRequestBoardVisibility:e.target.value as StoreMaster["leaveRequestBoardVisibility"]}))}><option value="immediate">提出と同時に全員へ公開</option><option value="after_approval">管理者確認後に全員へ公開</option><option value="private">本人と編集者だけに表示</option></select></label><Button className="w-full h-11 font-bold" onClick={() => void handleSaveBoardVisibility(storeMaster.leaveRequestBoardVisibility)}>お知らせ掲示板マスタを保存</Button><div className="border-t pt-4"><label className="block text-sm font-bold">確定シフト訂正依頼の公開範囲<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={correctionVisibility} onChange={e => setCorrectionVisibility(e.target.value as "all" | "private")}><option value="all">全員に表示</option><option value="private">本人と管理者のみ表示</option></select></label><Button className="mt-3 w-full h-11" onClick={async () => { try { setCorrectionVisibility(await saveCorrectionVisibility(correctionVisibility)); toast.success("訂正依頼の公開設定を保存しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "保存できませんでした"); } }}>訂正依頼の公開設定を保存</Button></div></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "employee" ? (
               <motion.div key="settings-employee" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><EmployeeMasterSettings employees={employeeMaster} onSave={handleSaveEmployeeMaster} /></motion.div>
             ) : activeTab === "admin" && settingsPage === "shift" ? (
-              <motion.div key="settings-shift" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}><Card><CardHeader className="page-blue-header rounded-t-xl"><CardTitle>シフト設定</CardTitle><CardDescription>各マスターを選択してください</CardDescription></CardHeader><CardContent className="grid gap-3 p-6"><Button variant="outline" onClick={() => setSettingsPage("autodraft")}>シフト案自動作成マスター</Button><Button variant="outline" onClick={() => setSettingsPage("operations")}>クール作成マスター</Button><Button variant="outline" onClick={() => setSettingsPage("special")}>特殊日マスター</Button><Button variant="outline" onClick={() => setSettingsPage("dropdown")}>プルダウンマスター</Button><Button variant="ghost" onClick={() => setSettingsPage("menu")}>設定へ戻る</Button></CardContent></Card></motion.div>
+              <motion.div key="settings-shift" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}><Card><CardHeader className="page-blue-header rounded-t-xl"><CardTitle className="admin-page-title">シフト設定管理者</CardTitle><CardDescription>各マスターを選択してください</CardDescription></CardHeader><CardContent className="grid gap-3 p-6"><Button variant="outline" onClick={() => setSettingsPage("autodraft")}>シフト案自動作成マスター</Button><Button variant="outline" onClick={() => setSettingsPage("operations")}>クール作成マスター</Button><Button variant="outline" onClick={() => setSettingsPage("special")}>特殊日マスター</Button><Button variant="outline" onClick={() => setSettingsPage("dropdown")}>プルダウンマスター</Button><Button variant="ghost" onClick={() => setSettingsPage("menu")}>設定へ戻る</Button></CardContent></Card></motion.div>
             ) : activeTab === "admin" && settingsPage === "autodraft" ? (
               <motion.div key="settings-autodraft" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><AutoDraftSettingsView settings={autoDraftSettings} onChange={value => void updateAutoDraftSettings(value)} onStart={startAutoDraft} /></motion.div>
             ) : activeTab === "admin" && settingsPage === "dropdown" ? (
               <motion.div key="settings-dropdown" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle>プルダウンマスター</CardTitle><CardDescription>全体シフトの備考欄に表示する項目</CardDescription></div></div></CardHeader><CardContent className="p-6"><DropdownMasterSettings rules={specialDayRules} loading={specialDayLoading} onSave={handleSaveSpecialDayRules} /></CardContent></Card>
+                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">プルダウンマスター管理者</CardTitle><CardDescription>全体シフトの備考欄に表示する項目</CardDescription></div></div></CardHeader><CardContent className="p-6"><DropdownMasterSettings rules={specialDayRules} loading={specialDayLoading} onSave={handleSaveSpecialDayRules} /></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "special" ? (
               <motion.div key="settings-special" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle>特殊日設定</CardTitle><CardDescription>年ごとに変わる日付・店舗固有の定休日</CardDescription></div></div></CardHeader><CardContent className="p-6"><SpecialDaySettings rules={specialDayRules} loading={specialDayLoading} onSave={handleSaveSpecialDayRules} /></CardContent></Card>
+                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">特殊日設定管理者</CardTitle><CardDescription>年ごとに変わる日付・店舗固有の定休日</CardDescription></div></div></CardHeader><CardContent className="p-6"><SpecialDaySettings rules={specialDayRules} loading={specialDayLoading} onSave={handleSaveSpecialDayRules} /></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" ? (
               <motion.div
@@ -2238,9 +2274,9 @@ export default function App() {
                 <div className="grid grid-cols-1 gap-6">
                   <Card className="border-border shadow-sm">
                     <CardHeader className="settings-card-header page-blue-header py-5 border-b border-border rounded-t-xl">
-                      <CardTitle className="text-xl flex items-center gap-2">
+                      <CardTitle className="admin-page-title text-xl flex items-center gap-2">
                         <Users className="w-4 h-4 text-primary" />
-                        従業員・シフト設定
+                        従業員・シフト設定管理者
                       </CardTitle>
                       <CardDescription className="text-xs">従業員、勤務パターン、接続キー、出力を設定します</CardDescription>
                     </CardHeader>
