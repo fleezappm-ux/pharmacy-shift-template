@@ -24,6 +24,7 @@ interface HomeViewProps {
   installLabel: string;
   operatorName: string;
   requests: LeaveRequest[];
+  pendingCorrections: LeaveRequest[];
   boardMonthLabel: string;
   boardLocked: boolean;
   boardVisibility: "immediate" | "after_approval" | "private";
@@ -48,7 +49,7 @@ function shiftLabel(employee: Employee, date: string): string {
 export function HomeView({
   employees, remarks, weekDates, selectedDate, today, weekOffset, heatmapEnabled, monthDates,
   onWeekOffsetChange, onDateSelect, onShowDashboard, onEmployeeSelect, onOpenLeaveRequest, onInstall, installLabel,
-  operatorName, requests, boardMonthLabel, boardLocked, boardVisibility, correctionVisibility, isEditor, onOpenBoard
+  operatorName, requests, pendingCorrections, boardMonthLabel, boardLocked, boardVisibility, correctionVisibility, isEditor, onOpenBoard
 }: HomeViewProps) {
   const orderedEmployees = sortEmployeesForDisplay(employees);
   const selectedDateObject = new Date(`${selectedDate}T00:00:00`);
@@ -72,7 +73,7 @@ export function HomeView({
     <motion.div key="home" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }} className="space-y-4 pb-4">
       <header className="home-brand-header">
         <div className="home-brand-cluster">
-          <button type="button" className="home-app-icon" onClick={onInstall} title={installLabel} aria-label={installLabel}><img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="薬局シフトをホーム画面に追加" /></button>
+          <button type="button" className="home-app-icon" onClick={onInstall} title={installLabel} aria-label={installLabel}><img src="${import.meta.env.BASE_URL}icon-192.png" alt="薬局シフトをホーム画面に追加" /></button>
           <div className="home-brand-copy">
             <span>PHARMACY SHIFT</span>
             <div className="home-title-line">
@@ -125,7 +126,7 @@ export function HomeView({
         <Button variant="outline" className="w-full mt-3 h-10 font-bold" onClick={onShowDashboard}>月の全体シフトを見る <ArrowRight className="w-4 h-4 ml-2" /></Button>
       </section>
 
-      <BulletinBoard compact periods={[{ label: boardMonthLabel, locked: boardLocked, requests }]} isEditor={isEditor} visibility={boardVisibility} correctionVisibility={correctionVisibility} operatorName={operatorName} onOpenBoard={onOpenBoard} />
+      <BulletinBoard compact periods={[{ label: boardMonthLabel, locked: boardLocked, requests }]} pendingCorrections={pendingCorrections} isEditor={isEditor} visibility={boardVisibility} correctionVisibility={correctionVisibility} operatorName={operatorName} onOpenBoard={onOpenBoard} />
 
       <button className="home-leave-request" onClick={onOpenLeaveRequest}>
         <CalendarDays className="w-5 h-5" /><div><strong>休み希望日を提出する</strong><span>希望受付中のシフト案に提出できます</span></div><ArrowRight className="w-5 h-5" />
