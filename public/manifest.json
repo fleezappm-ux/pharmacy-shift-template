@@ -1,0 +1,12 @@
+{
+  "name": "シフト管理ツール",
+  "short_name": "SHIFT",
+  "start_url": "/pharmacy-shift-template/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0d1420",
+  "icons": [
+    { "src": "/pharmacy-shift-template/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/pharmacy-shift-template/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
