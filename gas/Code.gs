@@ -4,7 +4,7 @@ function doPost(e) {
     var data = JSON.parse(e.postData.contents);
     if (!data || !data.action) throw new Error("actionが必要です。");
     var viewActions = ["getShifts", "getShiftHolidays", "getShiftLeaveRequests", "saveShiftLeaveRequest", "cancelShiftLeaveRequest", "updateShiftLeaveRequestWorkTime", "getShiftSpecialDayRules", "getShiftCalendarPeriodSettings", "getShiftPeriodStatus", "getShiftPaidLeaveBalance", "saveShiftPaidLeaveBalance"];
-    var adminActions = ["updateShiftLeaveRequestStatus", "saveShiftCorrectionVisibility", "saveShiftSpecialDayRules", "saveShiftCalendarPeriodSettings", "saveShiftPeriodStatus", "saveShift", "saveShiftMonth", "deleteShift"];
+    var adminActions = ["updateShiftLeaveRequestStatus", "deleteShiftLeaveRequest", "saveShiftCorrectionVisibility", "saveShiftSpecialDayRules", "saveShiftCalendarPeriodSettings", "saveShiftPeriodStatus", "saveShift", "saveShiftMonth", "deleteShift"];
     if (viewActions.indexOf(data.action) >= 0) requireShiftSession(data.sessionToken);
     if (adminActions.indexOf(data.action) >= 0) requireShiftSession(data.sessionToken, "admin");
     if (data.action === "loginShift") return loginShift(data);
@@ -30,6 +30,7 @@ function doPost(e) {
     if (data.action === "cancelShiftLeaveRequest") return cancelShiftLeaveRequest(data);
     if (data.action === "updateShiftLeaveRequestWorkTime") return updateShiftLeaveRequestWorkTime(data);
     if (data.action === "updateShiftLeaveRequestStatus") return updateShiftLeaveRequestStatus(data);
+    if (data.action === "deleteShiftLeaveRequest") return deleteShiftLeaveRequest(data);
     if (data.action === "getShiftSpecialDayRules") return getShiftSpecialDayRules(data);
     if (data.action === "saveShiftSpecialDayRules") return saveShiftSpecialDayRules(data);
     if (data.action === "getShiftCalendarPeriodSettings") return getShiftCalendarPeriodSettings(data);
@@ -1134,6 +1135,36 @@ function updateShiftLeaveRequestStatus(data) {
   } catch (error) {
     console.error(error);
     return createJsonResponse(false, error.message || "希望の状態を更新できませんでした。");
+  } finally { try { lock.releaseLock(); } catch (_) {} }
+}
+
+
+
+/** 管理者が希望申請を削除します。Notion上の対応ページは復元可能なアーカイブにします。 */
+function deleteShiftLeaveRequest(data) {
+  var lock = LockService.getScriptLock();
+  try {
+    if (!lock.tryLock(10000)) throw new Error("別の処理を実行中です。");
+    verifyShiftApiKey(data.shiftApiKey);
+    var store = findShiftLeaveRequestStore(sanitizeText(data.id, 100));
+    var before = JSON.parse(JSON.stringify(store.request));
+    var p = PropertiesService.getScriptProperties();
+    var apiKey = p.getProperty("NOTION_API_KEY");
+    var databaseId = p.getProperty("NOTION_SHIFT_REQUEST_DATABASE_ID");
+    if (apiKey && databaseId) {
+      var pages = queryNotionDatabase(apiKey, databaseId, { filter: { property: "申請ID", rich_text: { equals: before.id } }, page_size: 10 });
+      pages.forEach(function(page) {
+        assertPageBelongsToDatabase(apiKey, page.id, databaseId);
+        requestNotion(apiKey, "https://api.notion.com/v1/pages/" + page.id, "patch", { archived: true });
+      });
+    }
+    var remaining = store.items.filter(function(item) { return item.id !== before.id; });
+    p.setProperty(store.key, JSON.stringify(remaining));
+    appendShiftAudit(data, "休み希望削除", before.id, before, null);
+    return createJsonDataResponse({ success: true });
+  } catch (error) {
+    console.error(error);
+    return createJsonResponse(false, error.message || "希望を削除できませんでした。");
   } finally { try { lock.releaseLock(); } catch (_) {} }
 }
 
