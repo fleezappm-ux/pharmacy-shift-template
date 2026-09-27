@@ -1,3 +1,4 @@
+import { templateStorage } from "./template-storage";
 import { getGasUrl } from "./gas-config";
 
 const SESSION_KEY = "shift_app_session";
@@ -36,14 +37,14 @@ async function call(action: string, payload: Record<string, unknown> = {}) {
 
 function readSession(key: string): ShiftSession | null {
   try {
-    const session = JSON.parse(localStorage.getItem(key) || "null") as ShiftSession | null;
+    const session = JSON.parse(templateStorage.getItem(key) || "null") as ShiftSession | null;
     if (!session?.token || new Date(session.expiresAt).getTime() <= Date.now()) {
-      localStorage.removeItem(key);
+      templateStorage.removeItem(key);
       return null;
     }
     return session;
   } catch (_) {
-    localStorage.removeItem(key);
+    templateStorage.removeItem(key);
     return null;
   }
 }
@@ -51,20 +52,20 @@ function readSession(key: string): ShiftSession | null {
 export const getShiftSession = () => readSession(SESSION_KEY);
 export const getEmployeeSession = getShiftSession;
 export const getEmployeeToken = () => getShiftSession()?.token || "";
-export const getManagementApiKey = () => localStorage.getItem(API_KEY_KEY) || "";
-export const saveManagementApiKey = (value: string) => localStorage.setItem(API_KEY_KEY, value.trim());
+export const getManagementApiKey = () => templateStorage.getItem(API_KEY_KEY) || "";
+export const saveManagementApiKey = (value: string) => templateStorage.setItem(API_KEY_KEY, value.trim());
 
 export async function loginEmployee(loginId: string, password: string, employeeId: string, employeeName: string): Promise<ShiftSession> {
   const json = await call("loginShiftEmployee", { loginId, password, employeeId, employeeName });
   const session = json.session as ShiftSession;
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  templateStorage.setItem(SESSION_KEY, JSON.stringify(session));
   return session;
 }
 
 export async function loginEditor(loginId: string, password: string, employeeId: string, employeeName: string): Promise<ShiftSession> {
   const json = await call("loginShiftAdmin", { loginId, password, employeeId, employeeName });
   const session = json.session as ShiftSession;
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  templateStorage.setItem(SESSION_KEY, JSON.stringify(session));
   return session;
 }
 
@@ -73,11 +74,11 @@ export async function loginShift(loginId: string, password: string, employeeId: 
   // 認証種別の判定はGAS側の loginShift に一本化し、1回の通信でログインします。
   const json = await call("loginShift", { loginId, password, employeeId, employeeName });
   const session = json.session as ShiftSession;
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  templateStorage.setItem(SESSION_KEY, JSON.stringify(session));
   return session;
 }
 
-export function logoutShiftSession() { localStorage.removeItem(SESSION_KEY); }
+export function logoutShiftSession() { templateStorage.removeItem(SESSION_KEY); }
 export const logoutEmployee = logoutShiftSession;
 
 export async function fetchShiftLoginEmployees(): Promise<ShiftLoginEmployee[]> {

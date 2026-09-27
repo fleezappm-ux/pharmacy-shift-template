@@ -1,3 +1,4 @@
+import { templateStorage } from "./lib/template-storage";
 import { useState, useEffect, useRef } from "react";
 import { format, addMonths } from "date-fns";
 import { ja } from "date-fns/locale/ja";
@@ -111,12 +112,12 @@ export default function App() {
   });
   const [settingsPage, setSettingsPage] = useState<"menu" | "store" | "board" | "employee" | "shift" | "dropdown" | "special" | "operations" | "autodraft">("menu");
   const [storeMaster, setStoreMaster] = useState<StoreMaster>(() => {
-    const saved = localStorage.getItem("store_master_settings");
+    const saved = templateStorage.getItem("store_master_settings");
     if (!saved) return DEFAULT_STORE_MASTER;
     try { return { ...DEFAULT_STORE_MASTER, ...JSON.parse(saved) }; } catch { return DEFAULT_STORE_MASTER; }
   });
   const [calendarPeriodSettings, setCalendarPeriodSettings] = useState<CalendarPeriodSettings>(() => {
-    const saved = localStorage.getItem("calendar_period_settings");
+    const saved = templateStorage.getItem("calendar_period_settings");
     if (saved) {
       try { return { ...DEFAULT_CALENDAR_PERIOD, ...JSON.parse(saved) }; } catch (_) { /* default */ }
     }
@@ -125,7 +126,7 @@ export default function App() {
   const [calendarPeriodDraft, setCalendarPeriodDraft] = useState<CalendarPeriodSettings>(calendarPeriodSettings);
   const [calendarPeriodSaving, setCalendarPeriodSaving] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>(() => {
-    const saved = localStorage.getItem("shift_data");
+    const saved = templateStorage.getItem("shift_data");
     if (saved) {
       try {
         const data = JSON.parse(saved);
@@ -147,7 +148,7 @@ export default function App() {
   });
   const [employeeMaster, setEmployeeMaster] = useState<EmployeeMasterItem[]>([]);
   const [globalRemarks, setGlobalRemarks] = useState<GlobalRemark[]>(() => {
-    const saved = localStorage.getItem("global_remarks");
+    const saved = templateStorage.getItem("global_remarks");
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -158,13 +159,13 @@ export default function App() {
     return [];
   });
   const [currentMonth, setCurrentMonth] = useState(() => {
-    const saved = localStorage.getItem("current_month");
+    const saved = templateStorage.getItem("current_month");
     return saved ? new Date(saved) : getCurrentShiftMonth(new Date(), calendarPeriodSettings);
   });
   // 起動時は、前回閉じた画面に関係なく必ずホームから開始します。
   const [activeTab, setActiveTab] = useState("home");
   const [lockedMonths, setLockedMonths] = useState<string[]>(() => {
-    const saved = localStorage.getItem("locked_months");
+    const saved = templateStorage.getItem("locked_months");
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -175,14 +176,14 @@ export default function App() {
     return [];
   });
   const [dashboardTitle, setDashboardTitle] = useState(() => {
-    const savedTitle = localStorage.getItem("dashboard_title");
+    const savedTitle = templateStorage.getItem("dashboard_title");
     return !savedTitle || savedTitle === "全体シフト集約" ? "全体シフト" : savedTitle;
   });
   const [isFromAdmin, setIsFromAdmin] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showNotificationPopup, setShowNotificationPopup] = useState(false);
   const [cycleNames, setCycleNames] = useState<Record<number, string>>(() => {
-    const saved = localStorage.getItem("cycle_names");
+    const saved = templateStorage.getItem("cycle_names");
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -201,12 +202,12 @@ export default function App() {
     };
   });
   const [cycleAssignments, setCycleAssignments] = useState<Record<string, { cycleType: number; anchorDate: string }>>(() => {
-    const saved = localStorage.getItem("cycle_assignments");
+    const saved = templateStorage.getItem("cycle_assignments");
     if (!saved) return {};
     try { return JSON.parse(saved); } catch { return {}; }
   });
   const [cyclePatterns, setCyclePatterns] = useState<CyclePatterns>(() => {
-    const saved = localStorage.getItem("cycle_patterns");
+    const saved = templateStorage.getItem("cycle_patterns");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -220,7 +221,7 @@ export default function App() {
     return DEFAULT_CYCLE_PATTERNS;
   });
   const [cycleLengths, setCycleLengths] = useState<Record<number, number>>(() => {
-    try { return JSON.parse(localStorage.getItem("cycle_lengths") || "null") || { 1: 2, 2: 2, 3: 2, 4: 2, 5: 1, 6: 1, 7: 1 }; } catch { return { 1: 2, 2: 2, 3: 2, 4: 2, 5: 1, 6: 1, 7: 1 }; }
+    try { return JSON.parse(templateStorage.getItem("cycle_lengths") || "null") || { 1: 2, 2: 2, 3: 2, 4: 2, 5: 1, 6: 1, 7: 1 }; } catch { return { 1: 2, 2: 2, 3: 2, 4: 2, 5: 1, 6: 1, 7: 1 }; }
   });
   const [editingCycleId, setEditingCycleId] = useState<number | null>(null);
   const [cycleSaving, setCycleSaving] = useState(false);
@@ -230,7 +231,7 @@ export default function App() {
     kind: "saving" | "success" | "error";
     message: string;
   } | null>(null);
-  const [heatmapEnabled, setHeatmapEnabled] = useState(() => localStorage.getItem("heatmap_enabled") === "true");
+  const [heatmapEnabled, setHeatmapEnabled] = useState(() => templateStorage.getItem("heatmap_enabled") === "true");
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [leaveRequestLoading, setLeaveRequestLoading] = useState(false);
   const [homeBoardRequests, setHomeBoardRequests] = useState<LeaveRequest[]>([]);
@@ -246,7 +247,7 @@ export default function App() {
   const [periodStatusLoading, setPeriodStatusLoading] = useState(false);
   const [paidLeaveBalance, setPaidLeaveBalance] = useState<PaidLeaveBalance | null>(null);
   const [autoDraftSettings, setAutoDraftSettings] = useState<AutoDraftSettings>(() => {
-    try { return JSON.parse(localStorage.getItem("shift_auto_draft_settings") || "null") || { enabled: false, started: false, horizonMonths: 3 }; }
+    try { return JSON.parse(templateStorage.getItem("shift_auto_draft_settings") || "null") || { enabled: false, started: false, horizonMonths: 3 }; }
     catch { return { enabled: false, started: false, horizonMonths: 3 }; }
   });
 
@@ -279,7 +280,7 @@ export default function App() {
         if (cancelled || !settings) return;
         setCalendarPeriodSettings(settings);
         setCalendarPeriodDraft(settings);
-        localStorage.setItem("calendar_period_settings", JSON.stringify(settings));
+        templateStorage.setItem("calendar_period_settings", JSON.stringify(settings));
         setCurrentMonth(getCurrentShiftMonth(new Date(), settings));
       })
       .catch(error => console.error("カレンダー期間設定の取得に失敗しました", error));
@@ -294,7 +295,7 @@ export default function App() {
         if (cancelled) return;
         setStoreMaster(current => {
           const next = { ...current, leaveRequestBoardVisibility: visibility };
-          localStorage.setItem("store_master_settings", JSON.stringify(next));
+          templateStorage.setItem("store_master_settings", JSON.stringify(next));
           return next;
         });
       })
@@ -503,7 +504,7 @@ export default function App() {
   // 編集内容を端末内へ保存し、管理者の変更は短い待機後に共有保存します。
   useEffect(() => {
     if (employees.length > 0) {
-      localStorage.setItem("shift_data", JSON.stringify(employees));
+      templateStorage.setItem("shift_data", JSON.stringify(employees));
     }
     if (!syncReadyRef.current) return;
     if (skipDirtyRef.current) {
@@ -515,11 +516,11 @@ export default function App() {
   }, [employees]);
 
   useEffect(() => {
-    localStorage.setItem("locked_months", JSON.stringify(lockedMonths));
+    templateStorage.setItem("locked_months", JSON.stringify(lockedMonths));
   }, [lockedMonths]);
 
   useEffect(() => {
-    localStorage.setItem("global_remarks", JSON.stringify(globalRemarks));
+    templateStorage.setItem("global_remarks", JSON.stringify(globalRemarks));
     if (!syncReadyRef.current) return;
     if (skipRemarkDirtyRef.current) {
       skipRemarkDirtyRef.current = false;
@@ -530,21 +531,21 @@ export default function App() {
   }, [globalRemarks]);
 
   useEffect(() => {
-    localStorage.setItem("dashboard_title", dashboardTitle);
+    templateStorage.setItem("dashboard_title", dashboardTitle);
   }, [dashboardTitle]);
 
   useEffect(() => {
-    localStorage.setItem("cycle_names", JSON.stringify(cycleNames));
+    templateStorage.setItem("cycle_names", JSON.stringify(cycleNames));
   }, [cycleNames]);
 
   useEffect(() => {
-    localStorage.setItem("cycle_assignments", JSON.stringify(cycleAssignments));
+    templateStorage.setItem("cycle_assignments", JSON.stringify(cycleAssignments));
   }, [cycleAssignments]);
 
   useEffect(() => {
-    localStorage.setItem("cycle_patterns", JSON.stringify(cyclePatterns));
+    templateStorage.setItem("cycle_patterns", JSON.stringify(cyclePatterns));
   }, [cyclePatterns]);
-  useEffect(() => { localStorage.setItem("cycle_lengths", JSON.stringify(cycleLengths)); }, [cycleLengths]);
+  useEffect(() => { templateStorage.setItem("cycle_lengths", JSON.stringify(cycleLengths)); }, [cycleLengths]);
 
   useEffect(() => {
     if (!appSession?.token) return;
@@ -558,16 +559,16 @@ export default function App() {
   }, [appSession?.token]);
 
   useEffect(() => {
-    localStorage.setItem("heatmap_enabled", String(heatmapEnabled));
+    templateStorage.setItem("heatmap_enabled", String(heatmapEnabled));
   }, [heatmapEnabled]);
 
 
   useEffect(() => {
-    localStorage.setItem("current_month", currentMonth.toISOString());
+    templateStorage.setItem("current_month", currentMonth.toISOString());
   }, [currentMonth]);
 
   useEffect(() => {
-    localStorage.setItem("active_tab", activeTab);
+    templateStorage.setItem("active_tab", activeTab);
   }, [activeTab]);
 
   const toggleLock = async () => {
@@ -833,7 +834,7 @@ export default function App() {
     fetchPaidLeaveBalance(appSession.employeeId).then(setPaidLeaveBalance).catch(error => console.error("有給情報の取得に失敗しました", error));
   }, [appSession?.employeeId]);
 
-  useEffect(() => { localStorage.setItem("shift_auto_draft_settings", JSON.stringify(autoDraftSettings)); }, [autoDraftSettings]);
+  useEffect(() => { templateStorage.setItem("shift_auto_draft_settings", JSON.stringify(autoDraftSettings)); }, [autoDraftSettings]);
   useEffect(() => { if (appSession?.role !== "admin") return; fetchAutoDraftSettings().then(value => { if (value) setAutoDraftSettings(value); }).catch(() => undefined); }, [appSession?.role]);
 
   const updateAutoDraftSettings = async (value: AutoDraftSettings) => { setAutoDraftSettings(value); try { setAutoDraftSettings(await saveAutoDraftSettings(value)); } catch (error) { toast.error(error instanceof Error ? error.message : "自動作成設定を保存できませんでした"); } };
@@ -947,7 +948,7 @@ export default function App() {
       const saved = await saveCalendarPeriodSettings(settings);
       setCalendarPeriodSettings(saved);
       setCalendarPeriodDraft(saved);
-      localStorage.setItem("calendar_period_settings", JSON.stringify(saved));
+      templateStorage.setItem("calendar_period_settings", JSON.stringify(saved));
       setCurrentMonth(getCurrentShiftMonth(new Date(), saved));
       toast.success(`シフト期間を「毎月${saved.startDay}日〜${saved.endDay === 0 ? "月末" : `翌月${saved.endDay}日`}」に設定しました`);
     } catch (error) {
@@ -962,7 +963,7 @@ export default function App() {
       const saved = await saveBoardVisibility(visibility);
       setStoreMaster(current => {
         const next = { ...current, leaveRequestBoardVisibility: saved };
-        localStorage.setItem("store_master_settings", JSON.stringify(next));
+        templateStorage.setItem("store_master_settings", JSON.stringify(next));
         return next;
       });
     } catch (error) {

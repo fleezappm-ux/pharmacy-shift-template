@@ -1,3 +1,4 @@
+import { templateStorage } from "../lib/template-storage";
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale/ja";
@@ -34,7 +35,7 @@ interface Props {
 
 function readNote(key: string): { drafts: DraftMap; times: WorkTimes; comment: string } {
   try {
-    const saved = JSON.parse(localStorage.getItem(key) || "null");
+    const saved = JSON.parse(templateStorage.getItem(key) || "null");
     const drafts: DraftMap = {};
     if (saved?.drafts && typeof saved.drafts === "object") {
       Object.entries(saved.drafts).forEach(([date, value]) => {
@@ -64,11 +65,11 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
   const [openDate, setOpenDate] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [showHelp, setShowHelp] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches && localStorage.getItem(HELP_STORAGE_KEY) !== "yes");
+  const [showHelp, setShowHelp] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches && templateStorage.getItem(HELP_STORAGE_KEY) !== "yes");
   const [dismissHelp, setDismissHelp] = useState(false);
 
   useEffect(() => {
-    if (operatorId) localStorage.setItem(noteKey, JSON.stringify({ drafts, times, comment }));
+    if (operatorId) templateStorage.setItem(noteKey, JSON.stringify({ drafts, times, comment }));
   }, [noteKey, operatorId, drafts, times, comment]);
 
   const periodStart = dates[0] ? format(dates[0], "yyyy-MM-dd") : "";
@@ -237,7 +238,7 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
         </ol>
         <p>確定済みの日は「訂正依頼」を選び、コメントに変更内容を入力してください。</p>
         <label><input type="checkbox" checked={dismissHelp} onChange={event => setDismissHelp(event.target.checked)} />次回から表示しない</label>
-        <Button className="w-full" onClick={() => { if (dismissHelp) localStorage.setItem(HELP_STORAGE_KEY, "yes"); setShowHelp(false); }}>使い始める</Button>
+        <Button className="w-full" onClick={() => { if (dismissHelp) templateStorage.setItem(HELP_STORAGE_KEY, "yes"); setShowHelp(false); }}>使い始める</Button>
       </div>
     </div>}
   </div>;

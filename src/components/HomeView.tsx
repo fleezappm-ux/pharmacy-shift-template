@@ -73,7 +73,7 @@ export function HomeView({
     <motion.div key="home" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }} className="space-y-4 pb-4">
       <header className="home-brand-header">
         <div className="home-brand-cluster">
-          <button type="button" className="home-app-icon" onClick={onInstall} title={installLabel} aria-label={installLabel}><img src="${import.meta.env.BASE_URL}icon-192.png" alt="薬局シフトをホーム画面に追加" /></button>
+          <button type="button" className="home-app-icon" onClick={onInstall} title={installLabel} aria-label={installLabel}><img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="薬局シフトをホーム画面に追加" /></button>
           <div className="home-brand-copy">
             <span>PHARMACY SHIFT</span>
             <div className="home-title-line">

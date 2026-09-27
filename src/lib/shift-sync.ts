@@ -1,3 +1,4 @@
+import { templateStorage } from "./template-storage";
 import { Employee, DayShift, ShiftType, GlobalRemark } from "../types";
 import { SHIFT_OPTIONS } from "../constants";
 import { getShiftSession } from "./auth-sync";
@@ -7,11 +8,11 @@ import { getGasUrl } from "./gas-config";
 
 const SHIFT_API_KEY_STORAGE = "shift_api_key";
 export function hasShiftApiKey(): boolean {
-  return Boolean(localStorage.getItem(SHIFT_API_KEY_STORAGE));
+  return Boolean(templateStorage.getItem(SHIFT_API_KEY_STORAGE));
 }
 
 export function saveShiftApiKey(value: string): void {
-  localStorage.setItem(SHIFT_API_KEY_STORAGE, value.trim());
+  templateStorage.setItem(SHIFT_API_KEY_STORAGE, value.trim());
 }
 
 /** 全端末で共有される、期間単位のシフト確定状態を取得します。 */
@@ -56,7 +57,7 @@ export interface ShiftFetchResult {
 }
 
 async function callGas(action: string, extra: Record<string, unknown> = {}, requireApiKey = true): Promise<any> {
-  const shiftApiKey = localStorage.getItem(SHIFT_API_KEY_STORAGE) || "";
+  const shiftApiKey = templateStorage.getItem(SHIFT_API_KEY_STORAGE) || "";
   if (requireApiKey && !shiftApiKey) throw new Error("GAS接続キーが未設定です。設定画面で登録してください。");
   const response = await fetch(getGasUrl(), {
     method: "POST",

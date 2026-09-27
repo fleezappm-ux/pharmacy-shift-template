@@ -1,3 +1,4 @@
+import { templateStorage } from "../lib/template-storage";
 import { ReactNode, useState } from "react";
 import { Save } from "lucide-react";
 import { toast } from "sonner";
@@ -53,7 +54,7 @@ export function StoreMasterSettings({ master, onMasterChange, period, periodDraf
   const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
   const save = async () => {
     onMasterChange(draft);
-    localStorage.setItem("store_master_settings", JSON.stringify(draft));
+    templateStorage.setItem("store_master_settings", JSON.stringify(draft));
     if (period.startDay !== periodDraft.startDay || period.endDay !== periodDraft.endDay) await onSavePeriod();
     toast.success("店舗マスターを保存しました");
   };
