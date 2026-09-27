@@ -84,6 +84,18 @@ import { MyPage } from "./components/MyPage";
 import { AutoDraftSettings as AutoDraftSettingsView } from "./components/AutoDraftSettings";
 import { fetchAutoDraftSettings, saveAutoDraftSettings } from "./lib/auto-draft-sync";
 
+const EMPLOYEE_MASTER_CACHE_KEY = "employee_master_cache_v1";
+
+function readCachedEmployeeMaster(): EmployeeMasterItem[] | null {
+  try {
+    const raw = templateStorage.getItem(EMPLOYEE_MASTER_CACHE_KEY);
+    if (!raw) return null;
+    const items: unknown = JSON.parse(raw);
+    if (!Array.isArray(items) || !items.every(item => item && typeof item === "object" && typeof item.id === "string" && typeof item.name === "string" && typeof item.active === "boolean")) return null;
+    return items as EmployeeMasterItem[];
+  } catch { return null; }
+}
+
 const DEFAULT_EMPLOYEES: string[] = [];
 const PLACEHOLDER_EMPLOYEE_PATTERN = /^従業員[Ａ-ＺA-Zａ-ｚa-z０-９0-9]+$/;
 const BASE_GLOBAL_REMARK_TYPES = ["コメント"] as const;
@@ -123,6 +135,7 @@ export default function App() {
   });
   const [calendarPeriodDraft, setCalendarPeriodDraft] = useState<CalendarPeriodSettings>(calendarPeriodSettings);
   const [calendarPeriodSaving, setCalendarPeriodSaving] = useState(false);
+  const [cachedEmployeeMaster] = useState(readCachedEmployeeMaster);
   const [employees, setEmployees] = useState<Employee[]>(() => {
     const saved = templateStorage.getItem("shift_data");
     if (saved) {
@@ -133,6 +146,7 @@ export default function App() {
           if (item && item.id) uniqueMap.set(item.id, item);
         });
         const initialData = (Array.from(uniqueMap.values()) as Employee[]).filter(item => !/^従業員[A-EＡ-Ｅ]$/.test(String(item.name || "").trim()));
+        if (cachedEmployeeMaster) return mergeEmployeesWithMaster(initialData, cachedEmployeeMaster);
         if (initialData.length > 0) return initialData;
       } catch (e) {
         console.error("Failed to parse saved data", e);
@@ -144,7 +158,7 @@ export default function App() {
       shifts: []
     }));
   });
-  const [employeeMaster, setEmployeeMaster] = useState<EmployeeMasterItem[]>([]);
+  const [employeeMaster, setEmployeeMaster] = useState<EmployeeMasterItem[]>(cachedEmployeeMaster || []);
   const [globalRemarks, setGlobalRemarks] = useState<GlobalRemark[]>(() => {
     const saved = templateStorage.getItem("global_remarks");
     if (saved) {
@@ -449,7 +463,7 @@ export default function App() {
   // 起動時に、他の端末で保存されたシフトをNotion（ファーマシーOS経由）から読み込みます。
   // 取得できた場合はそちらを優先し、取得できない場合（オフライン等）はlocalStorageの内容のまま使います。
   const syncReadyRef = useRef(false);
-  const [initialSyncComplete, setInitialSyncComplete] = useState(false);
+  const [initialSyncComplete, setInitialSyncComplete] = useState(cachedEmployeeMaster !== null);
   const skipDirtyRef = useRef(false);
   const skipRemarkDirtyRef = useRef(false);
   const editRevisionRef = useRef(0);
@@ -460,16 +474,14 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
-        const merged = await fetchShiftsFromServer(employees);
+        // Both reads are independent. Cached master keeps the UI available while they refresh.
+        const [merged, master] = await Promise.all([fetchShiftsFromServer(employees), fetchEmployeeMaster()]);
         if (cancelled) return;
-        const sourceEmployees = merged?.employees || employees;
-        const master = await fetchEmployeeMaster();
-        if (cancelled) return;
+        templateStorage.setItem(EMPLOYEE_MASTER_CACHE_KEY, JSON.stringify(master));
         setEmployeeMaster(master);
-        if (master.length || merged) {
-          skipDirtyRef.current = true;
-          setEmployees(master.length ? mergeEmployeesWithMaster(sourceEmployees, master) : sourceEmployees);
-        }
+        const sourceEmployees = merged?.employees || employees;
+        skipDirtyRef.current = true;
+        setEmployees(mergeEmployeesWithMaster(sourceEmployees, master));
         if (merged) {
           // GAS更新前のDBには全体補足プロパティがないため、その間は端末内の既存補足を消さない。
           if (merged.supportsGlobalRemarks) {
@@ -1125,6 +1137,7 @@ export default function App() {
 
   const handleSaveEmployeeMaster = async (items: EmployeeMasterItem[]) => {
     const saved = await saveEmployeeMaster(items);
+    templateStorage.setItem(EMPLOYEE_MASTER_CACHE_KEY, JSON.stringify(saved));
     setEmployeeMaster(saved);
     skipDirtyRef.current = true;
     setEmployees(mergeEmployeesWithMaster(employees, saved));
