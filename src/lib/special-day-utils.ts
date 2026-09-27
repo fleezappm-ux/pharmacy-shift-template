@@ -80,7 +80,7 @@ export function buildDisplayRemarks(manualRemarks: GlobalRemark[], rules: Specia
 }
 
 export function findSpecialDayRule(date: Date, rules: SpecialDayRule[]) {
-  return rules.find(rule => matchesSpecialDayRule(date, rule));
+  return rules.find(rule => !rule.id.startsWith("dropdown-") && matchesSpecialDayRule(date, rule));
 }
 
 export function colorForRemark(remark: GlobalRemark | undefined, rules: SpecialDayRule[]) {

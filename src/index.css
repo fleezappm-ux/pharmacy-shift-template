@@ -194,7 +194,7 @@ body { margin:0; background:#f5f7fa; }
   .dashboard-day-col{width:24px!important;max-width:24px!important}
   .dashboard-employee-col,.dashboard-employee-cell{width:calc((100vw - 86px)/5)!important;max-width:calc((100vw - 86px)/5)!important}
   .dashboard-employee-cell>div{font-size:9px!important;line-height:1.05!important;padding:2px 0!important;white-space:nowrap}
-  .dashboard-remarks-col{display:none!important}
+  .dashboard-remarks-col{display:table-cell!important;min-width:150px!important}
   .dashboard-shift-full{display:none}
   .dashboard-shift-compact{display:inline;font-size:9px;line-height:1.05}
   .dashboard-summary-row td{height:48px!important}

@@ -846,12 +846,12 @@ export default function App() {
     const date = new Date(`${remark.date}T00:00:00`);
     return date.getDay() !== 0 || getJapaneseHolidayDates(date, date).includes(remark.date);
   });
-  const displayRemarks = buildDisplayRemarks(cleanedRemarks, specialDayRules, displayDates);
+  const displayRemarks = buildDisplayRemarks(cleanedRemarks, specialDayRules.filter(rule => !rule.id.startsWith("dropdown-")), displayDates);
   const globalRemarkTypes = [...new Set(["なし", ...specialDayRules.filter(rule => rule.enabled).sort((a, b) => (a.order ?? 999) - (b.order ?? 999)).map(rule => rule.name).filter(Boolean), ...BASE_GLOBAL_REMARK_TYPES])];
   const bandLegendItems = [
     ...(storeMaster.yearEndEnabled && storeMaster.yearEndBandEnabled ? [{ color: storeMaster.yearEndColor, label: "年末年始" }] : []),
     ...(storeMaster.obonEnabled && storeMaster.obonBandEnabled ? [{ color: storeMaster.obonColor, label: "お盆" }] : []),
-    ...specialDayRules.filter(rule => rule.enabled).sort((a, b) => (a.order ?? 999) - (b.order ?? 999)).map(rule => ({ color: rule.color, label: rule.name }))
+    ...specialDayRules.filter(rule => rule.enabled && !rule.id.startsWith("dropdown-")).sort((a, b) => (a.order ?? 999) - (b.order ?? 999)).map(rule => ({ color: rule.color, label: rule.name }))
   ].filter((item, index, items) => items.findIndex(candidate => candidate.color === item.color && candidate.label === item.label) === index);
 
   useEffect(() => {
@@ -875,7 +875,7 @@ export default function App() {
     const allDates = targetRanges.flat();
     const holidaySet = new Set(getJapaneseHolidayDates(allDates[0], allDates[allDates.length - 1]));
     const remarkMap = new Map<string, GlobalRemark>(globalRemarks.map(item => [item.date, item]));
-    const isDuty = (date: Date) => remarkMap.get(getDateStr(date))?.type === "当番薬局" || findSpecialDayRule(date, specialDayRules)?.behavior === "duty";
+    const isDuty = (date: Date) => remarkMap.get(getDateStr(date))?.type === "当番薬局" || findSpecialDayRule(date, specialDayRules.filter(rule => !rule.id.startsWith("dropdown-")))?.behavior === "duty";
     const isRed = (date: Date) => {
       if (isDuty(date)) return false;
       const remark = remarkMap.get(getDateStr(date));
@@ -2244,11 +2244,11 @@ export default function App() {
               <motion.div key="settings-autodraft" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><AutoDraftSettingsView settings={autoDraftSettings} onChange={value => void updateAutoDraftSettings(value)} onStart={startAutoDraft} /></motion.div>
             ) : activeTab === "admin" && settingsPage === "dropdown" ? (
               <motion.div key="settings-dropdown" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">プルダウンマスター管理者</CardTitle><CardDescription>全体シフトの備考欄に表示する項目</CardDescription></div></div></CardHeader><CardContent className="p-6"><DropdownMasterSettings rules={specialDayRules} loading={specialDayLoading} onSave={handleSaveSpecialDayRules} /></CardContent></Card>
+                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">プルダウンマスター管理者</CardTitle><CardDescription>全体シフトの備考欄に表示する項目</CardDescription></div></div></CardHeader><CardContent className="p-6"><DropdownMasterSettings rules={specialDayRules.filter(rule => rule.id.startsWith("dropdown-"))} loading={specialDayLoading} onSave={rules => handleSaveSpecialDayRules([...specialDayRules.filter(rule => !rule.id.startsWith("dropdown-")), ...rules])} /></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "special" ? (
               <motion.div key="settings-special" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">特殊日設定管理者</CardTitle><CardDescription>年ごとに変わる日付・店舗固有の定休日</CardDescription></div></div></CardHeader><CardContent className="p-6"><SpecialDaySettings rules={specialDayRules} loading={specialDayLoading} onSave={handleSaveSpecialDayRules} /></CardContent></Card>
+                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">特殊日設定管理者</CardTitle><CardDescription>年ごとに変わる日付・店舗固有の定休日</CardDescription></div></div></CardHeader><CardContent className="p-6"><SpecialDaySettings rules={specialDayRules.filter(rule => !rule.id.startsWith("dropdown-"))} loading={specialDayLoading} onSave={rules => handleSaveSpecialDayRules([...rules, ...specialDayRules.filter(rule => rule.id.startsWith("dropdown-"))])} /></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" ? (
               <motion.div

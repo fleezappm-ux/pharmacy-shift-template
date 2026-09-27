@@ -25,7 +25,7 @@ export function DropdownMasterSettings({ rules, loading, onSave }: Props) {
     return next;
   });
   const add = () => setDrafts(current => [...current, {
-    id: crypto.randomUUID(), name: "新しい項目", color: "amber", behavior: "information", enabled: true,
+    id: `dropdown-${crypto.randomUUID()}`, name: "新しい項目", color: "amber", behavior: "information", enabled: true,
     mode: "annual", weekday: 0, weeks: [1], dates: [], order: current.length
   }]);
   const save = async () => {
