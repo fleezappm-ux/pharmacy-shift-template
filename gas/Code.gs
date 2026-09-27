@@ -1564,3 +1564,31 @@ function initializeShiftOperator() {
   props.deleteProperty("SHIFT_INITIAL_OPERATOR_NAME");
   Logger.log("初期操作員を登録しました: " + name + " (" + id + ")");
 }
+
+
+/** 複製環境に混入した本番従業員を無効化する一度限りの復旧処理。 */
+function deactivateImportedTemplateEmployees() {
+  var p = PropertiesService.getScriptProperties();
+  if (p.getProperty("NOTION_SHIFT_DATABASE_ID") !== "665ef4863f6040e9b542586083764148" ||
+      p.getProperty("NOTION_SHIFT_REQUEST_DATABASE_ID") !== "a4d434ce8dbc4e9d860167971c631738" ||
+      p.getProperty("NOTION_STORE_DATABASE_ID") !== "23de2613332d4ef3b809d21006cec516") {
+    throw new Error("複製用Notion DBの設定が一致しません。何も変更していません。");
+  }
+  var raw = p.getProperty("SHIFT_EMPLOYEE_MASTER_JSON");
+  if (!raw) throw new Error("従業員マスターが空です。何も変更していません。");
+  var master = normalizeShiftEmployeeMaster(JSON.parse(raw));
+  var importedNames = ["降旗", "藤川", "金井", "本道", "児玉"];
+  var active = master.filter(function(item) { return item.active; });
+  var keep = active.filter(function(item) { return item.name === "tesuto"; });
+  if (keep.length !== 1 || active.some(function(item) {
+    return item.id !== keep[0].id && importedNames.indexOf(item.name) < 0;
+  })) {
+    throw new Error("想定外の従業員がいます。何も変更していません。");
+  }
+  var backupKey = "SHIFT_EMPLOYEE_MASTER_BACKUP_20260927";
+  if (p.getProperty(backupKey)) throw new Error("バックアップが既にあります。再実行せず確認してください。");
+  p.setProperty(backupKey, raw);
+  master.forEach(function(item) { if (item.id !== keep[0].id) item.active = false; });
+  p.setProperty("SHIFT_EMPLOYEE_MASTER_JSON", JSON.stringify(master));
+  Logger.log("複製用従業員マスターを復旧しました。操作員1名を残し、" + (active.length - 1) + "名を無効化しました。");
+}
