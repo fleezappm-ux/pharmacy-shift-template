@@ -1,7 +1,20 @@
 import { format } from "date-fns";
+import { getJapaneseHolidayDates } from "./japanese-holidays";
 import { GlobalRemark, SpecialDayRule } from "../types";
 
 export const DEFAULT_SPECIAL_DAY_RULES: SpecialDayRule[] = [
+  {
+    id: "sunday",
+    name: "日曜日",
+    color: "red",
+    behavior: "information",
+    enabled: true,
+    mode: "recurring",
+    weekday: 0,
+    weeks: [1, 2, 3, 4, 5],
+    dates: [],
+    order: 0
+  },
   {
     id: "national-holiday",
     name: "祝日",
@@ -40,17 +53,16 @@ export const DEFAULT_SPECIAL_DAY_RULES: SpecialDayRule[] = [
   }
 ];
 
-/** 既存店舗の保存済み設定にも、後から追加した標準ルールを安全に補完します。 */
+/** 保存済みの削除を尊重し、標準ルールを勝手に復元しません。 */
 export function withDefaultSpecialDayRules(rules: SpecialDayRule[]): SpecialDayRule[] {
-  const names = new Set(rules.map(rule => rule.name));
-  return [...rules, ...DEFAULT_SPECIAL_DAY_RULES.filter(rule => !names.has(rule.name)).map(rule => ({ ...rule, dates: [...rule.dates], weeks: [...rule.weeks] }))]
-    .map((rule, index) => ({ ...rule, order: rule.order ?? index }))
+  return rules.map((rule, index) => ({ ...rule, order: rule.order ?? index }))
     .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
 }
 
 export function matchesSpecialDayRule(date: Date, rule: SpecialDayRule): boolean {
   if (!rule.enabled) return false;
   const key = format(date, "yyyy-MM-dd");
+  if ((rule.id === "national-holiday" || rule.id === "national-holiday-v2")) return getJapaneseHolidayDates(date, date).includes(key) && date.getDay() !== 0;
   if (rule.mode === "annual") return rule.dates.includes(key);
   const week = Math.ceil(date.getDate() / 7);
   return date.getDay() === rule.weekday && rule.weeks.includes(week);
@@ -74,7 +86,6 @@ export function findSpecialDayRule(date: Date, rules: SpecialDayRule[]) {
 export function colorForRemark(remark: GlobalRemark | undefined, rules: SpecialDayRule[]) {
   if (!remark) return undefined;
   if (remark.color) return remark.color;
-  if (remark.type === "祝日" || remark.type === "店休日") return "red";
-  if (remark.type === "当番薬局") return "green";
-  return rules.find(rule => rule.name === remark.type)?.color;
+
+  return rules.find(rule => rule.enabled && rule.name === remark.type)?.color;
 }

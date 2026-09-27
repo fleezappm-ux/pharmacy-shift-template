@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { format } from "date-fns";
 import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight, UserRound, Users } from "lucide-react";
 import { motion } from "motion/react";
@@ -23,6 +24,7 @@ interface HomeViewProps {
   onInstall: () => void;
   installLabel: string;
   operatorName: string;
+  onLogout: () => void;
   requests: LeaveRequest[];
   pendingCorrections: LeaveRequest[];
   boardMonthLabel: string;
@@ -49,8 +51,9 @@ function shiftLabel(employee: Employee, date: string): string {
 export function HomeView({
   employees, remarks, weekDates, selectedDate, today, weekOffset, heatmapEnabled, monthDates,
   onWeekOffsetChange, onDateSelect, onShowDashboard, onEmployeeSelect, onOpenLeaveRequest, onInstall, installLabel,
-  operatorName, requests, pendingCorrections, boardMonthLabel, boardLocked, boardVisibility, correctionVisibility, isEditor, onOpenBoard
+  operatorName, onLogout, requests, pendingCorrections, boardMonthLabel, boardLocked, boardVisibility, correctionVisibility, isEditor, onOpenBoard
 }: HomeViewProps) {
+  const [showLogout, setShowLogout] = useState(false);
   const orderedEmployees = sortEmployeesForDisplay(employees);
   const selectedDateObject = new Date(`${selectedDate}T00:00:00`);
   const selectedRemark = remarks.find(item => item.date === selectedDate);
@@ -78,7 +81,10 @@ export function HomeView({
             <span>PHARMACY SHIFT</span>
             <div className="home-title-line">
               <h1 className={isEditor ? "home-admin-title" : ""}>{isEditor ? "シフト管理者" : "薬局シフト"}</h1>
-              <span className="home-operator"><UserRound className="h-4 w-4" />操作員：{operatorName}</span>
+              <span className="relative inline-flex items-center">
+                <button type="button" className="home-operator cursor-pointer" aria-expanded={showLogout} onClick={() => setShowLogout(value => !value)}><UserRound className="h-4 w-4" />操作員：{operatorName}</button>
+                {showLogout && <button type="button" className="absolute right-0 top-full z-50 mt-2 whitespace-nowrap rounded-lg border bg-white px-4 py-3 font-bold text-slate-900 shadow-lg" onClick={onLogout}>ログアウトして別のIDで入る</button>}
+              </span>
             </div>
           </div>
         </div>

@@ -59,7 +59,7 @@ import {
 import { AutoDraftSettings, CommentVisibility, Employee, DayShift, ShiftType, GlobalRemark, LeaveRequest, LeaveRequestStatus, LeaveRequestType, PaidLeaveBalance, SpecialDayRule } from "./types";
 import { SHIFT_OPTIONS, DEFAULT_CYCLE_PATTERNS, CyclePatterns } from "./constants";
 import { calculateTimes, generateConfiguredDateRange, normalizeShiftInput, finalizeShiftText, resolveCycleShift } from "./lib/shift-utils";
-import { fetchShiftsFromServer, saveMonthToServer, fetchHolidaysFromServer, fetchShiftPeriodStatus, saveShiftPeriodStatus } from "./lib/shift-sync";
+import { fetchShiftsFromServer, saveMonthToServer, fetchShiftPeriodStatus, saveShiftPeriodStatus } from "./lib/shift-sync";
 import { getJapaneseHolidayDates } from "./lib/japanese-holidays";
 import { chooseOutputFolder, getRememberedFolderName, saveBufferToRememberedFolder } from "./lib/output-destination";
 import { HomeView, sortEmployeesForDisplay } from "./components/HomeView";
@@ -251,7 +251,7 @@ export default function App() {
   const [boardPeriods, setBoardPeriods] = useState<BoardPeriod[]>([]);
   const [boardAnchor, setBoardAnchor] = useState(() => getCurrentShiftMonth(new Date(), { startDay: 21, endDay: 20 }));
   const [correctionVisibility, setCorrectionVisibility] = useState<"all" | "private">("all");
-  const [specialDayRules, setSpecialDayRules] = useState<SpecialDayRule[]>(DEFAULT_SPECIAL_DAY_RULES);
+  const [specialDayRules, setSpecialDayRules] = useState<SpecialDayRule[]>([]);
   const [specialDayLoading, setSpecialDayLoading] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [managementApiKey, setManagementApiKey] = useState(() => getManagementApiKey());
@@ -279,7 +279,19 @@ export default function App() {
     if (!appSession?.token) return;
     let cancelled = false;
     fetchSpecialDayRules()
-      .then(rules => { if (!cancelled) setSpecialDayRules(withDefaultSpecialDayRules(rules)); })
+      .then(async rules => {
+        if (cancelled) return;
+        const legacyHoliday = rules.find(rule => rule.id === "national-holiday");
+        const migrated = legacyHoliday
+          ? [...rules.map(rule => rule.id === "national-holiday" ? { ...rule, id: "national-holiday-v2" } : rule),
+              ...(rules.some(rule => rule.id === "sunday") ? [] : [DEFAULT_SPECIAL_DAY_RULES[0]])]
+          : rules;
+        setSpecialDayRules(withDefaultSpecialDayRules(migrated));
+        if (legacyHoliday && appSession.role === "admin") {
+          try { await saveSpecialDayRules(migrated); }
+          catch (error) { console.error("特殊日の旧設定を更新できませんでした", error); }
+        }
+      })
       .catch(error => console.error("特殊日設定の取得に失敗しました", error));
     return () => { cancelled = true; };
   }, [appSession?.token]);
@@ -829,14 +841,17 @@ export default function App() {
     : (cachedLoginEmployees.length ? cachedLoginEmployees.map((item, index) => ({ id: item.id, name: item.name, displayName: item.displayName || item.name, displayOrder: index + 1, active: item.active !== false, aliases: item.aliases || [], role: item.role || "事務員" }))
       : []);
   const displayDates = [...dateRange, ...homeWeekDates.filter(homeDate => !dateRange.some(date => getDateStr(date) === getDateStr(homeDate)))];
-  const displayRemarks = buildDisplayRemarks(globalRemarks, specialDayRules, displayDates);
+  const cleanedRemarks = globalRemarks.filter(remark => {
+    if (remark.type !== "祝日" || remark.text?.trim()) return true;
+    const date = new Date(`${remark.date}T00:00:00`);
+    return date.getDay() !== 0 || getJapaneseHolidayDates(date, date).includes(remark.date);
+  });
+  const displayRemarks = buildDisplayRemarks(cleanedRemarks, specialDayRules, displayDates);
   const globalRemarkTypes = [...new Set(["なし", ...specialDayRules.filter(rule => rule.enabled).sort((a, b) => (a.order ?? 999) - (b.order ?? 999)).map(rule => rule.name).filter(Boolean), ...BASE_GLOBAL_REMARK_TYPES])];
   const bandLegendItems = [
-    { color: "red", label: "通常の休業日" },
-    ...(storeMaster.useJapaneseHolidays && storeMaster.holidayBandEnabled ? [{ color: storeMaster.holidayColor, label: "国民の祝日" }] : []),
     ...(storeMaster.yearEndEnabled && storeMaster.yearEndBandEnabled ? [{ color: storeMaster.yearEndColor, label: "年末年始" }] : []),
     ...(storeMaster.obonEnabled && storeMaster.obonBandEnabled ? [{ color: storeMaster.obonColor, label: "お盆" }] : []),
-    ...specialDayRules.filter(rule => rule.enabled && rule.name !== "祝日").sort((a, b) => (a.order ?? 999) - (b.order ?? 999)).map(rule => ({ color: rule.color, label: rule.name }))
+    ...specialDayRules.filter(rule => rule.enabled).sort((a, b) => (a.order ?? 999) - (b.order ?? 999)).map(rule => ({ color: rule.color, label: rule.name }))
   ].filter((item, index, items) => items.findIndex(candidate => candidate.color === item.color && candidate.label === item.label) === index);
 
   useEffect(() => {
@@ -982,48 +997,7 @@ export default function App() {
     }
   };
 
-  // 表示中の期間について、日曜・祝日・年末年始をファーマシーOS側の判定ロジックで自動取得し、
-  // まだ備考が付いていない日にだけ「祝日」を自動でセットします（既存の備考は上書きしません）。
-  useEffect(() => {
-    if (!initialSyncComplete || dateRange.length === 0) return;
-    let cancelled = false;
-    const start = getDateStr(dateRange[0]);
-    const end = getDateStr(dateRange[dateRange.length - 1]);
-    (async () => {
-      const localHolidays = getJapaneseHolidayDates(dateRange[0], dateRange[dateRange.length - 1]);
-      const serverHolidays = await fetchHolidaysFromServer(start, end);
-      const holidays = [...new Set([...localHolidays, ...serverHolidays])];
-      if (cancelled || holidays.length === 0) return;
-      // 当番薬局の日は日曜・祝日でも勤務を優先し、既存の勤務時間を休みに上書きしない。
-      const dutyPharmacyDates = new Set([
-        ...globalRemarks.filter(remark => remark.type === "当番薬局").map(remark => remark.date),
-        ...dateRange.filter(date => findSpecialDayRule(date, specialDayRules)?.behavior === "duty").map(getDateStr)
-      ]);
-      const closedHolidays = holidays.filter(date => !dutyPharmacyDates.has(date));
-      setGlobalRemarks(prev => {
-        const byDate = new Map<string, GlobalRemark>(prev.map(remark => [remark.date, remark]));
-        holidays.forEach(date => {
-          if (!dutyPharmacyDates.has(date) && byDate.get(date)?.type !== "当番薬局") {
-            byDate.set(date, { date, type: "祝日", text: byDate.get(date)?.text || "" });
-          }
-        });
-        return Array.from(byDate.values());
-      });
-      // 保存済みの勤務は変更せず、まだシフト行がない場合だけ休みの初期値を追加する。
-      setEmployees(prev => prev.map(emp => {
-        const shifts = [...emp.shifts];
-        closedHolidays.forEach(date => {
-          const index = shifts.findIndex(shift => shift.date.slice(0, 10) === date);
-          const offShift: DayShift = { date, shift: "休み", breakTime: "0:00", workTime: "0:00", comment: index >= 0 ? shifts[index].comment : "" };
-          if (index < 0) shifts.push(offShift);
-        });
-        return { ...emp, shifts };
-      }));
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMonthKey, initialSyncComplete, specialDayRules]);
-
+  // 祝日や日曜日の表示は特殊日ルールから算出する。備考や勤務には自動書き込みしない。
   // 「全員休み」の特殊日ルールは、対象月の勤務初期値にも反映します。
   useEffect(() => {
     if (!initialSyncComplete) return;
@@ -1725,14 +1699,12 @@ export default function App() {
 
   const getRowBgClass = (date: Date) => {
     const gr = getGlobalRemark(date);
-    if (gr?.type === "祝日") return storeMaster.holidayBandEnabled ? `shift-row-special-${storeMaster.holidayColor}` : "";
     const color = colorForRemark(gr, specialDayRules);
     if (color) return `shift-row-special-${color}`;
     const monthDay = format(date, "MM-dd");
     const inRange = (start: string, end: string) => start <= end ? monthDay >= start && monthDay <= end : monthDay >= start || monthDay <= end;
     if (storeMaster.yearEndEnabled && storeMaster.yearEndBandEnabled && inRange(storeMaster.yearEndStart, storeMaster.yearEndEnd)) return `shift-row-special-${storeMaster.yearEndColor}`;
     if (storeMaster.obonEnabled && storeMaster.obonBandEnabled && inRange(storeMaster.obonStart, storeMaster.obonEnd)) return `shift-row-special-${storeMaster.obonColor}`;
-    if (!storeMaster.businessDays.includes(date.getDay())) return "shift-row-holiday";
     return "";
   };
 
@@ -2024,6 +1996,7 @@ export default function App() {
                 onInstall={installToHomeScreen}
                 installLabel={installLabel}
                 operatorName={appSession.employeeName || "未選択"}
+                onLogout={() => { logoutShiftSession(); setAppSession(null); setActiveTab("home"); setIsFromAdmin(false); }}
                 requests={homeBoardRequests}
                 pendingCorrections={homePendingCorrections}
                 boardMonthLabel={(() => { const r = generateConfiguredDateRange(homeBoardMonth.getFullYear(), homeBoardMonth.getMonth() + 1, calendarPeriodSettings.startDay, calendarPeriodSettings.endDay); return r.length ? `${format(r[0], "M/d")}〜${format(r[r.length - 1], "M/d")}` : "期間未設定"; })()}
