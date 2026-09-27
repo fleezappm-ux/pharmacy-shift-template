@@ -1,5 +1,5 @@
 import { templateStorage } from "../lib/template-storage";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale/ja";
 import { Send, Trash2 } from "lucide-react";
@@ -26,6 +26,7 @@ interface Props {
   locked: boolean;
   loading: boolean;
   operatorId: string;
+  isAdmin: boolean;
   onCheckPeriodStatus: (periodStart: string) => Promise<boolean>;
   onSubmit: (input: { employeeId: string; employeeName: string; date: string; periodStart: string; periodEnd: string; type: LeaveRequestType; comment: string; commentVisibility: CommentVisibility }) => Promise<LeaveRequest>;
   onCancel: (id: string) => Promise<void>;
@@ -53,7 +54,7 @@ function shiftLabelFor(employee: Employee | undefined, date: string) {
   return shift?.shift === "任意入力" ? shift.customShiftText || "任意入力" : shift?.shift || "―";
 }
 
-export function LeaveRequestView({ employees, dates, requests, remarks, locked, loading, operatorId, onCheckPeriodStatus, onSubmit, onCancel, onSaveWorkTime, onPeriodChange }: Props) {
+export function LeaveRequestView({ employees, dates, requests, remarks, locked, loading, operatorId, isAdmin, onCheckPeriodStatus, onSubmit, onCancel, onSaveWorkTime, onPeriodChange }: Props) {
   const operator = employees.find(item => item.id === operatorId);
   const employeeName = operator?.displayName || operator?.name || "";
   const noteKey = `shift-leave-note-v2-${operatorId}`;
@@ -61,7 +62,7 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
   const [drafts, setDrafts] = useState<DraftMap>(initialNote.drafts);
   const [times, setTimes] = useState<WorkTimes>(initialNote.times);
   const [comment, setComment] = useState(initialNote.comment);
-  const [view, setView] = useState<"overall" | "personal">("overall");
+  const [view, setView] = useState<"overall" | "personal">(() => window.matchMedia("(min-width: 901px)").matches ? "personal" : "overall");
   const [openDate, setOpenDate] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -151,7 +152,7 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
         <button type="button" className="leave-shift-pick" disabled={loading || submitting} onClick={() => setOpenDate(openDate === key ? null : key)} aria-label={`${format(date, "M/d")}の自分の希望を選ぶ`}>
           <strong>{shiftLabelFor(employee, key)}</strong>{selected && <small>{selected}</small>}
         </button>
-        {(openDate === key || selected) && selectFor(key)}
+        <span className="leave-desktop-select">{selectFor(key)}</span><span className="leave-mobile-select">{(openDate === key || selected) && selectFor(key)}</span>
         {existing && !selected && <span className="leave-shift-existing">提出済：{existing.type}</span>}
       </> : <span className="leave-shift-other">{shiftLabelFor(employee, key)}</span>}
     </td>;
@@ -161,7 +162,7 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
     <header className="leave-shift-hero">
       <div className="leave-shift-brand">
         <img src="${import.meta.env.BASE_URL}icon-192.png" alt="" />
-        <div><h1>希望シフト受付</h1><span>操作員：{employeeName || "未選択"}</span></div>
+        <div><h1>希望シフト受付{isAdmin && <span className="leave-admin-desktop">・管理者用</span>}</h1><span>操作員：{employeeName || "未選択"}</span></div>
         <button type="button" className="leave-help-button" onClick={() => setShowHelp(true)}>使い方</button>
       </div>
       <div className="leave-shift-full-period">{fullPeriodLabel}</div>
@@ -192,13 +193,14 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
             </tr>;
           })}</tbody>
         </table>
-      </div> : <div className="leave-personal-list">
+      </div> : <div className="leave-personal-list" style={{ "--leave-first-day": dates[0]?.getDay() ?? 0 } as CSSProperties}>
+        <div className="leave-desktop-weekdays" aria-hidden="true">{["日", "月", "火", "水", "木", "金", "土"].map(day => <span key={day}>{day}</span>)}</div>
         {dates.map(date => {
           const key = format(date, "yyyy-MM-dd");
           const remark = remarkFor(key);
           return <div key={key} className={`leave-personal-row ${colorFor(date, key) ? `special-${colorFor(date, key)}` : ""} ${drafts[key] ? "has-draft" : ""}`}>
             <div className="leave-personal-date"><strong>{format(date, "M/d")}</strong><small>{format(date, "E", { locale: ja })}</small></div>
-            <div className="leave-personal-work"><button type="button" disabled={loading || submitting} onClick={() => setOpenDate(openDate === key ? null : key)} aria-label={`${format(date, "M/d")}の自分の希望を選ぶ`}><strong>{shiftLabelFor(operator, key)}</strong>{drafts[key] && <small>{drafts[key].type}</small>}</button>{(openDate === key || drafts[key]) && selectFor(key)}{requestByDate.get(key) && !drafts[key] && <span className="leave-shift-existing">提出済：{requestByDate.get(key)?.type}</span>}</div>
+            <div className="leave-personal-work"><button type="button" disabled={loading || submitting} onClick={() => setOpenDate(openDate === key ? null : key)} aria-label={`${format(date, "M/d")}の自分の希望を選ぶ`}><strong>{shiftLabelFor(operator, key)}</strong>{drafts[key] && <small>{drafts[key].type}</small>}</button><span className="leave-desktop-select">{selectFor(key)}</span><span className="leave-mobile-select">{(openDate === key || drafts[key]) && selectFor(key)}</span>{requestByDate.get(key) && !drafts[key] && <span className="leave-shift-existing">提出済：{requestByDate.get(key)?.type}</span>}</div>
             {remark && remark.type !== "なし" && <small className="leave-personal-remark">{remark.type}{remark.text ? `：${remark.text}` : ""}</small>}
           </div>;
         })}
