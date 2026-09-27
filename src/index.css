@@ -382,3 +382,8 @@ body { margin:0; background:#f5f7fa; }
   .leave-shift-pick strong{font-size:11px}
   .leave-shift-page .leave-note-card{max-width:900px;margin:16px auto 0}
 }
+
+/* Keep Android pull-to-refresh from interrupting mobile editing. */
+@media (max-width: 767px) {
+  html, body { overscroll-behavior-y: contain; }
+}
