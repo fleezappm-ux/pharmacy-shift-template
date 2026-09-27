@@ -72,7 +72,7 @@ import { fetchSpecialDayRules, saveSpecialDayRules } from "./lib/special-day-syn
 import { buildDisplayRemarks, colorForRemark, DEFAULT_SPECIAL_DAY_RULES, findSpecialDayRule, withDefaultSpecialDayRules } from "./lib/special-day-utils";
 import { CalendarPeriodSettings, fetchCalendarPeriodSettings, saveCalendarPeriodSettings } from "./lib/calendar-period-sync";
 import { BoardVisibility, fetchBoardVisibility, saveBoardVisibility, fetchCorrectionVisibility, saveCorrectionVisibility } from "./lib/store-board-sync";
-import { getManagementApiKey, logoutShiftSession, saveManagementApiKey, ShiftSession } from "./lib/auth-sync";
+import { getManagementApiKey, getShiftSession, logoutShiftSession, saveManagementApiKey, ShiftSession } from "./lib/auth-sync";
 import { DropdownMasterSettings } from "./components/DropdownMasterSettings";
 import { DEFAULT_STORE_MASTER, StoreMaster, StoreMasterSettings } from "./components/StoreMasterSettings";
 import { ShiftLogin } from "./components/ShiftLogin";
@@ -107,10 +107,7 @@ function getCurrentShiftMonth(today = new Date(), settings = DEFAULT_CALENDAR_PE
 }
 
 export default function App() {
-  const [appSession, setAppSession] = useState<ShiftSession | null>(() => {
-    logoutShiftSession();
-    return null;
-  });
+  const [appSession, setAppSession] = useState<ShiftSession | null>(() => getShiftSession());
   const [settingsPage, setSettingsPage] = useState<"menu" | "store" | "board" | "employee" | "shift" | "dropdown" | "special" | "operations" | "autodraft" | "reset">("menu");
   const [storeMaster, setStoreMaster] = useState<StoreMaster>(() => {
     const saved = templateStorage.getItem("store_master_settings");
