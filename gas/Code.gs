@@ -674,13 +674,8 @@ function normalizeShiftEmployeeMaster(items) {
 function getShiftEmployeeMaster(data) {
   try {
     requireShiftSession(data.sessionToken);
-    var master = readShiftEmployeeMaster();
-    var names = (Array.isArray(data.names) ? data.names : []).map(function(name) { return sanitizeText(name, 100).trim(); }).filter(Boolean);
-    var known = {};
-    master.forEach(function(item) { known[item.name] = true; (item.aliases || []).forEach(function(name) { known[name] = true; }); });
-    names.forEach(function(name) { if (!known[name]) master.push({ id: Utilities.getUuid(), name: name, displayName: name, displayOrder: master.length + 1, active: true, aliases: [], role: "" }); });
-    master = normalizeShiftEmployeeMaster(master);
-    PropertiesService.getScriptProperties().setProperty("SHIFT_EMPLOYEE_MASTER_JSON", JSON.stringify(master));
+    // Reading must never register names from a browser cache in a new store.
+    var master = normalizeShiftEmployeeMaster(readShiftEmployeeMaster());
     return createJsonDataResponse({ success: true, employees: master });
   } catch (error) { return createJsonResponse(false, error.message || "従業員マスターを取得できませんでした。"); }
 }

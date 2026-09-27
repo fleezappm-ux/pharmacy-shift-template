@@ -465,7 +465,7 @@ export default function App() {
         const merged = await fetchShiftsFromServer(employees);
         if (cancelled) return;
         const sourceEmployees = merged?.employees || employees;
-        const master = await fetchEmployeeMaster(sourceEmployees.map(employee => employee.name));
+        const master = await fetchEmployeeMaster();
         if (cancelled) return;
         setEmployeeMaster(master);
         if (master.length || merged) {
@@ -878,7 +878,7 @@ export default function App() {
         const weekIndex = cycleWeekIndex(date, assignment);
         let shift = resolveCycleShift(cyclePatterns, assignment.cycleType, date.getDay(), weekIndex);
         if (isRed(date)) shift = "休み";
-        else if (isBlue(date) && ["金井", "児玉"].includes(employee.name)) shift = "休み";
+        
         if (!shift) return;
         const times = calculateTimes(shift);
         shifts.push({ date: key, shift, breakTime: times.breakTime, workTime: times.workTime, comment: "" });

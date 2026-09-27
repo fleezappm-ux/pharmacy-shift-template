@@ -22,8 +22,9 @@ async function call(action: string, payload: Record<string, unknown> = {}) {
   return json;
 }
 
-export async function fetchEmployeeMaster(names: string[]): Promise<EmployeeMasterItem[]> {
-  const json = await call("getShiftEmployeeMaster", { names });
+export async function fetchEmployeeMaster(): Promise<EmployeeMasterItem[]> {
+  // Never submit cached shift names to GAS: its legacy read endpoint auto-registers them.
+  const json = await call("getShiftEmployeeMaster", { names: [] });
   return Array.isArray(json.employees) ? json.employees : [];
 }
 
