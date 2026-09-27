@@ -76,7 +76,7 @@ export function TemplateResetSettings({ onBack }: { onBack: () => void }) {
         <Button variant="outline" disabled={busy} onClick={() => void inspect()}>対象件数を確認</Button>
         {preview && <div className="space-y-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm">
           <p className="font-semibold">初期化対象（複製用DB）</p>
-          <ul className="list-inside list-disc">{preview.counts.map(item => <li key={item.label}>{item.label}: {item.count}件</li>)}<li>従業員: {preview.employees}名（{preview.operatorName}を残す）</li></ul>
+          <ul className="list-inside list-disc">{preview.counts.map(item => <li key={item.label}>{item.label}: {item.count}件</li>)}<li>従業員登録: {preview.employees}件（無効・非表示の登録も含む。{preview.operatorName}のみ残す）</li></ul>
           <label className="block space-y-2"><span>実行する場合は「初期化」と入力</span><Input value={confirmation} disabled={busy} onChange={event => setConfirmation(event.target.value)} placeholder="初期化" /></label>
           {archived > 0 && <p>アーカイブ済み: {archived}件</p>}
           <Button variant="destructive" disabled={busy || confirmation !== "初期化"} onClick={() => void run()}>{busy ? "処理中…" : archived ? "初期化を再開" : "業務データを初期化"}</Button>
