@@ -1,4 +1,5 @@
 import { templateStorage } from "./lib/template-storage";
+import { TemplateResetSettings } from "./components/TemplateResetSettings";
 import { useState, useEffect, useRef } from "react";
 import { format, addMonths } from "date-fns";
 import { ja } from "date-fns/locale/ja";
@@ -110,7 +111,7 @@ export default function App() {
     logoutShiftSession();
     return null;
   });
-  const [settingsPage, setSettingsPage] = useState<"menu" | "store" | "board" | "employee" | "shift" | "dropdown" | "special" | "operations" | "autodraft">("menu");
+  const [settingsPage, setSettingsPage] = useState<"menu" | "store" | "board" | "employee" | "shift" | "dropdown" | "special" | "operations" | "autodraft" | "reset">("menu");
   const [storeMaster, setStoreMaster] = useState<StoreMaster>(() => {
     const saved = templateStorage.getItem("store_master_settings");
     if (!saved) return DEFAULT_STORE_MASTER;
@@ -2233,6 +2234,7 @@ export default function App() {
                       { key: "board", icon: MessageSquareText, title: "お知らせ掲示板マスタ", description: "休み希望を掲示板へ公開するタイミング" },
                       { key: "employee", icon: Users, title: "従業員設定", description: "従業員マスター、役職、表示順" },
                       { key: "shift", icon: SlidersHorizontal, title: "シフト設定", description: "自動作成、クール、特殊日、プルダウン" },
+                      { key: "reset", icon: Trash2, title: "複製版のデータ初期化", description: "業務データをまとめて初期化（管理者のみ）" },
                     ].map(item => <button key={item.key} type="button" onClick={() => setSettingsPage(item.key as typeof settingsPage)} className="group flex min-h-32 items-center gap-4 rounded-2xl border-2 border-slate-100 bg-white p-5 text-left shadow-sm transition hover:border-blue-300 hover:bg-blue-50/50">
                       <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700"><item.icon className="h-6 w-6" /></span>
                       <span><strong className="flex items-center gap-2 text-base text-slate-900">{item.title}<ChevronRight className="h-4 w-4 transition group-hover:translate-x-1" /></strong><small className="mt-1 block leading-relaxed text-slate-500">{item.description}</small></span>
@@ -2240,6 +2242,8 @@ export default function App() {
                   </CardContent>
                 </Card>
               </motion.div>
+            ) : activeTab === "admin" && settingsPage === "reset" ? (
+              <TemplateResetSettings onBack={() => setSettingsPage("menu")} />
             ) : activeTab === "admin" && settingsPage === "store" ? (
               <motion.div key="settings-store" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                 <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">店舗マスター管理者</CardTitle><CardDescription>店舗全体の基本ルール</CardDescription></div></div></CardHeader><CardContent className="p-6 space-y-5"><StoreMasterSettings master={storeMaster} onMasterChange={setStoreMaster} period={calendarPeriodSettings} periodDraft={calendarPeriodDraft} saving={calendarPeriodSaving} onPeriodDraftChange={setCalendarPeriodDraft} onSavePeriod={handleSaveCalendarPeriod} onSaveBoardVisibility={handleSaveBoardVisibility} /><section className="rounded-2xl border-2 border-blue-100 bg-blue-50/50 p-5"><h4 className="font-black">APIキー設定</h4><p className="mt-1 text-xs text-slate-500">管理者操作とNotion連携に使用します。この端末だけに保存されます。</p><div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]"><Input type="password" value={managementApiKey} onChange={e => setManagementApiKey(e.target.value)} placeholder="管理者用GAS接続キー" /><Button onClick={() => { saveManagementApiKey(managementApiKey); toast.success("APIキーをこの端末に保存しました"); }}>APIキーを保存</Button></div></section></CardContent></Card>

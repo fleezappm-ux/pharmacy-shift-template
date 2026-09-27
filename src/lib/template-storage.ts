@@ -11,5 +11,11 @@ export const templateStorage = {
   },
   removeItem(key: string): void {
     localStorage.removeItem(namespace + key);
+  },
+  clearBusinessData(): void {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(namespace) && key !== namespace + "shift_api_key") localStorage.removeItem(key);
+    }
   }
 };

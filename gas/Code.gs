@@ -7,6 +7,8 @@ function doPost(e) {
     var adminActions = ["updateShiftLeaveRequestStatus", "deleteShiftLeaveRequest", "saveShiftCorrectionVisibility", "saveShiftSpecialDayRules", "saveShiftCalendarPeriodSettings", "saveShiftPeriodStatus", "saveShift", "saveShiftMonth", "deleteShift"];
     if (viewActions.indexOf(data.action) >= 0) requireShiftSession(data.sessionToken);
     if (adminActions.indexOf(data.action) >= 0) requireShiftSession(data.sessionToken, "admin");
+    if (data.action === "previewTemplateReset") return previewTemplateReset(data);
+    if (data.action === "runTemplateReset") return runTemplateReset(data);
     if (data.action === "loginShift") return loginShift(data);
     if (data.action === "loginShiftAdmin") return loginShiftAdmin(data);
     if (data.action === "loginShiftEmployee") return loginShiftEmployee(data);
@@ -1591,4 +1593,100 @@ function deactivateImportedTemplateEmployees() {
   master.forEach(function(item) { if (item.id !== keep[0].id) item.active = false; });
   p.setProperty("SHIFT_EMPLOYEE_MASTER_JSON", JSON.stringify(master));
   Logger.log("複製用従業員マスターを復旧しました。操作員1名を残し、" + (active.length - 1) + "名を無効化しました。");
+}
+
+/** 複製用の3DB以外に向いたGASでは初期化を一切受け付けない。 */
+function assertTemplateResetTarget() {
+  var p = PropertiesService.getScriptProperties();
+  var expected = {
+    NOTION_SHIFT_DATABASE_ID: "665ef4863f6040e9b542586083764148",
+    NOTION_SHIFT_REQUEST_DATABASE_ID: "a4d434ce8dbc4e9d860167971c631738",
+    NOTION_STORE_DATABASE_ID: "23de2613332d4ef3b809d21006cec516"
+  };
+  Object.keys(expected).forEach(function(key) {
+    if (normalizeNotionId(p.getProperty(key)) !== expected[key]) {
+      throw new Error("複製用DBの設定が一致しません。初期化できません。");
+    }
+  });
+  if (!p.getProperty("NOTION_API_KEY")) throw new Error("Notion接続が未設定です。");
+  return p;
+}
+
+function templateResetDatabases(p) {
+  return [
+    { key: "NOTION_SHIFT_DATABASE_ID", label: "シフト" },
+    { key: "NOTION_SHIFT_REQUEST_DATABASE_ID", label: "希望届" },
+    { key: "NOTION_STORE_DATABASE_ID", label: "店舗設定" }
+  ];
+}
+
+function previewTemplateReset(data) {
+  try {
+    var session = requireShiftSession(data.sessionToken, "admin");
+    verifyShiftApiKey(data.apiKey);
+    var p = assertTemplateResetTarget();
+    var dbs = templateResetDatabases(p);
+    var counts = dbs.map(function(db) {
+      return { label: db.label, count: queryNotionDatabase(p.getProperty("NOTION_API_KEY"), p.getProperty(db.key), { page_size: 100 }).length };
+    });
+    var operator = normalizeShiftEmployeeMaster(readShiftEmployeeMaster()).filter(function(item) {
+      return item.id === session.employeeId && item.active;
+    })[0];
+    if (!operator) throw new Error("操作員が見つかりません。ログインし直してください。");
+    var token = Utilities.getUuid();
+    p.setProperty("SHIFT_TEMPLATE_RESET_AUTH", JSON.stringify({
+      token: token, operator: operator, expiresAt: Date.now() + 60 * 60 * 1000
+    }));
+    return createJsonDataResponse({ success: true, counts: counts, employees: readShiftEmployeeMaster().length, token: token, operatorName: operator.displayName });
+  } catch (error) { return createJsonResponse(false, error.message || "初期化対象を確認できませんでした。"); }
+}
+
+function runTemplateReset(data) {
+  var lock = LockService.getScriptLock();
+  try {
+    if (!lock.tryLock(10000)) throw new Error("別の処理中です。少し待って再試行してください。");
+    var session = requireShiftSession(data.sessionToken, "admin");
+    verifyShiftApiKey(data.apiKey);
+    var p = assertTemplateResetTarget();
+    var authorization = JSON.parse(p.getProperty("SHIFT_TEMPLATE_RESET_AUTH") || "null");
+    if (!authorization || authorization.token !== data.token ||
+        authorization.operator.id !== session.employeeId || authorization.expiresAt <= Date.now() ||
+        data.confirmation !== "初期化") throw new Error("確認が無効です。対象を再確認してください。");
+    var apiKey = p.getProperty("NOTION_API_KEY");
+    var archived = 0;
+    var remaining = 0;
+    var budget = 20;
+    templateResetDatabases(p).forEach(function(db) {
+      var rows = queryNotionDatabase(apiKey, p.getProperty(db.key), { page_size: Math.min(budget + 1, 100) });
+      var selected = rows.slice(0, budget);
+      selected.forEach(function(page) {
+        requestNotion(apiKey, "https://api.notion.com/v1/pages/" + page.id, "patch", { archived: true });
+        archived++;
+      });
+      budget -= selected.length;
+      remaining += rows.length - selected.length;
+    });
+    // 次のバッチで最終確認を行う。失敗時は同じ確認トークンで安全に再試行できる。
+    if (budget === 0 || remaining > 0) {
+      return createJsonDataResponse({ success: true, done: false, archived: archived });
+    }
+    var businessKeys = [
+      "SHIFT_CYCLE_MASTER_JSON", "SHIFT_AUTO_DRAFT_SETTINGS_JSON", "SHIFT_SPECIAL_DAY_RULES_JSON",
+      "SHIFT_CALENDAR_PERIOD_JSON", "SHIFT_PERIOD_STATUSES_JSON", "SHIFT_PAID_LEAVE_BALANCES_JSON",
+      "SHIFT_PAID_LEAVE_LEDGER_JSON", "SHIFT_AUDIT_LOG_JSON",
+      "SHIFT_BOARD_VISIBILITY_FALLBACK_" + getStoreId(),
+      "SHIFT_CORRECTION_VISIBILITY_" + getStoreId()
+    ];
+    businessKeys.forEach(function(key) { p.deleteProperty(key); });
+    // ログイン用に操作員1名だけ残し、接続情報・ログインID・パスワードは保持する。
+    p.setProperty("SHIFT_EMPLOYEE_MASTER_JSON", JSON.stringify([authorization.operator]));
+    var all = p.getProperties();
+    Object.keys(all).forEach(function(key) {
+      if (key.indexOf("SHIFT_SESSION_") === 0) p.deleteProperty(key);
+    });
+    p.deleteProperty("SHIFT_TEMPLATE_RESET_AUTH");
+    return createJsonDataResponse({ success: true, done: true, archived: archived });
+  } catch (error) {
+    return createJsonResponse(false, error.message || "初期化に失敗しました。");
+  } finally { if (lock.hasLock()) lock.releaseLock(); }
 }
