@@ -91,7 +91,7 @@ export function ShiftToolGuide({ role, initialSection = "home", onClose }: { rol
   const jumpTo = (id: EmployeeGuideSection, behavior: ScrollBehavior = "smooth") => {
     const container = scrollRef.current;
     const target = container?.querySelector<HTMLElement>(`[data-guide-section="${id}"]`);
-    if (container && target) container.scrollTo({ top: target.offsetTop - container.offsetTop, behavior });
+    if (container && target) container.scrollTo({ top: target.offsetTop, behavior });
   };
   useEffect(() => {
     if (role !== "employee") return;
