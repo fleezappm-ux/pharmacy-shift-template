@@ -60,7 +60,7 @@ import {
 import { AutoDraftSettings, CommentVisibility, Employee, DayShift, ShiftType, GlobalRemark, LeaveRequest, LeaveRequestStatus, LeaveRequestType, PaidLeaveBalance, SpecialDayRule } from "./types";
 import { SHIFT_OPTIONS, DEFAULT_CYCLE_PATTERNS, CyclePatterns } from "./constants";
 import { calculateTimes, generateConfiguredDateRange, normalizeShiftInput, finalizeShiftText, resolveCycleShift } from "./lib/shift-utils";
-import { fetchShiftsFromServer, saveMonthToServer, fetchShiftPeriodStatus, saveShiftPeriodStatus, clearTemplateShiftRemarks } from "./lib/shift-sync";
+import { fetchShiftsFromServer, saveMonthToServer, fetchShiftPeriodStatus, saveShiftPeriodStatus } from "./lib/shift-sync";
 import { chooseOutputFolder, getRememberedFolderName, saveBufferToRememberedFolder } from "./lib/output-destination";
 import { HomeView, sortEmployeesForDisplay } from "./components/HomeView";
 import { LeaveRequestView } from "./components/LeaveRequestView";
@@ -2091,7 +2091,7 @@ export default function App() {
                         </div>
                       </div>
 
-<section className="rounded-xl border border-red-200 bg-red-50 p-4"><h3 className="font-bold text-red-800">複製版に残る古い備考を削除</h3><p className="mt-2 text-sm">シフトの勤務内容は残し、旧「備考」「全体補足」の値だけ消します。複製用DBの確認に通ったときだけ実行します。</p><Button variant="outline" className="mt-3" onClick={async () => { try { const preview = await clearTemplateShiftRemarks(true); if (!preview.count) { toast.success("削除する古い備考はありません"); return; } if (!window.confirm(`${preview.count}件の備考を削除しますか？（シフトは残ります）`)) return; let remaining = preview.count; while (remaining > 0) { const result = await clearTemplateShiftRemarks(false); if (!result.cleared) break; remaining = result.remaining || 0; } if (remaining) toast.error(`一部の備考が残りました（${remaining}件）。再実行してください`); else toast.success("古い備考を削除しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "削除できませんでした"); } }}>古い備考を確認して削除</Button></section></CardContent></Card></motion.div>
+</CardContent></Card></motion.div>
             ) : activeTab === "admin" ? (
               <p>設定項目を選んでください。</p>
             ) : (
