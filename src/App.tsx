@@ -1,3 +1,4 @@
+import { AdminNotice, AdminNoticeVisibility, fetchAdminNotices, fetchAdminNoticeVisibility, saveAdminNoticeVisibility, createAdminNotice, removeAdminNotice } from "./lib/admin-notice-sync";
 import { templateStorage } from "./lib/template-storage";
 import { TemplateResetSettings } from "./components/TemplateResetSettings";
 import { ShiftToolGuide } from "./components/ShiftToolGuide";
@@ -5,7 +6,6 @@ import { useState, useEffect, useRef } from "react";
 import { format, addMonths } from "date-fns";
 import { ja } from "date-fns/locale/ja";
 import { 
-  Bell,
   Trash2,
   PlusCircle, 
   Download, 
@@ -60,8 +60,7 @@ import {
 import { AutoDraftSettings, CommentVisibility, Employee, DayShift, ShiftType, GlobalRemark, LeaveRequest, LeaveRequestStatus, LeaveRequestType, PaidLeaveBalance, SpecialDayRule } from "./types";
 import { SHIFT_OPTIONS, DEFAULT_CYCLE_PATTERNS, CyclePatterns } from "./constants";
 import { calculateTimes, generateConfiguredDateRange, normalizeShiftInput, finalizeShiftText, resolveCycleShift } from "./lib/shift-utils";
-import { fetchShiftsFromServer, saveMonthToServer, fetchShiftPeriodStatus, saveShiftPeriodStatus } from "./lib/shift-sync";
-import { getJapaneseHolidayDates } from "./lib/japanese-holidays";
+import { fetchShiftsFromServer, saveMonthToServer, fetchShiftPeriodStatus, saveShiftPeriodStatus, clearTemplateShiftRemarks } from "./lib/shift-sync";
 import { chooseOutputFolder, getRememberedFolderName, saveBufferToRememberedFolder } from "./lib/output-destination";
 import { HomeView, sortEmployeesForDisplay } from "./components/HomeView";
 import { LeaveRequestView } from "./components/LeaveRequestView";
@@ -70,15 +69,15 @@ import { PersonalShiftList } from "./components/PersonalShiftList";
 import { cancelLeaveRequest, deleteLeaveRequest, fetchLeaveRequests, fetchPaidLeaveBalance, savePaidLeaveBalance, submitLeaveRequest, updateLeaveRequestStatus, updateLeaveRequestWorkTime } from "./lib/leave-request-sync";
 import { SpecialDaySettings } from "./components/SpecialDaySettings";
 import { fetchSpecialDayRules, saveSpecialDayRules } from "./lib/special-day-sync";
-import { buildDisplayRemarks, colorForRemark, DEFAULT_SPECIAL_DAY_RULES, findSpecialDayRule, withDefaultSpecialDayRules } from "./lib/special-day-utils";
+import { buildDisplayRemarks, colorForRemark, DEFAULT_SPECIAL_DAY_RULES, findSpecialDayRule, withDefaultSpecialDayRules, businessDaysFromRules, withBusinessDays } from "./lib/special-day-utils";
 import { CalendarPeriodSettings, fetchCalendarPeriodSettings, saveCalendarPeriodSettings } from "./lib/calendar-period-sync";
 import { BoardVisibility, fetchBoardVisibility, saveBoardVisibility, fetchCorrectionVisibility, saveCorrectionVisibility } from "./lib/store-board-sync";
 import { getManagementApiKey, getShiftSession, logoutShiftSession, saveManagementApiKey, ShiftSession } from "./lib/auth-sync";
-import { DropdownMasterSettings } from "./components/DropdownMasterSettings";
 import { DEFAULT_STORE_MASTER, StoreMaster, StoreMasterSettings } from "./components/StoreMasterSettings";
 import { ShiftLogin } from "./components/ShiftLogin";
 import { EmployeeMasterSettings } from "./components/EmployeeMasterSettings";
-import { EmployeeMasterItem, fetchEmployeeMaster, mergeEmployeesWithMaster, saveEmployeeMaster } from "./lib/employee-master-sync";
+import { RoleAndHomeSettings } from "./components/RoleAndHomeSettings";
+import { EmployeeMasterItem, fetchEmployeeMaster, mergeEmployeesWithMaster, saveEmployeeMaster, DEFAULT_HOME_LAYOUT, DEFAULT_ROLES, fetchShiftRoles, fetchHomeLayout, saveShiftRoles, saveHomeLayout, ShiftRole, HomeLayout } from "./lib/employee-master-sync";
 import { fetchCycleMaster, saveCycleMaster } from "./lib/cycle-master-sync";
 import { BoardPeriod, BulletinBoard } from "./components/BulletinBoard";
 import { MyPage } from "./components/MyPage";
@@ -122,7 +121,7 @@ function getCurrentShiftMonth(today = new Date(), settings = DEFAULT_CALENDAR_PE
 export default function App() {
   const [appSession, setAppSession] = useState<ShiftSession | null>(() => getShiftSession());
   const [guideOpen, setGuideOpen] = useState(() => templateStorage.getItem("shift_guide_hidden_v1") !== "1");
-  const [settingsPage, setSettingsPage] = useState<"menu" | "store" | "board" | "employee" | "shift" | "dropdown" | "special" | "operations" | "autodraft" | "reset">("menu");
+  const [settingsPage, setSettingsPage] = useState<"menu" | "store" | "board" | "employee" | "shift" | "special" | "operations" | "autodraft" | "other" | "reset">("menu");
   const [storeMaster, setStoreMaster] = useState<StoreMaster>(() => {
     const saved = templateStorage.getItem("store_master_settings");
     if (!saved) return DEFAULT_STORE_MASTER;
@@ -161,17 +160,11 @@ export default function App() {
     }));
   });
   const [employeeMaster, setEmployeeMaster] = useState<EmployeeMasterItem[]>(cachedEmployeeMaster || []);
-  const [globalRemarks, setGlobalRemarks] = useState<GlobalRemark[]>(() => {
-    const saved = templateStorage.getItem("global_remarks");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Failed to parse global remarks", e);
-      }
-    }
-    return [];
-  });
+  const [roles, setRoles] = useState<ShiftRole[]>(DEFAULT_ROLES);
+  const [adminNotices, setAdminNotices] = useState<AdminNotice[]>([]);
+  const [adminNoticeVisibility, setAdminNoticeVisibility] = useState<AdminNoticeVisibility>("all");
+  const [homeLayout, setHomeLayout] = useState<HomeLayout>(DEFAULT_HOME_LAYOUT);
+  const [globalRemarks, setGlobalRemarks] = useState<GlobalRemark[]>([]);
   const [currentMonth, setCurrentMonth] = useState(() => {
     const saved = templateStorage.getItem("current_month");
     return saved ? new Date(saved) : getCurrentShiftMonth(new Date(), calendarPeriodSettings);
@@ -195,7 +188,6 @@ export default function App() {
   });
   const [isFromAdmin, setIsFromAdmin] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [showNotificationPopup, setShowNotificationPopup] = useState(false);
   const [cycleNames, setCycleNames] = useState<Record<number, string>>(() => {
     const saved = templateStorage.getItem("cycle_names");
     if (saved) {
@@ -253,7 +245,7 @@ export default function App() {
   const [boardPeriods, setBoardPeriods] = useState<BoardPeriod[]>([]);
   const [boardAnchor, setBoardAnchor] = useState(() => getCurrentShiftMonth(new Date(), { startDay: 21, endDay: 20 }));
   const [correctionVisibility, setCorrectionVisibility] = useState<"all" | "private">("all");
-  const [specialDayRules, setSpecialDayRules] = useState<SpecialDayRule[]>([]);
+  const [specialDayRules, setSpecialDayRules] = useState<SpecialDayRule[]>(DEFAULT_SPECIAL_DAY_RULES);
   const [specialDayLoading, setSpecialDayLoading] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [managementApiKey, setManagementApiKey] = useState(() => getManagementApiKey());
@@ -281,19 +273,20 @@ export default function App() {
     if (!appSession?.token) return;
     let cancelled = false;
     fetchSpecialDayRules()
-      .then(async rules => {
+      .then(rules => {
         if (cancelled) return;
-        const legacyHoliday = rules.find(rule => rule.id === "national-holiday");
-        const migrated = legacyHoliday
-          ? [...rules.map(rule => rule.id === "national-holiday" ? { ...rule, id: "national-holiday-v2" } : rule),
-              ...(rules.some(rule => rule.id === "sunday") ? [] : [DEFAULT_SPECIAL_DAY_RULES[0]])]
-          : rules;
-        setSpecialDayRules(withDefaultSpecialDayRules(migrated.map(rule =>
-          rule.id.startsWith("dropdown-") || rule.id.startsWith("band-v2:") ? rule : { ...rule, enabled: false }
-        )));
+        setSpecialDayRules(withDefaultSpecialDayRules(rules));
       })
       .catch(error => console.error("特殊日設定の取得に失敗しました", error));
     return () => { cancelled = true; };
+  }, [appSession?.token]);
+
+  useEffect(() => {
+    if (!appSession?.token) return;
+    fetchShiftRoles().then(setRoles).catch(error => console.error("役職の取得に失敗しました", error));
+    fetchHomeLayout().then(setHomeLayout).catch(error => console.error("ホーム表示設定の取得に失敗しました", error));
+    fetchAdminNotices().then(setAdminNotices).catch(error => console.error("お知らせ取得", error));
+    fetchAdminNoticeVisibility().then(setAdminNoticeVisibility).catch(error => console.error("お知らせ公開設定", error));
   }, [appSession?.token]);
 
   useEffect(() => {
@@ -495,7 +488,7 @@ export default function App() {
         skipDirtyRef.current = true;
         setEmployees(mergeEmployeesWithMaster(sourceEmployees, master));
         if (merged) {
-          // GAS更新前のDBには全体補足プロパティがないため、その間は端末内の既存補足を消さない。
+          // 旧備考は複製版では表示しない。
           if (merged.supportsGlobalRemarks) {
             skipRemarkDirtyRef.current = true;
             // 祝日取得とNotion読込が同時に終わっても、先に取得できた自動祝日を消さない。
@@ -600,17 +593,6 @@ export default function App() {
       ? "このシフト案を確定しますか？\n\n確定後は一般ユーザーへ確定シフトとして表示され、通常の編集はできなくなります。"
       : "確定シフトを解除して、シフト案・編集中に戻しますか？");
     if (!confirmed) return;
-    if (nextLocked) {
-      const conflicts = dateRange.reduce((total, date) => {
-        const remark = getGlobalRemark(date);
-        if (remark?.type !== "祝日" && remark?.type !== "店休日") return total;
-        return total + employees.filter(emp => {
-          const shift = emp.shifts.find(s => s.date === getDateStr(date))?.shift;
-          return Boolean(shift && shift !== "休み" && shift !== "有休");
-        }).length;
-      }, 0);
-      if (conflicts > 0) toast.warning(`店休日・祝日に勤務が${conflicts}件あります。内容は変更せず確定しました`);
-    }
     setPeriodStatusLoading(true);
     try {
       if (nextLocked) await saveCurrentMonth();
@@ -841,15 +823,9 @@ export default function App() {
     : (cachedLoginEmployees.length ? cachedLoginEmployees.map((item, index) => ({ id: item.id, name: item.name, displayName: item.displayName || item.name, displayOrder: index + 1, active: item.active !== false, aliases: item.aliases || [], role: item.role || "事務員" }))
       : []);
   const displayDates = [...dateRange, ...homeWeekDates.filter(homeDate => !dateRange.some(date => getDateStr(date) === getDateStr(homeDate)))];
-  const cleanedRemarks = globalRemarks.filter(remark => {
-    if (remark.type !== "祝日" || remark.text?.trim()) return true;
-    const date = new Date(`${remark.date}T00:00:00`);
-    return date.getDay() !== 0 || getJapaneseHolidayDates(date, date).includes(remark.date);
-  });
-  const displayRemarks = buildDisplayRemarks(cleanedRemarks, specialDayRules.filter(rule => !rule.id.startsWith("dropdown-")), displayDates);
-  const globalRemarkTypes = [...new Set(["なし", ...specialDayRules.filter(rule => rule.enabled).sort((a, b) => (a.order ?? 999) - (b.order ?? 999)).map(rule => rule.name).filter(Boolean), ...BASE_GLOBAL_REMARK_TYPES])];
+  const displayRemarks = buildDisplayRemarks([], specialDayRules, displayDates);
   const bandLegendItems = specialDayRules
-    .filter(rule => rule.id.startsWith("band-v2:") && rule.enabled)
+    .filter(rule => rule.id.startsWith("band-v3:") && rule.enabled)
     .sort((first, second) => (first.order ?? 999) - (second.order ?? 999))
     .map(rule => ({ color: rule.color, label: rule.name }));
 
@@ -872,16 +848,12 @@ export default function App() {
       return generateConfiguredDateRange(anchor.getFullYear(), anchor.getMonth() + 1, calendarPeriodSettings.startDay, calendarPeriodSettings.endDay);
     });
     const allDates = targetRanges.flat();
-    const holidaySet = new Set(getJapaneseHolidayDates(allDates[0], allDates[allDates.length - 1]));
-    const remarkMap = new Map<string, GlobalRemark>(globalRemarks.map(item => [item.date, item]));
-    const isDuty = (date: Date) => remarkMap.get(getDateStr(date))?.type === "当番薬局" || findSpecialDayRule(date, specialDayRules.filter(rule => !rule.id.startsWith("dropdown-")))?.behavior === "duty";
+    const isDuty = (date: Date) => findSpecialDayRule(date, specialDayRules)?.behavior === "duty";
     const isRed = (date: Date) => {
       if (isDuty(date)) return false;
-      const remark = remarkMap.get(getDateStr(date));
       const rule = findSpecialDayRule(date, specialDayRules);
-      return date.getDay() === 0 || holidaySet.has(getDateStr(date)) || remark?.color === "red" || remark?.type === "祝日" || remark?.type === "店休日" || rule?.color === "red" || rule?.behavior === "all-off";
+      return rule?.behavior === "all-off";
     };
-    const isBlue = (date: Date) => remarkMap.get(getDateStr(date))?.color === "blue" || remarkMap.get(getDateStr(date))?.type === "谷川整形休診" || findSpecialDayRule(date, specialDayRules)?.color === "blue";
     const mondayOf = (date: Date) => { const result = new Date(date); result.setDate(date.getDate() + (date.getDay() === 0 ? -6 : 1 - date.getDay())); result.setHours(0, 0, 0, 0); return result; };
     const doubleRedWeek = (monday: Date) => { const thu = new Date(monday); thu.setDate(monday.getDate() + 3); const sat = new Date(monday); sat.setDate(monday.getDate() + 5); return isRed(thu) && isRed(sat); };
     const cycleWeekIndex = (date: Date, assignment: { cycleType: number; anchorDate: string }) => {
@@ -949,13 +921,7 @@ export default function App() {
       const saved = await saveSpecialDayRules(rules);
       const effectiveRules = saved.length ? saved : rules;
       setSpecialDayRules(effectiveRules);
-      // 以前「祝日」と自動記録された日を当番日に変更した場合は、当番表示を優先します。
-      setGlobalRemarks(previous => previous.filter(remark => {
-        if (remark.type !== "祝日") return true;
-        const date = new Date(`${remark.date}T00:00:00`);
-        return findSpecialDayRule(date, effectiveRules)?.behavior !== "duty";
-      }));
-      toast.success("特殊日設定を保存し、全カレンダーへ反映しました");
+      toast.success("カレンダー帯色設定を保存しました");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "特殊日設定を保存できませんでした");
       throw error;
@@ -1114,6 +1080,14 @@ export default function App() {
     setEmployeeMaster(saved);
     skipDirtyRef.current = true;
     setEmployees(mergeEmployeesWithMaster(employees, saved));
+  };
+
+  const handleSaveRoles = async (items: ShiftRole[]) => {
+    const saved = await saveShiftRoles(items);
+    setRoles(saved.roles);
+    setEmployeeMaster(saved.employees);
+    setEmployees(previous => mergeEmployeesWithMaster(previous, saved.employees));
+    templateStorage.setItem(EMPLOYEE_MASTER_CACHE_KEY, JSON.stringify(saved.employees));
   };
 
   const handleCustomTimeChange = (employeeId: string, date: string, field: "breakTime" | "workTime", value: string) => {
@@ -1318,6 +1292,7 @@ export default function App() {
   };
 
   const addCycle = () => {
+    if (!window.confirm("新しいクールを1件追加しますか？")) return;
     const nextId = Math.max(0, ...Object.keys(cycleNames).map(Number)) + 1;
     const blank = Array.from({ length: 7 }, () => ({ week1: "休み" as ShiftType, week2: "休み" as ShiftType, week3: "休み" as ShiftType, week4: "休み" as ShiftType }));
     setCycleNames(previous => ({ ...previous, [nextId]: `クール${nextId}` }));
@@ -1342,7 +1317,7 @@ export default function App() {
       const saved = await saveCycleMaster({ names: cycleNames, lengths: cycleLengths, patterns: cyclePatterns, assignments: cycleAssignments });
       setCycleNames(saved.names); setCycleLengths(saved.lengths); setCyclePatterns(saved.patterns); setCycleAssignments(saved.assignments || {});
       toast.success("クールマスターを全端末へ保存しました");
-    } catch (error) { toast.error(error instanceof Error ? error.message : "クールマスターを保存できませんでした"); }
+    } catch (error) { toast.error(error instanceof Error ? error.message : "クール作成マスタを保存できませんでした"); }
     finally { setCycleSaving(false); }
   };
 
@@ -1363,19 +1338,17 @@ export default function App() {
   const downloadCSV = (outputDateRange: Date[] = dateRange) => {
     if (!outputDateRange.length) return;
     const exportEmployees = sortEmployeesForDisplay(employees);
-    const headers = ["日付", "曜日", ...exportEmployees.flatMap(e => [`${e.name}(シフト)`, `${e.name}(備考)`]), "全体備考"];
+    const headers = ["日付", "曜日", ...exportEmployees.map(e => `${e.name}(シフト)`)];
     const rows = outputDateRange.map(date => {
       const dateStr = getDateStr(date);
-      const gr = getGlobalRemark(date);
       const row = [
         format(date, "MM/dd"),
         format(date, "E", { locale: ja }),
-        ...exportEmployees.flatMap(e => {
+        ...exportEmployees.map(e => {
           const s = getShift(e, date);
           const shiftText = s?.shift === "任意入力" ? (s?.customShiftText || "任意入力") : (s?.shift === "休み" ? "" : (s?.shift || "-"));
-          return [shiftText, s?.comment || ""];
-        }),
-        gr ? `${gr.type}${gr.text ? `: ${gr.text}` : ""}` : ""
+          return shiftText;
+        })
       ];
       return row;
     });
@@ -1418,7 +1391,7 @@ export default function App() {
       margins: { left: 0.3, right: 0.3, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 }
     };
 
-    const totalCols = exportEmployees.length + 2;
+    const totalCols = exportEmployees.length + 1;
 
     // 題名とメタデータ
     const titleRow = overallSheet.addRow(["全体シフト"]);
@@ -1433,7 +1406,7 @@ export default function App() {
     metaRow.getCell(totalCols).alignment = { horizontal: 'right' };
     overallSheet.addRow([]); // 空行
 
-    const overallHeaders = ["日付", ...exportEmployees.map(e => e.name), "備考"];
+    const overallHeaders = ["日付", ...exportEmployees.map(e => e.name)];
     const headerRow = overallSheet.addRow(overallHeaders);
     headerRow.font = { bold: true };
     headerRow.alignment = { horizontal: 'center' };
@@ -1448,24 +1421,12 @@ export default function App() {
 
     outputDateRange.forEach(date => {
       const gr = getGlobalRemark(date);
-      let remarkText = "";
-      if (gr && gr.type !== "なし") {
-        if (gr.type === "コメント") {
-          remarkText = gr.text;
-        } else if (gr.text) {
-          remarkText = `${gr.type}: ${gr.text}`;
-        } else {
-          remarkText = gr.type;
-        }
-      }
-
       const rowData = [
         format(date, "M/d(E)", { locale: ja }),
         ...exportEmployees.map(e => {
           const s = getShift(e, date);
           return s?.shift === "任意入力" ? (s?.customShiftText || "任意入力") : (s?.shift === "休み" ? "" : (s?.shift || "-"));
         }),
-        remarkText
       ];
       const row = overallSheet.addRow(rowData);
       row.height = 22;
@@ -1494,10 +1455,7 @@ export default function App() {
           }
         }
 
-        // 備考列（最後）は左揃え
-        if (colNumber === totalCols) {
-          cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
-        }
+
       });
     });
 
@@ -1527,7 +1485,7 @@ export default function App() {
     });
 
     [attendanceData, workHoursData, paidLeaveData].forEach(data => {
-      const row = overallSheet.addRow([...data, ""]); // 備考列分空ける
+      const row = overallSheet.addRow(data);
       row.font = { bold: true };
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
         cell.border = borderStyle;
@@ -1541,7 +1499,6 @@ export default function App() {
     exportEmployees.forEach((_, i) => {
       overallSheet.getColumn(i + 2).width = 12; // 少し広げる
     });
-    overallSheet.getColumn(totalCols).width = 18; // 備考を狭くする
 
     // 2. 各個人のシートを作成
     exportEmployees.forEach(emp => {
@@ -1564,7 +1521,7 @@ export default function App() {
       empMetaRow.getCell(5).alignment = { horizontal: 'right' };
       empSheet.addRow([]);
 
-      const empHeaders = ["日付", "シフト", "休憩時間", "実働時間", "備考"];
+      const empHeaders = ["日付", "シフト", "休憩時間", "実働時間"];
       const empHeaderRow = empSheet.addRow(empHeaders);
       empHeaderRow.font = { bold: true };
       empHeaderRow.alignment = { horizontal: 'center' };
@@ -1576,24 +1533,12 @@ export default function App() {
       outputDateRange.forEach(date => {
         const s = getShift(emp, date);
         const gr = getGlobalRemark(date);
-        let remarkText = "";
-        if (gr && gr.type !== "なし") {
-          if (gr.type === "コメント") {
-            remarkText = gr.text;
-          } else if (gr.text) {
-            remarkText = `${gr.type}: ${gr.text}`;
-          } else {
-            remarkText = gr.type;
-          }
-        }
-
         const shiftText = s?.shift === "任意入力" ? (s?.customShiftText || "任意入力") : (s?.shift === "休み" ? "" : (s?.shift || "-"));
         const rowData = [
           format(date, "M/d(E)", { locale: ja }),
           shiftText,
           s?.breakTime || "0:00",
-          s?.workTime || "0:00",
-          [remarkText, s?.comment].filter(Boolean).join(" / ")
+          s?.workTime || "0:00"
         ];
         const row = empSheet.addRow(rowData);
         row.height = 22;
@@ -1714,94 +1659,6 @@ export default function App() {
           <div className="flex items-center gap-3">
             <img src="${import.meta.env.BASE_URL}icon-192.png" alt="" className="w-10 h-10 object-contain rounded-xl" />
             <div className="leading-tight"><span className="block text-base">シフト管理</span><span className="block text-[10px] font-medium opacity-60 mt-1">PHARMACY SHIFT</span></div>
-          </div>
-          <div className="relative">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-full hover:bg-slate-100"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowNotificationPopup(!showNotificationPopup);
-              }}
-            >
-              <Bell className="w-4 h-4 text-slate-600" />
-              {employees.some(e => e.shifts.some(s => s.comment)) && (
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
-              )}
-            </Button>
-            
-            <AnimatePresence>
-              {showNotificationPopup && (
-                <>
-                  <div className="fixed inset-0 z-[90]" onClick={() => setShowNotificationPopup(false)} />
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95, x: 20 }}
-                    animate={{ opacity: 1, scale: 1, x: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, x: 20 }}
-                    className="fixed left-64 top-6 ml-2 w-72 bg-white rounded-xl shadow-2xl border border-border overflow-hidden z-[100]"
-                  >
-                    <div className="p-4 bg-slate-50 border-b border-border flex items-center justify-between">
-                      <h4 className="font-bold text-sm text-slate-800 flex items-center gap-2">
-                        <Bell className="w-4 h-4 text-blue-500" />
-                        備考通知一覧
-                      </h4>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-6 w-6 rounded-md"
-                        onClick={() => setShowNotificationPopup(false)}
-                      >
-                        ×
-                      </Button>
-                    </div>
-                    <div className="max-h-[60vh] overflow-y-auto">
-                      {(() => {
-                        const allComments = employees.flatMap(emp => 
-                          emp.shifts
-                            .filter(s => s.comment && s.comment.trim() !== "")
-                            .map(s => ({ 
-                              employeeId: emp.id,
-                              employeeName: emp.name, 
-                              date: s.date, 
-                              comment: s.comment 
-                            }))
-                        ).sort((a, b) => b.date.localeCompare(a.date));
-
-                        if (allComments.length === 0) {
-                          return <div className="p-8 text-center text-slate-400 text-xs">新しい備考はありません</div>;
-                        }
-
-                        return allComments.map((c, i) => (
-                          <div 
-                            key={i} 
-                            className="p-3 border-b border-border/50 hover:bg-blue-50/50 transition-colors cursor-pointer group"
-                            onClick={() => {
-                              setActiveTab(c.employeeId);
-                              setIsFromAdmin(false);
-                              setShowNotificationPopup(false);
-                              const [y, m, d] = c.date.split("-").map(Number);
-                              setCurrentMonth(new Date(y, m - 1, 1));
-                              toast.success(`${c.employeeName}さんのページに移動しました`);
-                            }}
-                          >
-                            <div className="flex justify-between items-start mb-1">
-                              <span className="font-bold text-xs text-slate-700 group-hover:text-blue-600 transition-colors">{c.employeeName}</span>
-                              <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap ml-2">
-                                {format(new Date(c.date.replace(/-/g, "/")), "M月d日")}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-slate-600 leading-relaxed bg-white/50 p-2 rounded-md border border-slate-100 group-hover:border-blue-200 transition-colors line-clamp-2">
-                              {c.comment}
-                            </p>
-                          </div>
-                        ));
-                      })()}
-                    </div>
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
           </div>
         </div>
 
@@ -1970,6 +1827,9 @@ export default function App() {
             {activeTab === "home" ? (
               <HomeView
                 employees={employees}
+                storeName={storeMaster.storeName}
+                roles={roles}
+                layout={homeLayout}
                 remarks={displayRemarks}
                 weekDates={homeWeekDates}
                 selectedDate={homeSelectedDateStr}
@@ -1994,12 +1854,13 @@ export default function App() {
                 boardVisibility={storeMaster.leaveRequestBoardVisibility || "immediate"}
                 correctionVisibility={correctionVisibility}
                 isEditor={appSession.role === "admin"}
+                notices={adminNotices}
                 onOpenBoard={() => { setBoardAnchor(homeBoardMonth); setActiveTab("board"); setIsFromAdmin(false); }}
               />
             ) : activeTab === "requests" ? (
               <LeaveRequestView employees={dashboardEmployees} dates={dateRange} remarks={displayRemarks} requests={leaveRequests} locked={isLocked} loading={leaveRequestLoading || periodStatusLoading} operatorId={appSession.employeeId || ""} isAdmin={appSession.role === "admin"} onCheckPeriodStatus={fetchShiftPeriodStatus} onSubmit={handleLeaveRequestSubmit} onCancel={handleLeaveRequestCancel} onSaveWorkTime={async (id, start, end) => { const saved = await updateLeaveRequestWorkTime(id, start, end); setLeaveRequests(prev => prev.map(item => item.id === id ? saved : item)); }} onPeriodChange={async direction => { if (appSession.role === "admin" && (syncState === "dirty" || syncState === "saving")) { try { await saveCurrentMonth(); } catch { return; } } setCurrentMonth(prev => addMonths(prev, direction)); }} />
             ) : activeTab === "board" ? (
-              <BulletinBoard onBack={goBack} periods={boardPeriods} isEditor={appSession.role === "admin"} visibility={storeMaster.leaveRequestBoardVisibility || "immediate"} correctionVisibility={correctionVisibility} operatorName={appSession.employeeName} onShiftPeriod={direction => setBoardAnchor(prev => addMonths(prev, direction))} onResolve={async item => { const saved = await updateLeaveRequestStatus(item.id, "対応済み"); setBoardPeriods(prev => prev.map(period => ({ ...period, requests: period.requests.map(request => request.id === saved.id ? saved : request) }))); setHomeBoardRequests(prev => prev.map(request => request.id === saved.id ? saved : request)); setHomePendingCorrections(prev => prev.filter(request => request.id !== saved.id)); }} />
+              <BulletinBoard onBack={goBack} notices={adminNotices} employees={employeeMaster} defaultNoticeVisibility={adminNoticeVisibility} onCreateNotice={async (text, visibility, ids) => { try { const notice = await createAdminNotice(text, visibility, ids); setAdminNotices(items => [notice, ...items]); toast.success("お知らせを公開しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "公開できませんでした"); throw error; } }} onDeleteNotice={async id => { if (!window.confirm("このお知らせを削除しますか？")) return; try { await removeAdminNotice(id); setAdminNotices(items => items.filter(item => item.id !== id)); } catch (error) { toast.error(error instanceof Error ? error.message : "削除できませんでした"); } }} periods={boardPeriods} isEditor={appSession.role === "admin"} visibility={storeMaster.leaveRequestBoardVisibility || "immediate"} correctionVisibility={correctionVisibility} operatorName={appSession.employeeName} onShiftPeriod={direction => setBoardAnchor(prev => addMonths(prev, direction))} onResolve={async item => { const saved = await updateLeaveRequestStatus(item.id, "対応済み"); setBoardPeriods(prev => prev.map(period => ({ ...period, requests: period.requests.map(request => request.id === saved.id ? saved : request) }))); setHomeBoardRequests(prev => prev.map(request => request.id === saved.id ? saved : request)); setHomePendingCorrections(prev => prev.filter(request => request.id !== saved.id)); }} />
             ) : activeTab === "mypage" ? (
               <MyPage employee={operatorEmployee} requests={leaveRequests} locked={isLocked} initialBalance={paidLeaveBalance} onSaveBalance={async balance => { const saved = await savePaidLeaveBalance(balance); setPaidLeaveBalance(saved); }} onCancel={handleLeaveRequestCancel} onSaveWorkTime={async (id, start, end) => { const saved = await updateLeaveRequestWorkTime(id, start, end); setLeaveRequests(prev => prev.map(item => item.id === id ? saved : item)); }} onEdit={() => setActiveTab("requests")} />
             ) : activeTab === "dashboard" ? (
@@ -2081,7 +1942,7 @@ export default function App() {
                                 </button>
                               </TableHead>
                             ))}
-                            <TableHead className="dashboard-remarks-col font-bold text-muted-foreground min-w-[150px]">備考</TableHead>
+                            
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -2119,33 +1980,7 @@ export default function App() {
                                     </TableCell>
                                   );
                                 })}
-                                <TableCell className="dashboard-remarks-col py-1 px-2">
-                                  <div className="flex flex-col gap-1">
-                                    <Select 
-                                      value={gr?.type || "なし"} 
-                                      onValueChange={(val) => handleGlobalRemarkTypeChange(dateStr, val as GlobalRemark["type"])}
-                                      disabled={isLocked || !isFromAdmin}
-                                    >
-                                      <SelectTrigger className="h-7 text-[10px] bg-white/50">
-                                        <SelectValue placeholder="備考種別" />
-                                      </SelectTrigger>
-                                      <SelectContent className="bg-white border-border shadow-xl z-50">
-                                        {globalRemarkTypes.map(type => (
-                                          <SelectItem key={type} value={type} className="text-xs">{type === "コメント" ? "自由コメント" : type}</SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                    {(gr?.type === "コメント" || gr?.type === "当番薬局") && (
-                                      <Input 
-                                        className="h-7 text-[10px] bg-white/50 border-border" 
-                                        placeholder="内容入力..." 
-                                        value={gr?.text || ""}
-                                        onChange={(e) => handleGlobalRemarkTextChange(dateStr, e.target.value)}
-                                        disabled={isLocked || !isFromAdmin}
-                                      />
-                                    )}
-                                  </div>
-                                </TableCell>
+
                               </TableRow>
                             );
                           })}
@@ -2182,7 +2017,7 @@ export default function App() {
                                 </TableCell>
                               );
                             })}
-                            <TableCell className="dashboard-remarks-col bg-muted/30" />
+                            
                           </TableRow>
                         </TableBody>
                       </Table>
@@ -2203,10 +2038,11 @@ export default function App() {
                   </CardHeader>
                   <CardContent className="grid gap-4 p-6 sm:grid-cols-2">
                     {[
-                      { key: "store", icon: Building2, title: "店舗マスター", description: "店舗名、集計期間、営業曜日、APIキー" },
-                      { key: "board", icon: MessageSquareText, title: "お知らせ掲示板マスタ", description: "休み希望を掲示板へ公開するタイミング" },
-                      { key: "employee", icon: Users, title: "従業員設定", description: "従業員マスター、役職、表示順" },
-                      { key: "shift", icon: SlidersHorizontal, title: "シフト設定", description: "自動作成、クール、特殊日、プルダウン" },
+                      { key: "store", icon: Building2, title: "店舗マスタ", description: "店舗名、集計期間、営業曜日" },
+                      { key: "board", icon: MessageSquareText, title: "お知らせ掲示板設定", description: "お知らせ・希望・訂正依頼の公開範囲" },
+                      { key: "employee", icon: Users, title: "従業員マスタ", description: "従業員登録、役職、ホームの表示" },
+                      { key: "shift", icon: SlidersHorizontal, title: "シフトマスタ", description: "自動作成、クール、帯色" },
+                      { key: "other", icon: Settings, title: "その他設定", description: "接続、表示、ファイル出力" },
                       { key: "reset", icon: Trash2, title: "複製版のデータ初期化", description: "業務データをまとめて初期化（管理者のみ）" },
                     ].map(item => <button key={item.key} type="button" onClick={() => setSettingsPage(item.key as typeof settingsPage)} className="group flex min-h-32 items-center gap-4 rounded-2xl border-2 border-slate-100 bg-white p-5 text-left shadow-sm transition hover:border-blue-300 hover:bg-blue-50/50">
                       <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700"><item.icon className="h-6 w-6" /></span>
@@ -2220,63 +2056,26 @@ export default function App() {
               <TemplateResetSettings onBack={() => setSettingsPage("menu")} />
             ) : activeTab === "admin" && settingsPage === "store" ? (
               <motion.div key="settings-store" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">店舗マスター管理者</CardTitle><CardDescription>店舗全体の基本ルール</CardDescription></div></div></CardHeader><CardContent className="p-6 space-y-5"><StoreMasterSettings master={storeMaster} onMasterChange={setStoreMaster} period={calendarPeriodSettings} periodDraft={calendarPeriodDraft} saving={calendarPeriodSaving} onPeriodDraftChange={setCalendarPeriodDraft} onSavePeriod={handleSaveCalendarPeriod} onSaveBoardVisibility={handleSaveBoardVisibility} /><section className="rounded-2xl border-2 border-blue-100 bg-blue-50/50 p-5"><h4 className="font-black">APIキー設定</h4><p className="mt-1 text-xs text-slate-500">管理者操作とNotion連携に使用します。この端末だけに保存されます。</p><div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]"><Input type="password" value={managementApiKey} onChange={e => setManagementApiKey(e.target.value)} placeholder="管理者用GAS接続キー" /><Button onClick={() => { saveManagementApiKey(managementApiKey); toast.success("APIキーをこの端末に保存しました"); }}>APIキーを保存</Button></div></section></CardContent></Card>
+                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">店舗マスタ</CardTitle><CardDescription>店舗全体の基本ルール</CardDescription></div></div></CardHeader><CardContent className="p-6 space-y-5"><StoreMasterSettings master={{ ...storeMaster, businessDays: businessDaysFromRules(specialDayRules) }} onMasterChange={setStoreMaster} period={calendarPeriodSettings} periodDraft={calendarPeriodDraft} saving={calendarPeriodSaving} onPeriodDraftChange={setCalendarPeriodDraft} onSavePeriod={handleSaveCalendarPeriod} onSaveBoardVisibility={handleSaveBoardVisibility} onSaveBusinessDays={days => handleSaveSpecialDayRules(withBusinessDays(specialDayRules, days))} onOpenBandSettings={() => setSettingsPage("special")} /></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "board" ? (
               <motion.div key="settings-board" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">お知らせ掲示板マスタ管理者</CardTitle><CardDescription>承認済みの希望を従業員へ共有する設定</CardDescription></div></div></CardHeader>
-                <CardContent className="p-6 space-y-4"><label className="block text-sm font-bold">休み希望の公開設定<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={storeMaster.leaveRequestBoardVisibility || "immediate"} onChange={e => setStoreMaster(v => ({...v, leaveRequestBoardVisibility:e.target.value as StoreMaster["leaveRequestBoardVisibility"]}))}><option value="immediate">提出と同時に全員へ公開</option><option value="after_approval">管理者確認後に全員へ公開</option><option value="private">本人と編集者だけに表示</option></select></label><Button className="w-full h-11 font-bold" onClick={() => void handleSaveBoardVisibility(storeMaster.leaveRequestBoardVisibility)}>お知らせ掲示板マスタを保存</Button><div className="border-t pt-4"><label className="block text-sm font-bold">確定シフト訂正依頼の公開範囲<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={correctionVisibility} onChange={e => setCorrectionVisibility(e.target.value as "all" | "private")}><option value="all">全員に表示</option><option value="private">本人と管理者のみ表示</option></select></label><Button className="mt-3 w-full h-11" onClick={async () => { try { setCorrectionVisibility(await saveCorrectionVisibility(correctionVisibility)); toast.success("訂正依頼の公開設定を保存しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "保存できませんでした"); } }}>訂正依頼の公開設定を保存</Button></div></CardContent></Card>
+                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">お知らせ掲示板設定</CardTitle><CardDescription>承認済みの希望を従業員へ共有する設定</CardDescription></div></div></CardHeader>
+                <CardContent className="p-6 space-y-4"><label className="block text-sm font-bold">休み希望の公開設定<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={storeMaster.leaveRequestBoardVisibility || "immediate"} onChange={e => setStoreMaster(v => ({...v, leaveRequestBoardVisibility:e.target.value as StoreMaster["leaveRequestBoardVisibility"]}))}><option value="immediate">提出と同時に全員へ公開</option><option value="after_approval">管理者確認後に全員へ公開</option><option value="private">本人と編集者だけに表示</option></select></label><Button className="w-full h-11 font-bold" onClick={() => void handleSaveBoardVisibility(storeMaster.leaveRequestBoardVisibility)}>お知らせ掲示板マスタを保存</Button><div className="border-t pt-4"><label className="block text-sm font-bold">管理者からのお知らせ設定<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={adminNoticeVisibility} onChange={event => setAdminNoticeVisibility(event.target.value as AdminNoticeVisibility)}><option value="all">全員</option><option value="selected">指定従業員</option></select></label><Button className="mt-3 w-full h-11" onClick={async () => { try { setAdminNoticeVisibility(await saveAdminNoticeVisibility(adminNoticeVisibility)); toast.success("お知らせ公開設定を保存しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "保存できませんでした"); } }}>管理者からのお知らせ設定を保存</Button></div><div className="border-t pt-4"><label className="block text-sm font-bold">確定シフト訂正依頼の公開範囲<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={correctionVisibility} onChange={e => setCorrectionVisibility(e.target.value as "all" | "private")}><option value="all">全員に表示</option><option value="private">本人と管理者のみ表示</option></select></label><Button className="mt-3 w-full h-11" onClick={async () => { try { setCorrectionVisibility(await saveCorrectionVisibility(correctionVisibility)); toast.success("訂正依頼の公開設定を保存しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "保存できませんでした"); } }}>訂正依頼の公開設定を保存</Button></div></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "employee" ? (
-              <motion.div key="settings-employee" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><EmployeeMasterSettings employees={employeeMaster} onSave={handleSaveEmployeeMaster} /></motion.div>
+              <motion.div key="settings-employee" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><EmployeeMasterSettings employees={employeeMaster} roles={roles} onSave={handleSaveEmployeeMaster} /><RoleAndHomeSettings roles={roles} layout={homeLayout} onSaveRoles={handleSaveRoles} onSaveLayout={async value => setHomeLayout(await saveHomeLayout(value))} /></motion.div>
             ) : activeTab === "admin" && settingsPage === "shift" ? (
-              <motion.div key="settings-shift" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}><Card><CardHeader className="page-blue-header rounded-t-xl"><CardTitle className="admin-page-title">シフト設定管理者</CardTitle><CardDescription>各マスターを選択してください</CardDescription></CardHeader><CardContent className="grid gap-3 p-6"><Button variant="outline" onClick={() => setSettingsPage("autodraft")}>シフト案自動作成マスター</Button><Button variant="outline" onClick={() => setSettingsPage("operations")}>クール作成マスター</Button><Button variant="outline" onClick={() => setSettingsPage("special")}>特殊日マスター</Button><Button variant="outline" onClick={() => setSettingsPage("dropdown")}>プルダウンマスター</Button><Button variant="ghost" onClick={() => setSettingsPage("menu")}>設定へ戻る</Button></CardContent></Card></motion.div>
+              <motion.div key="settings-shift" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}><Card><CardHeader className="page-blue-header rounded-t-xl"><CardTitle className="admin-page-title">シフトマスタ</CardTitle><CardDescription>各マスターを選択してください</CardDescription></CardHeader><CardContent className="grid gap-3 p-6"><Button variant="outline" onClick={() => setSettingsPage("autodraft")}>シフト案自動作成マスタ</Button><Button variant="outline" onClick={() => setSettingsPage("operations")}>クール作成マスタ</Button><Button variant="outline" onClick={() => setSettingsPage("special")}>帯色マスタ</Button><Button variant="ghost" onClick={() => setSettingsPage("menu")}>設定へ戻る</Button></CardContent></Card></motion.div>
             ) : activeTab === "admin" && settingsPage === "autodraft" ? (
               <motion.div key="settings-autodraft" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><AutoDraftSettingsView settings={autoDraftSettings} onChange={value => void updateAutoDraftSettings(value)} onStart={startAutoDraft} /></motion.div>
-            ) : activeTab === "admin" && settingsPage === "dropdown" ? (
-              <motion.div key="settings-dropdown" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">プルダウンマスター管理者</CardTitle><CardDescription>全体シフトの備考欄に表示する項目</CardDescription></div></div></CardHeader><CardContent className="p-6"><DropdownMasterSettings rules={specialDayRules.filter(rule => rule.id.startsWith("dropdown-"))} loading={specialDayLoading} onSave={rules => handleSaveSpecialDayRules([...specialDayRules.filter(rule => !rule.id.startsWith("dropdown-")), ...rules])} /></CardContent></Card>
-              </motion.div>
             ) : activeTab === "admin" && settingsPage === "special" ? (
               <motion.div key="settings-special" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">特殊日設定管理者</CardTitle><CardDescription>年ごとに変わる日付・店舗固有の定休日</CardDescription></div></div></CardHeader><CardContent className="p-6"><SpecialDaySettings rules={specialDayRules.filter(rule => !rule.id.startsWith("dropdown-"))} loading={specialDayLoading} onSave={rules => handleSaveSpecialDayRules([...rules.map(rule => ({ ...rule, id: rule.id.startsWith("band-v2:") ? rule.id : `band-v2:${rule.id}` })), ...specialDayRules.filter(rule => rule.id.startsWith("dropdown-"))])} /></CardContent></Card>
+                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">カレンダー帯色設定</CardTitle><CardDescription>年ごとに変わる日付・店舗固有の定休日</CardDescription></div></div></CardHeader><CardContent className="p-6"><SpecialDaySettings rules={specialDayRules} loading={specialDayLoading} onSave={handleSaveSpecialDayRules} /></CardContent></Card>
               </motion.div>
-            ) : activeTab === "admin" ? (
-              <motion.div
-                key="admin"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-8"
-              >
-                <div className="grid grid-cols-1 gap-6">
-                  <Card className="border-border shadow-sm">
-                    <CardHeader className="settings-card-header page-blue-header py-5 border-b border-border rounded-t-xl">
-                      <CardTitle className="admin-page-title text-xl flex items-center gap-2">
-                        <Users className="w-4 h-4 text-primary" />
-                        従業員・シフト設定管理者
-                      </CardTitle>
-                      <CardDescription className="text-xs">従業員、勤務パターン、接続キー、出力を設定します</CardDescription>
-                    </CardHeader>
-                    <CardContent className="settings-content p-6 space-y-5">
-                      <Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button>
-                      <div className="rounded-2xl border-2 border-blue-100 bg-blue-50/50 p-5 space-y-4">
-                        <div>
-                          <h4 className="text-base font-black text-blue-950">管理者用GAS接続キー</h4>
-                          <p className="mt-1 text-xs text-slate-600">Notion保存、確定状態の共有、管理者操作に使用します。この端末だけに保存されます。</p>
-                        </div>
-                        <p className="rounded-lg bg-slate-100 px-3 py-2 text-[11px] font-semibold text-slate-600">従業員ID・パスワードはGAS側で設定済みです。安全のため、この画面には値を表示しません。</p>
-                        <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-                          <Input type="password" value={managementApiKey} onChange={event => setManagementApiKey(event.target.value)} placeholder="管理者用GAS接続キー" className="h-11 bg-white" />
-                          <Button className="h-11 font-bold" onClick={() => { saveManagementApiKey(managementApiKey); toast.success("この端末に接続キーを保存しました"); }}>この端末に保存</Button>
-                        </div>
-                        <p className="text-[11px] text-slate-500">従業員は共通の従業員ID・パスワードでログイン後、自分の名前を選んで希望を提出します。</p>
-                      </div>
-                      <EmployeeMasterSettings employees={employeeMaster} onSave={handleSaveEmployeeMaster} />
-
-                      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                        <div className="mb-4 flex items-center justify-between gap-3"><div><h4 className="font-black text-slate-900">クールマスター</h4><p className="mt-1 text-xs text-slate-500">1〜4週間の勤務パターンを登録します。編集するクールだけを開きます。</p></div><Button variant="outline" onClick={addCycle}><PlusCircle className="mr-1 h-4 w-4" />クール追加</Button></div>
+            ) : activeTab === "admin" && settingsPage === "operations" ? (
+              <motion.div key="settings-cycles" className="space-y-4"><Button variant="outline" onClick={() => setSettingsPage("shift")}>← シフトマスタへ戻る</Button><Card><CardHeader className="page-blue-header"><CardTitle className="admin-page-title">クール作成マスタ</CardTitle></CardHeader><CardContent className="p-6">                      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                        <div className="mb-4 flex items-center justify-between gap-3"><div><h4 className="font-black text-slate-900">クール作成マスタ</h4><p className="mt-1 text-xs text-slate-500">1〜4週間の勤務パターンを登録します。編集するクールだけを開きます。</p></div><Button variant="outline" onClick={addCycle}><PlusCircle className="mr-1 h-4 w-4" />クール追加</Button></div>
                         <div className="space-y-3">{Object.keys(cycleNames).map(Number).sort((a, b) => a - b).map(num => {
                           const isOpen = editingCycleId === num;
                           const length = cycleLengths[num] || 2;
@@ -2288,9 +2087,23 @@ export default function App() {
                             </div>}
                           </div>;
                         })}</div>
-                        <Button className="mt-4 h-11 w-full font-bold" disabled={cycleSaving} onClick={() => void handleSaveCycleMaster()}>{cycleSaving ? "保存中…" : "クールマスターを保存"}</Button>
+                        <Button className="mt-4 h-11 w-full font-bold" disabled={cycleSaving} onClick={() => void handleSaveCycleMaster()}>{cycleSaving ? "保存中…" : "クール作成マスタを保存"}</Button>
                       </section>
 
+</CardContent></Card></motion.div>
+            ) : activeTab === "admin" && settingsPage === "other" ? (
+              <motion.div key="settings-other" className="space-y-4"><Button variant="outline" onClick={() => setSettingsPage("menu")}>← 設定へ戻る</Button><Card><CardHeader className="page-blue-header"><CardTitle className="admin-page-title">その他設定</CardTitle></CardHeader><CardContent className="space-y-5 p-6">                      <div className="rounded-2xl border-2 border-blue-100 bg-blue-50/50 p-5 space-y-4">
+                        <div>
+                          <h4 className="text-base font-black text-blue-950">管理者用GAS接続キー</h4>
+                          <p className="mt-1 text-xs text-slate-600">Notion保存、確定状態の共有、管理者操作に使用します。この端末だけに保存されます。</p>
+                        </div>
+                        <p className="rounded-lg bg-slate-100 px-3 py-2 text-[11px] font-semibold text-slate-600">従業員ID・パスワードはGAS側で設定済みです。安全のため、この画面には値を表示しません。</p>
+                        <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                          <Input type="password" value={managementApiKey} onChange={event => setManagementApiKey(event.target.value)} placeholder="管理者用GAS接続キー" className="h-11 bg-white" />
+                          <Button className="h-11 font-bold" onClick={() => { saveManagementApiKey(managementApiKey); toast.success("この端末に接続キーを保存しました"); }}>この端末に保存</Button>
+                        </div>
+                        <p className="text-[11px] text-slate-500">従業員は共通の従業員ID・パスワードでログイン後、自分の名前を選んで希望を提出します。</p>
+                      </div>
                       <div className="pt-6 border-t border-slate-100">
                         <div className="flex items-center justify-between gap-4">
                           <div>
@@ -2351,12 +2164,9 @@ export default function App() {
                         </div>
                       </div>
 
-                    </CardContent>
-                  </Card>
-
-                </div>
-
-              </motion.div>
+<section className="rounded-xl border border-red-200 bg-red-50 p-4"><h3 className="font-bold text-red-800">複製版に残る古い備考を削除</h3><p className="mt-2 text-sm">シフトの勤務内容は残し、旧「備考」「全体補足」の値だけ消します。複製用DBの確認に通ったときだけ実行します。</p><Button variant="outline" className="mt-3" onClick={async () => { try { const preview = await clearTemplateShiftRemarks(true); if (!preview.count) { toast.success("削除する古い備考はありません"); return; } if (!window.confirm(`${preview.count}件の備考を削除しますか？（シフトは残ります）`)) return; let remaining = preview.count; while (remaining > 0) { const result = await clearTemplateShiftRemarks(false); if (!result.cleared) break; remaining = result.remaining || 0; } if (remaining) toast.error(`一部の備考が残りました（${remaining}件）。再実行してください`); else toast.success("古い備考を削除しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "削除できませんでした"); } }}>古い備考を確認して削除</Button></section></CardContent></Card></motion.div>
+            ) : activeTab === "admin" ? (
+              <p>設定項目を選んでください。</p>
             ) : (
               (() => {
                 const emp = employees.find(e => e.id === activeTab);
@@ -2426,7 +2236,6 @@ export default function App() {
                                 <TableHead className="w-48 h-10 font-bold text-muted-foreground border-r border-border">シフト</TableHead>
                                 <TableHead className="w-24 h-10 font-bold text-muted-foreground border-r border-border">休憩</TableHead>
                                 <TableHead className="w-24 h-10 font-bold text-muted-foreground border-r border-border">実働</TableHead>
-                                <TableHead className="h-10 font-bold text-muted-foreground">コメント</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -2528,15 +2337,7 @@ export default function App() {
                                         s?.workTime || "0:00"
                                       )}
                                     </TableCell>
-                                    <TableCell className="py-1">
-                                      <Input 
-                                        className={`h-8 text-xs bg-white border-border ${isLocked ? "opacity-70 cursor-not-allowed" : ""}`}
-                                        placeholder="備考..." 
-                                        value={s?.comment || ""}
-                                        onChange={(e) => handleCommentChange(emp.id, dateStr, e.target.value)}
-                                        disabled={isLocked}
-                                      />
-                                    </TableCell>
+
                                   </TableRow>
                                 );
                               })}

@@ -3,12 +3,17 @@ import { format } from "date-fns";
 import { ArrowRight, BookOpen, CalendarDays, ChevronLeft, ChevronRight, UserRound, Users } from "lucide-react";
 import { motion } from "motion/react";
 import { Employee, GlobalRemark, LeaveRequest } from "../types";
+import { HomeLayout, ShiftRole } from "../lib/employee-master-sync";
 import { WorkforceHeatmap } from "./WorkforceHeatmap";
 import { Button } from "@/components/ui/button";
 import { BulletinBoard } from "./BulletinBoard";
+import { AdminNotice } from "../lib/admin-notice-sync";
 
 interface HomeViewProps {
   employees: Employee[];
+  storeName: string;
+  roles: ShiftRole[];
+  layout: HomeLayout;
   remarks: GlobalRemark[];
   weekDates: Date[];
   selectedDate: string;
@@ -33,6 +38,7 @@ interface HomeViewProps {
   boardVisibility: "immediate" | "after_approval" | "private";
   correctionVisibility: "all" | "private";
   isEditor: boolean;
+  notices: AdminNotice[];
   onOpenBoard: () => void;
 }
 
@@ -50,9 +56,9 @@ function shiftLabel(employee: Employee, date: string): string {
 }
 
 export function HomeView({
-  employees, remarks, weekDates, selectedDate, today, weekOffset, heatmapEnabled, monthDates,
+  employees, storeName, roles, layout, remarks, weekDates, selectedDate, today, weekOffset, heatmapEnabled, monthDates,
   onWeekOffsetChange, onDateSelect, onShowDashboard, onEmployeeSelect, onOpenLeaveRequest, onInstall, installLabel,
-  operatorName, onLogout, onOpenGuide, requests, pendingCorrections, boardMonthLabel, boardLocked, boardVisibility, correctionVisibility, isEditor, onOpenBoard
+  operatorName, onLogout, onOpenGuide, requests, pendingCorrections, boardMonthLabel, boardLocked, boardVisibility, correctionVisibility, isEditor, onOpenBoard, notices
 }: HomeViewProps) {
   const [showLogout, setShowLogout] = useState(false);
   const orderedEmployees = sortEmployeesForDisplay(employees);
@@ -62,9 +68,11 @@ export function HomeView({
     const label = shiftLabel(employee, selectedDate);
     return label !== "未入力" && label !== "休み" && label !== "有休";
   }).length;
-  const pharmacists = orderedEmployees.filter(employee => employee.role === "薬剤師");
-  const supportStaff = orderedEmployees.filter(employee => employee.role === "事務員" || employee.role === "登録販売者");
-  const unassignedStaff = orderedEmployees.filter(employee => !employee.role);
+  const groups = [0, 1].map(index => orderedEmployees.filter(employee => {
+    const roleId = employee.roleId || roles.find(role => role.name === employee.role)?.id;
+    return roleId && (layout.columns[index] || []).includes(roleId);
+  }));
+  const unassignedStaff = orderedEmployees.filter(employee => !employee.roleId && !employee.role);
   const renderRoster = (group: Employee[]) => group.map(employee => {
     const shift = employee.shifts.find(item => item.date === selectedDate);
     const label = shiftLabel(employee, selectedDate);
@@ -81,7 +89,7 @@ export function HomeView({
           <div className="home-brand-copy">
             <span>PHARMACY SHIFT</span>
             <div className="home-title-line">
-              <h1 className={isEditor ? "home-admin-title" : ""}>{isEditor ? "シフト管理者" : "薬局シフト"}</h1>
+              <h1 className={isEditor ? "home-admin-title" : ""} style={{ fontSize: `clamp(0.8rem, ${Math.max(1.05, 2.1 - Math.max(0, storeName.length - 7) * 0.08)}rem, 2.1rem)` }}>{storeName.slice(0, 30)} シフト</h1>
               <span className="relative inline-flex items-center">
                 <button type="button" className="home-operator cursor-pointer" aria-expanded={showLogout} onClick={() => setShowLogout(value => !value)}><UserRound className="h-4 w-4" />操作員：{operatorName}</button>
                 {showLogout && <button type="button" className="absolute right-0 top-full z-50 mt-2 whitespace-nowrap rounded-lg border bg-white px-4 py-3 font-bold text-slate-900 shadow-lg" onClick={onLogout}>ログアウトして別のIDで入る</button>}
@@ -126,15 +134,14 @@ export function HomeView({
           <span className="home-roster-header-spacer" aria-hidden="true" />
         </div>
         {selectedRemark && selectedRemark.type !== "なし" && <div className="home-remark">{selectedRemark.type}{selectedRemark.text ? `：${selectedRemark.text}` : ""}</div>}
-        <div className="grid grid-cols-2 gap-3">
-          <div>{renderRoster(pharmacists)}</div>
-          <div className="border-l pl-3">{renderRoster(supportStaff)}</div>
-        </div>
+        {layout.visible && <div className={`grid gap-3 ${groups.every(group => group.length > 0) ? "grid-cols-2" : "grid-cols-1"}`}>
+          {groups.filter(group => group.length).map((group, index) => <div key={index} className={index > 0 ? "border-l pl-3" : ""}>{renderRoster(group)}</div>)}
+        </div>}
         {unassignedStaff.length > 0 && <div className="home-role-warning">役職未設定：{unassignedStaff.map(employee => employee.displayName || employee.name).join("、")}（設定画面で役職を登録してください）</div>}
         <Button variant="outline" className="w-full mt-3 h-10 font-bold" onClick={onShowDashboard}>月の全体シフトを見る <ArrowRight className="w-4 h-4 ml-2" /></Button>
       </section>
 
-      <BulletinBoard compact periods={[{ label: boardMonthLabel, locked: boardLocked, requests }]} pendingCorrections={pendingCorrections} isEditor={isEditor} visibility={boardVisibility} correctionVisibility={correctionVisibility} operatorName={operatorName} onOpenBoard={onOpenBoard} />
+      <BulletinBoard compact notices={notices} periods={[{ label: boardMonthLabel, locked: boardLocked, requests }]} pendingCorrections={pendingCorrections} isEditor={isEditor} visibility={boardVisibility} correctionVisibility={correctionVisibility} operatorName={operatorName} onOpenBoard={onOpenBoard} />
 
       <button className="home-leave-request" onClick={onOpenLeaveRequest}>
         <CalendarDays className="w-5 h-5" /><div><strong>休み希望日を提出する</strong><span>希望受付中のシフト案に提出できます</span></div><ArrowRight className="w-5 h-5" />

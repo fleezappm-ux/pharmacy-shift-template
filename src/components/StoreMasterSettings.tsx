@@ -1,5 +1,5 @@
 import { templateStorage } from "../lib/template-storage";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Save } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,8 @@ interface Props {
   onPeriodDraftChange: (settings: CalendarPeriodSettings) => void;
   onSavePeriod: () => Promise<void>;
   onSaveBoardVisibility: (visibility: StoreMaster["leaveRequestBoardVisibility"]) => Promise<void>;
+  onSaveBusinessDays: (days: number[]) => Promise<void>;
+  onOpenBandSettings: () => void;
 }
 
 const panel = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm";
@@ -49,14 +51,16 @@ const heading = "text-sm font-bold text-slate-900";
 const description = "mt-1 text-xs leading-5 text-slate-500";
 const field = "h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 
-export function StoreMasterSettings({ master, onMasterChange, period, periodDraft, saving, onPeriodDraftChange, onSavePeriod, onSaveBoardVisibility }: Props) {
+export function StoreMasterSettings({ master, onMasterChange, period, periodDraft, saving, onPeriodDraftChange, onSavePeriod, onSaveBusinessDays, onOpenBandSettings }: Props) {
   const [draft, setDraft] = useState(master);
+  useEffect(() => setDraft(master), [master.businessDays.join(",")]);
   const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
   const save = async () => {
+    await onSaveBusinessDays(draft.businessDays);
     onMasterChange(draft);
     templateStorage.setItem("store_master_settings", JSON.stringify(draft));
     if (period.startDay !== periodDraft.startDay || period.endDay !== periodDraft.endDay) await onSavePeriod();
-    toast.success("店舗マスターを保存しました");
+    toast.success("店舗マスタを保存しました");
   };
 
   return <section className="space-y-4 font-sans text-slate-900">
@@ -76,8 +80,7 @@ export function StoreMasterSettings({ master, onMasterChange, period, periodDraf
       <h4 className={heading}>通常の営業曜日</h4><p className={description}>青は「営業日」、灰色は「休み」です。曜日を押すと切り替わります。</p>
       <div className="mt-4 grid grid-cols-4 gap-2 sm:grid-cols-7">{weekdays.map((day, index) => { const open = draft.businessDays.includes(index); return <label key={day} className={`flex h-14 cursor-pointer flex-col items-center justify-center rounded-xl border text-sm font-bold transition ${open ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-100 text-slate-500"}`}><input type="checkbox" className="sr-only" checked={open} onChange={event => setDraft(current => ({ ...current, businessDays: event.target.checked ? [...current.businessDays, index].sort() : current.businessDays.filter(value => value !== index) }))} /><span>{day}</span><small className="mt-0.5 text-[10px] font-bold">{open ? "営業" : "休み"}</small></label>; })}</div>
     </div>
-    <p className="rounded-xl bg-slate-50 p-4 text-xs leading-5 text-slate-600">カレンダーの帯色は「シフト設定 → 特殊日設定」で管理します。日曜日・祝日・年末年始・お盆も、そこで有効にしたものだけ色が付きます。</p>
-    <Button className="h-11 w-full font-bold" disabled={saving || !draft.storeName.trim()} onClick={() => void save()}><Save className="mr-2 h-4 w-4" />店舗マスターを保存</Button>
+    <div className="rounded-xl bg-slate-50 p-4 text-xs leading-5 text-slate-600"><p>「定休」にした曜日はカレンダー帯色設定の「通常の定休日」へ反映します。日曜日を営業にすると日曜日の定休日帯は消えます。祝日は別の設定です。</p><Button variant="outline" className="mt-3" onClick={onOpenBandSettings}>定休日の帯色を設定 →</Button></div>
+    <Button className="h-11 w-full font-bold" disabled={saving || !draft.storeName.trim()} onClick={() => void save()}><Save className="mr-2 h-4 w-4" />店舗マスタを保存</Button>
   </section>;
 }
-

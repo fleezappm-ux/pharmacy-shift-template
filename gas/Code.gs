@@ -9,12 +9,22 @@ function doPost(e) {
     if (adminActions.indexOf(data.action) >= 0) requireShiftSession(data.sessionToken, "admin");
     if (data.action === "previewTemplateReset") return previewTemplateReset(data);
     if (data.action === "runTemplateReset") return runTemplateReset(data);
+    if (data.action === "clearTemplateShiftRemarks") return clearTemplateShiftRemarks(data);
     if (data.action === "loginShift") return loginShift(data);
     if (data.action === "loginShiftAdmin") return loginShiftAdmin(data);
     if (data.action === "loginShiftEmployee") return loginShiftEmployee(data);
     if (data.action === "getShiftLoginEmployees") return getShiftLoginEmployees(data);
     if (data.action === "getShiftEmployeeMaster") return getShiftEmployeeMaster(data);
     if (data.action === "saveShiftEmployeeMaster") return saveShiftEmployeeMaster(data);
+    if (data.action === "getShiftRoleMaster") return getShiftRoleMaster(data);
+    if (data.action === "saveShiftRoleMaster") return saveShiftRoleMaster(data);
+    if (data.action === "getShiftHomeLayout") return getShiftHomeLayout(data);
+    if (data.action === "saveShiftHomeLayout") return saveShiftHomeLayout(data);
+    if (data.action === "getShiftAdminNotices") return getShiftAdminNotices(data);
+    if (data.action === "saveShiftAdminNotice") return saveShiftAdminNotice(data);
+    if (data.action === "deleteShiftAdminNotice") return deleteShiftAdminNotice(data);
+    if (data.action === "getShiftAdminNoticeVisibility") return getShiftAdminNoticeVisibility(data);
+    if (data.action === "saveShiftAdminNoticeVisibility") return saveShiftAdminNoticeVisibility(data);
     if (data.action === "getShiftCycleMaster") return getShiftCycleMaster(data);
     if (data.action === "saveShiftCycleMaster") return saveShiftCycleMaster(data);
     if (data.action === "getShiftPaidLeaveBalance") return getShiftPaidLeaveBalance(data);
@@ -658,7 +668,9 @@ function getShiftLoginEmployees() {
 
 
 function normalizeShiftEmployeeMaster(items) {
+  var roles = readShiftRoleMaster();
   return (Array.isArray(items) ? items : []).slice(0, 50).map(function(item, index) {
+    var selected = roles.filter(function(role) { return role.id === item.roleId || role.name === item.role; })[0];
     return {
       id: sanitizeText(item.id, 100).trim() || Utilities.getUuid(),
       name: sanitizeText(item.name, 100).trim(),
@@ -666,9 +678,141 @@ function normalizeShiftEmployeeMaster(items) {
       displayOrder: index + 1,
       active: item.active !== false,
       aliases: (Array.isArray(item.aliases) ? item.aliases : []).slice(0, 20).map(function(name) { return sanitizeText(name, 100).trim(); }).filter(Boolean)
-      ,role: ["薬剤師", "事務員", "登録販売者"].indexOf(item.role) >= 0 ? item.role : ""
+      ,roleId: selected ? selected.id : "", role: selected ? selected.name : ""
     };
   }).filter(function(item) { return item.name || !item.active; });
+}
+
+function readShiftRoleMaster() {
+  var raw = PropertiesService.getScriptProperties().getProperty("SHIFT_ROLE_MASTER_JSON");
+  try { if (raw) return JSON.parse(raw); } catch (_) {}
+  return [{ id: "pharmacist", name: "薬剤師" }, { id: "clerk", name: "事務員" }, { id: "seller", name: "登録販売者" }];
+}
+
+function getShiftRoleMaster(data) {
+  try { requireShiftSession(data.sessionToken); return createJsonDataResponse({ success: true, roles: readShiftRoleMaster() }); }
+  catch (error) { return createJsonResponse(false, error.message || "役職を取得できませんでした。"); }
+}
+
+function saveShiftRoleMaster(data) {
+  try {
+    requireShiftSession(data.sessionToken, "admin");
+    verifyShiftApiKey(data.shiftApiKey);
+    var source = Array.isArray(data.roles) ? data.roles : [];
+    if (!source.length) throw new Error("役職を1件以上登録してください。");
+    var ids = {}, names = {};
+    var roles = source.map(function(role) {
+      var id = sanitizeText(role.id, 80).trim(), name = sanitizeText(role.name, 50).trim();
+      if (!id || !name || ids[id] || names[name]) throw new Error("役職名とIDは重複せず入力してください。");
+      ids[id] = true; names[name] = true;
+      return { id: id, name: name };
+    });
+    var p = PropertiesService.getScriptProperties();
+    var before = readShiftRoleMaster();
+    p.setProperty("SHIFT_ROLE_MASTER_JSON", JSON.stringify(roles));
+    var employees = normalizeShiftEmployeeMaster(readShiftEmployeeMaster()).map(function(item) {
+      var current = roles.filter(function(role) { return role.id === item.roleId; })[0];
+      item.role = current ? current.name : "";
+      return item;
+    });
+    p.setProperty("SHIFT_EMPLOYEE_MASTER_JSON", JSON.stringify(employees));
+    appendShiftAudit(data, "役職マスタ保存", "SHIFT_ROLE_MASTER", before, roles);
+    return createJsonDataResponse({ success: true, roles: roles, employees: employees });
+  } catch (error) { return createJsonResponse(false, error.message || "役職を保存できませんでした。"); }
+}
+
+function getShiftHomeLayout(data) {
+  try {
+    requireShiftSession(data.sessionToken);
+    var raw = PropertiesService.getScriptProperties().getProperty("SHIFT_HOME_LAYOUT_JSON");
+    return createJsonDataResponse({ success: true, layout: raw ? JSON.parse(raw) : { visible: true, columns: [["pharmacist"], ["clerk", "seller"]] } });
+  } catch (error) { return createJsonResponse(false, error.message || "ホーム表示設定を取得できませんでした。"); }
+}
+
+function saveShiftHomeLayout(data) {
+  try {
+    requireShiftSession(data.sessionToken, "admin"); verifyShiftApiKey(data.shiftApiKey);
+    var source = data.layout || {}, roles = readShiftRoleMaster(), ids = {};
+    roles.forEach(function(role) { ids[role.id] = true; });
+    var columns = (Array.isArray(source.columns) ? source.columns : []).slice(0, 2).map(function(column) {
+      return (Array.isArray(column) ? column : []).map(function(id) { return sanitizeText(id, 80); }).filter(function(id) { return ids[id]; });
+    });
+    while (columns.length < 2) columns.push([]);
+    var layout = { visible: source.visible !== false, columns: columns };
+    PropertiesService.getScriptProperties().setProperty("SHIFT_HOME_LAYOUT_JSON", JSON.stringify(layout));
+    appendShiftAudit(data, "ホーム出勤一覧設定", "SHIFT_HOME_LAYOUT", null, layout);
+    return createJsonDataResponse({ success: true, layout: layout });
+  } catch (error) { return createJsonResponse(false, error.message || "ホーム表示設定を保存できませんでした。"); }
+}
+
+function readShiftAdminNotices() {
+  var p = PropertiesService.getScriptProperties();
+  var ids = JSON.parse(p.getProperty("SHIFT_ADMIN_NOTICE_IDS") || "[]");
+  return ids.map(function(id) {
+    try { return JSON.parse(p.getProperty("SHIFT_ADMIN_NOTICE_" + id) || "null"); } catch (_) { return null; }
+  }).filter(function(item) { return !!item; });
+}
+function getShiftAdminNotices(data) {
+  try {
+    var session = requireShiftSession(data.sessionToken);
+    var notices = readShiftAdminNotices().filter(function(item) {
+      return session.role === "admin" || item.visibility === "all" ||
+        (session.employeeId && item.employeeIds.indexOf(session.employeeId) !== -1);
+    });
+    return createJsonDataResponse({ success: true, notices: notices });
+  } catch (error) { return createJsonResponse(false, error.message || "お知らせを取得できませんでした。"); }
+}
+function getShiftAdminNoticeVisibility(data) {
+  try {
+    requireShiftSession(data.sessionToken);
+    return createJsonDataResponse({ success: true, visibility: PropertiesService.getScriptProperties().getProperty("SHIFT_ADMIN_NOTICE_VISIBILITY") || "all" });
+  } catch (error) { return createJsonResponse(false, error.message || "公開設定を取得できませんでした。"); }
+}
+function saveShiftAdminNoticeVisibility(data) {
+  try {
+    requireShiftSession(data.sessionToken, "admin"); verifyShiftApiKey(data.shiftApiKey);
+    if (data.visibility !== "all" && data.visibility !== "selected") throw new Error("公開範囲を選んでください。");
+    PropertiesService.getScriptProperties().setProperty("SHIFT_ADMIN_NOTICE_VISIBILITY", data.visibility);
+    return createJsonDataResponse({ success: true, visibility: data.visibility });
+  } catch (error) { return createJsonResponse(false, error.message || "公開設定を保存できませんでした。"); }
+}
+function saveShiftAdminNotice(data) {
+  try {
+    requireShiftSession(data.sessionToken, "admin"); verifyShiftApiKey(data.shiftApiKey);
+    var text = sanitizeText(data.text, 1200).trim();
+    if (!text) throw new Error("お知らせ本文を入力してください。");
+    var visibility = data.visibility === "selected" ? "selected" : "all";
+    var allowed = {};
+    readShiftEmployeeMaster().forEach(function(item) { if (item.active) allowed[item.id] = true; });
+    var ids = (Array.isArray(data.employeeIds) ? data.employeeIds : []).map(function(id) { return sanitizeText(id, 100); }).filter(function(id) { return allowed[id]; });
+    if (visibility === "selected" && !ids.length) throw new Error("対象の従業員を選んでください。");
+    var lock = LockService.getScriptLock(); lock.waitLock(10000);
+    try {
+      var p = PropertiesService.getScriptProperties();
+      var index = JSON.parse(p.getProperty("SHIFT_ADMIN_NOTICE_IDS") || "[]");
+      if (index.length >= 100) throw new Error("お知らせは100件までです。不要なものを削除してください。");
+      var id = Utilities.getUuid();
+      var item = { id: id, text: text, visibility: visibility, employeeIds: visibility === "all" ? [] : ids, createdAt: new Date().toISOString() };
+      p.setProperty("SHIFT_ADMIN_NOTICE_" + id, JSON.stringify(item));
+      p.setProperty("SHIFT_ADMIN_NOTICE_IDS", JSON.stringify([id].concat(index)));
+      return createJsonDataResponse({ success: true, notice: item });
+    } finally { lock.releaseLock(); }
+  } catch (error) { return createJsonResponse(false, error.message || "お知らせを保存できませんでした。"); }
+}
+function deleteShiftAdminNotice(data) {
+  try {
+    requireShiftSession(data.sessionToken, "admin"); verifyShiftApiKey(data.shiftApiKey);
+    var id = sanitizeText(data.id, 100);
+    var lock = LockService.getScriptLock(); lock.waitLock(10000);
+    try {
+      var p = PropertiesService.getScriptProperties();
+      var index = JSON.parse(p.getProperty("SHIFT_ADMIN_NOTICE_IDS") || "[]");
+      if (index.indexOf(id) === -1) throw new Error("対象のお知らせがありません。");
+      p.setProperty("SHIFT_ADMIN_NOTICE_IDS", JSON.stringify(index.filter(function(item) { return item !== id; })));
+      p.deleteProperty("SHIFT_ADMIN_NOTICE_" + id);
+      return createJsonDataResponse({ success: true });
+    } finally { lock.releaseLock(); }
+  } catch (error) { return createJsonResponse(false, error.message || "お知らせを削除できませんでした。"); }
 }
 
 
@@ -1197,8 +1341,19 @@ function updateShiftLeaveRequestWorkTime(data) {
 /** 薬局固有の休診・当番日ルール。本人認証導入まではシフト画面から共有編集できる試作運用です。 */
 function getShiftSpecialDayRules() {
   try {
-    var raw = PropertiesService.getScriptProperties().getProperty("SHIFT_SPECIAL_DAY_RULES_JSON");
-    return createJsonDataResponse({ success: true, rules: raw ? JSON.parse(raw) : [] });
+    var props = PropertiesService.getScriptProperties();
+    var raw = props.getProperty("SHIFT_SPECIAL_DAY_RULES_JSON");
+    var rules = raw ? JSON.parse(raw) : [];
+    if (props.getProperty("SHIFT_BAND_V3_MIGRATED") !== "1") {
+      // The duplicate template's old store-specific presets are replaced once.
+      rules = [
+        { id: "band-v3:closed-0", name: "定休日（日）", color: "red", behavior: "information", enabled: true, mode: "recurring", weekday: 0, weeks: [1,2,3,4,5], dates: [] },
+        { id: "band-v3:holiday", name: "祝日", color: "red", behavior: "information", enabled: true, mode: "annual", weekday: 0, weeks: [], dates: [] }
+      ];
+      props.setProperty("SHIFT_SPECIAL_DAY_RULES_JSON", JSON.stringify(rules));
+      props.setProperty("SHIFT_BAND_V3_MIGRATED", "1");
+    }
+    return createJsonDataResponse({ success: true, rules: rules });
   } catch (error) { return createJsonResponse(false, error.message || "特殊日設定を取得できませんでした。"); }
 }
 
@@ -1213,12 +1368,14 @@ function saveShiftSpecialDayRules(data) {
     if (source.length > 30) throw new Error("特殊日ルールは30件までです。");
     var colors = ["red", "blue", "green", "amber", "purple", "gray"];
     var behaviors = ["information", "all-off", "duty"];
-    var rules = source.map(function(rule) {
+    var rules = source.filter(function(rule) { return /^band-v3:/.test(String(rule.id || "")); }).map(function(rule) {
       var dates = Array.isArray(rule.dates) ? rule.dates.map(function(value) { return sanitizeText(value, 10); }).filter(function(value) { return /^\d{4}-\d{2}-\d{2}$/.test(value); }).slice(0, 366) : [];
+      var monthDays = Array.isArray(rule.monthDays) ? rule.monthDays.map(function(value) { return sanitizeText(value, 5); }).filter(function(value) { return /^\d{2}-\d{2}$/.test(value); }).slice(0, 366) : [];
       var weeks = Array.isArray(rule.weeks) ? rule.weeks.map(Number).filter(function(value) { return value >= 1 && value <= 5; }) : [];
-      return { id: sanitizeText(rule.id, 100) || Utilities.getUuid(), name: sanitizeText(rule.name, 50), color: colors.indexOf(rule.color) >= 0 ? rule.color : "gray", behavior: behaviors.indexOf(rule.behavior) >= 0 ? rule.behavior : "information", enabled: rule.enabled !== false, mode: rule.mode === "recurring" ? "recurring" : "annual", weekday: Math.max(0, Math.min(6, Number(rule.weekday) || 0)), weeks: weeks, dates: dates };
+      return { id: sanitizeText(rule.id, 100), name: sanitizeText(rule.name, 50), color: colors.indexOf(rule.color) >= 0 ? rule.color : "gray", behavior: behaviors.indexOf(rule.behavior) >= 0 ? rule.behavior : "information", enabled: rule.enabled !== false, mode: ["recurring", "yearly"].indexOf(rule.mode) >= 0 ? rule.mode : "annual", weekday: Math.max(0, Math.min(6, Number(rule.weekday) || 0)), weeks: weeks, dates: dates, monthDays: monthDays };
     }).filter(function(rule) { return !!rule.name; });
     PropertiesService.getScriptProperties().setProperty("SHIFT_SPECIAL_DAY_RULES_JSON", JSON.stringify(rules));
+    PropertiesService.getScriptProperties().setProperty("SHIFT_BAND_V3_MIGRATED", "1");
     return createJsonDataResponse({ success: true, rules: rules });
   } catch (error) { return createJsonResponse(false, error.message || "特殊日設定を保存できませんでした。"); }
   finally { try { lock.releaseLock(); } catch (_) {} }
@@ -1610,6 +1767,30 @@ function assertTemplateResetTarget() {
   });
   if (!p.getProperty("NOTION_API_KEY")) throw new Error("Notion接続が未設定です。");
   return p;
+}
+
+/** 複製用DBだけの旧備考欄を消す。シフトや申請は変更しない。1回最大25ページ。 */
+function clearTemplateShiftRemarks(data) {
+  try {
+    requireShiftSession(data.sessionToken, "admin"); verifyShiftApiKey(data.shiftApiKey);
+    var p = assertTemplateResetTarget();
+    var apiKey = p.getProperty("NOTION_API_KEY"), dbId = p.getProperty("NOTION_SHIFT_DATABASE_ID");
+    var rows = queryNotionDatabase(apiKey, dbId, { page_size: 100 });
+    var targets = rows.filter(function(page) {
+      var row = statusPageToObject(page);
+      return String(row["備考"] || row["全体補足種別"] || row["全体補足内容"] || "").trim() !== "";
+    });
+    if (data.preview === true) return createJsonDataResponse({ success: true, count: targets.length, cleared: 0 });
+    targets.slice(0, 25).forEach(function(page) {
+      updateNotionPage(apiKey, page.id, {
+        "備考": createRichTextProperty(""),
+        "全体補足種別": createRichTextProperty(""),
+        "全体補足内容": createRichTextProperty("")
+      });
+    });
+    p.deleteProperty("SHIFT_DROPDOWN_MASTER_JSON");
+    return createJsonDataResponse({ success: true, cleared: Math.min(targets.length, 25), remaining: Math.max(0, targets.length - 25) });
+  } catch (error) { return createJsonResponse(false, error.message || "古い備考を削除できませんでした。"); }
 }
 
 function templateResetDatabases(p) {

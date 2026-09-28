@@ -37,10 +37,11 @@ export interface SpecialDayRule {
   color: SpecialDayColor;
   behavior: SpecialDayBehavior;
   enabled: boolean;
-  mode: "recurring" | "annual";
+  mode: "recurring" | "annual" | "yearly";
   weekday: number;
   weeks: number[];
   dates: string[];
+  monthDays?: string[];
   order?: number;
 }
 
@@ -52,10 +53,11 @@ export interface Employee {
   active?: boolean;
   aliases?: string[];
   role?: EmployeeRole;
+  roleId?: string;
   shifts: DayShift[];
 }
 
-export type EmployeeRole = "薬剤師" | "事務員" | "登録販売者";
+export type EmployeeRole = string;
 export type CommentVisibility = "all" | "editors";
 
 export type LeaveRequestType = "有給希望" | "休み希望" | "出勤希望" | "午前休希望" | "午後休希望" | "希望なし" | "訂正依頼";

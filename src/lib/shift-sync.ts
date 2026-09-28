@@ -15,6 +15,11 @@ export function saveShiftApiKey(value: string): void {
   templateStorage.setItem(SHIFT_API_KEY_STORAGE, value.trim());
 }
 
+export async function clearTemplateShiftRemarks(preview: boolean): Promise<{ count?: number; cleared: number; remaining?: number }> {
+  const json = await callGas("clearTemplateShiftRemarks", { preview });
+  return { count: json.count, cleared: json.cleared, remaining: json.remaining };
+}
+
 /** 全端末で共有される、期間単位のシフト確定状態を取得します。 */
 export async function fetchShiftPeriodStatus(periodStart: string): Promise<boolean> {
   let timeoutId: number | undefined;
@@ -143,12 +148,12 @@ export async function fetchShiftsFromServer(existingEmployees: Employee[]): Prom
         customShiftText,
         breakTime: row["休憩時間"] || "",
         workTime: row["実働時間"] || "",
-        comment: row["備考"] || ""
+        comment: ""
       };
       emp.shifts.push(dayShift);
     });
 
-    const allowedRemarkTypes = new Set(["祝日", "当番薬局", "店休日", "コメント"]);
+    const allowedRemarkTypes = new Set<string>();
     const remarksByDate = new Map<string, GlobalRemark>();
     rows.forEach(row => {
       const date = row["日付"]?.start?.slice(0, 10) || "";
@@ -189,7 +194,7 @@ export async function fetchHolidaysFromServer(startDate: string, endDate: string
  */
 export async function saveMonthToServer(
   employees: Employee[],
-  globalRemarks: GlobalRemark[],
+  _globalRemarks: GlobalRemark[],
   periodStart: string,
   periodEnd: string,
   updatedBy?: string
@@ -215,9 +220,9 @@ export async function saveMonthToServer(
         "シフト内容": dayShift ? buildShiftContent(dayShift.shift, dayShift.customShiftText) : "",
         "休憩時間": dayShift?.breakTime || "",
         "実働時間": dayShift?.workTime || "",
-        "備考": dayShift?.comment || "",
-        "全体補足種別": globalRemarks.find(remark => remark.date === date)?.type || "",
-        "全体補足内容": globalRemarks.find(remark => remark.date === date)?.text || ""
+        "備考": "",
+        "全体補足種別": "",
+        "全体補足内容": ""
       });
       cursor.setDate(cursor.getDate() + 1);
     }

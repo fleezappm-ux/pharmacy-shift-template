@@ -2,90 +2,65 @@ import { format } from "date-fns";
 import { getJapaneseHolidayDates } from "./japanese-holidays";
 import { GlobalRemark, SpecialDayRule } from "../types";
 
+const weekdayRuleId = (day: number) => `band-v3:closed-${day}`;
 export const DEFAULT_SPECIAL_DAY_RULES: SpecialDayRule[] = [
-  {
-    id: "sunday",
-    name: "日曜日",
-    color: "red",
-    behavior: "information",
-    enabled: true,
-    mode: "recurring",
-    weekday: 0,
-    weeks: [1, 2, 3, 4, 5],
-    dates: [],
-    order: 0
-  },
-  {
-    id: "national-holiday",
-    name: "祝日",
-    color: "red",
-    behavior: "all-off",
-    enabled: true,
-    mode: "annual",
-    weekday: 0,
-    weeks: [1],
-    dates: [],
-    order: 0
-  },
-  {
-    id: "store-closed",
-    name: "店休日",
-    color: "red",
-    behavior: "all-off",
-    enabled: true,
-    mode: "annual",
-    weekday: 0,
-    weeks: [1],
-    dates: [],
-    order: 1
-  },
-  {
-    id: "duty-pharmacy",
-    name: "当番薬局",
-    color: "green",
-    behavior: "duty",
-    enabled: true,
-    mode: "annual",
-    weekday: 0,
-    weeks: [1],
-    dates: [],
-    order: 2
-  }
+  { id: weekdayRuleId(0), name: "定休日（日）", color: "red", behavior: "information", enabled: true, mode: "recurring", weekday: 0, weeks: [1, 2, 3, 4, 5], dates: [], order: 0 },
+  { id: "band-v3:holiday", name: "祝日", color: "red", behavior: "information", enabled: true, mode: "annual", weekday: 0, weeks: [], dates: [], order: 1 }
 ];
 
-/** 保存済みの削除を尊重し、標準ルールを勝手に復元しません。 */
+/** Older duplicate-specific presets are intentionally discarded. New rules use the v3 prefix. */
 export function withDefaultSpecialDayRules(rules: SpecialDayRule[]): SpecialDayRule[] {
-  return rules.map((rule, index) => ({ ...rule, order: rule.order ?? index }))
-    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+  const current = rules.filter(rule => rule.id.startsWith("band-v3:"));
+  return current.map((rule, order) => ({ ...rule, order }));
+}
+
+export function businessDaysFromRules(rules: SpecialDayRule[]): number[] {
+  return [0, 1, 2, 3, 4, 5, 6].filter(day => !rules.some(rule => rule.id === weekdayRuleId(day) && rule.enabled));
+}
+
+export function withBusinessDays(rules: SpecialDayRule[], businessDays: number[]): SpecialDayRule[] {
+  const days = new Set(businessDays);
+  const others = rules.filter(rule => !/^band-v3:closed-[0-6]$/.test(rule.id));
+  const weekly = [0, 1, 2, 3, 4, 5, 6].filter(day => !days.has(day)).map(day => {
+    const existing = rules.find(rule => rule.id === weekdayRuleId(day));
+    return existing ? { ...existing, enabled: true } : {
+      id: weekdayRuleId(day), name: `定休日（${"日月火水木金土"[day]}）`, color: "red" as const,
+      behavior: "information" as const, enabled: true, mode: "recurring" as const,
+      weekday: day, weeks: [1, 2, 3, 4, 5], dates: []
+    };
+  });
+  return [...weekly, ...others];
 }
 
 export function matchesSpecialDayRule(date: Date, rule: SpecialDayRule): boolean {
   if (!rule.enabled) return false;
   const key = format(date, "yyyy-MM-dd");
-  if (["national-holiday", "national-holiday-v2"].includes(rule.id.replace(/^band-v2:/, ""))) return getJapaneseHolidayDates(date, date).includes(key) && date.getDay() !== 0;
+  if (rule.id === "band-v3:holiday") return getJapaneseHolidayDates(date, date).includes(key);
   if (rule.mode === "annual") return rule.dates.includes(key);
+  if (rule.mode === "yearly") return (rule.monthDays || []).includes(format(date, "MM-dd"));
   const week = Math.ceil(date.getDate() / 7);
   return date.getDay() === rule.weekday && rule.weeks.includes(week);
 }
 
-/** 帯は特殊日設定で保存して有効にしたルールだけを描画する。 */
-export function buildDisplayRemarks(manualRemarks: GlobalRemark[], rules: SpecialDayRule[], dates: Date[]): GlobalRemark[] {
-  const byDate = new Map<string, GlobalRemark>(manualRemarks.map(remark => [remark.date, { ...remark, color: undefined, source: "manual" }]));
-  dates.forEach(date => {
-    const key = format(date, "yyyy-MM-dd");
-    const matching = rules.find(rule => rule.id.startsWith("band-v2:") && matchesSpecialDayRule(date, rule));
-    const manual = byDate.get(key);
-    if (manual) {
-      if (matching) byDate.set(key, { ...manual, color: matching.color });
-    } else if (matching) {
-      byDate.set(key, { date: key, type: matching.name, text: "", color: matching.color, source: "rule" });
-    }
-  });
-  return Array.from(byDate.values());
+/** Date exceptions win over holidays, which win over repeating closures. */
+function priority(rule: SpecialDayRule): number {
+  if (rule.id === "band-v3:holiday") return 2;
+  if (rule.mode === "annual" || rule.mode === "yearly") return 3;
+  if (rule.mode === "recurring" && rule.weeks.length < 5) return 1;
+  return 0;
 }
 
 export function findSpecialDayRule(date: Date, rules: SpecialDayRule[]) {
-  return rules.find(rule => rule.id.startsWith("band-v2:") && matchesSpecialDayRule(date, rule));
+  return rules.filter(rule => rule.id.startsWith("band-v3:") && matchesSpecialDayRule(date, rule))
+    .sort((a, b) => priority(b) - priority(a) || (a.order ?? 0) - (b.order ?? 0))[0];
+}
+
+export function buildDisplayRemarks(_manualRemarks: GlobalRemark[], rules: SpecialDayRule[], dates: Date[]): GlobalRemark[] {
+  return dates.flatMap(date => {
+    const rule = findSpecialDayRule(date, rules);
+    if (!rule) return [];
+    return [{ date: format(date, "yyyy-MM-dd"), type: rule.name, text: "", color: rule.color, source: "rule" as const }];
+  });
 }
 
 export function colorForRemark(remark: GlobalRemark | undefined, _rules: SpecialDayRule[]) {
