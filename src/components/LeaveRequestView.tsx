@@ -201,7 +201,7 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
           return <div key={key} className={`leave-personal-row ${colorFor(date, key) ? `special-${colorFor(date, key)}` : ""} ${drafts[key] ? "has-draft" : ""}`}>
             <div className="leave-personal-date"><strong>{format(date, "M/d")}</strong><small>{format(date, "E", { locale: ja })}</small></div>
             <div className="leave-personal-work"><button type="button" disabled={loading || submitting} onClick={() => setOpenDate(openDate === key ? null : key)} aria-label={`${format(date, "M/d")}の自分の希望を選ぶ`}><strong>{shiftLabelFor(operator, key)}</strong>{drafts[key] && <small>{drafts[key].type}</small>}</button><span className="leave-desktop-select">{selectFor(key)}</span><span className="leave-mobile-select">{(openDate === key || drafts[key]) && selectFor(key)}</span>{requestByDate.get(key) && !drafts[key] && <span className="leave-shift-existing">提出済：{requestByDate.get(key)?.type}</span>}</div>
-            {remark && remark.type !== "なし" && <small className="leave-personal-remark">{remark.type}{remark.text ? `：${remark.text}` : ""}</small>}
+            {remark?.type && remark.type !== "なし" && <small className="leave-personal-remark">{remark.type}{remark.text ? `：${remark.text}` : ""}</small>}
           </div>;
         })}
       </div>}
@@ -245,3 +245,4 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
     </div>}
   </div>;
 }
+

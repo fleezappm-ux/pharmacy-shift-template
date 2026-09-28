@@ -89,7 +89,7 @@ export function HomeView({
           <div className="home-brand-copy">
             <span>PHARMACY SHIFT</span>
             <div className="home-title-line">
-              <h1 className={isEditor ? "home-admin-title" : ""} style={{ fontSize: `clamp(0.8rem, ${Math.max(1.05, 2.1 - Math.max(0, storeName.length - 7) * 0.08)}rem, 2.1rem)` }}>{storeName.slice(0, 30)} シフト</h1>
+              <h1 className={isEditor ? "home-admin-title" : "home-store-title"} style={isEditor ? undefined : { fontSize: `clamp(0.85rem, ${Math.max(1, 1.75 - Math.max(0, storeName.length - 8) * 0.06)}rem, 1.75rem)` }}>{isEditor ? "シフト管理者" : `${storeName.slice(0, 30)} シフト`}</h1>
               <span className="relative inline-flex items-center">
                 <button type="button" className="home-operator cursor-pointer" aria-expanded={showLogout} onClick={() => setShowLogout(value => !value)}><UserRound className="h-4 w-4" />操作員：{operatorName}</button>
                 {showLogout && <button type="button" className="absolute right-0 top-full z-50 mt-2 whitespace-nowrap rounded-lg border bg-white px-4 py-3 font-bold text-slate-900 shadow-lg" onClick={onLogout}>ログアウトして別のIDで入る</button>}
@@ -133,7 +133,7 @@ export function HomeView({
           <p className="home-roster-date">{format(selectedDateObject, "M月d日")}（{WEEKDAYS[selectedDateObject.getDay()]}）</p>
           <span className="home-roster-header-spacer" aria-hidden="true" />
         </div>
-        {selectedRemark && selectedRemark.type !== "なし" && <div className="home-remark">{selectedRemark.type}{selectedRemark.text ? `：${selectedRemark.text}` : ""}</div>}
+        {selectedRemark?.type && selectedRemark.type !== "なし" && <div className="home-remark">{selectedRemark.type}{selectedRemark.text ? `：${selectedRemark.text}` : ""}</div>}
         {layout.visible && <div className={`grid gap-3 ${groups.every(group => group.length > 0) ? "grid-cols-2" : "grid-cols-1"}`}>
           {groups.filter(group => group.length).map((group, index) => <div key={index} className={index > 0 ? "border-l pl-3" : ""}>{renderRoster(group)}</div>)}
         </div>}

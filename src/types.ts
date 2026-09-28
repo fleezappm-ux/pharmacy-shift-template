@@ -43,6 +43,9 @@ export interface SpecialDayRule {
   dates: string[];
   monthDays?: string[];
   order?: number;
+  showName?: boolean;
+  restMode?: "none" | "all" | "selected";
+  restEmployeeIds?: string[];
 }
 
 export interface Employee {

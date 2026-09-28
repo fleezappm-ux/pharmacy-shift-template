@@ -69,7 +69,7 @@ import { PersonalShiftList } from "./components/PersonalShiftList";
 import { cancelLeaveRequest, deleteLeaveRequest, fetchLeaveRequests, fetchPaidLeaveBalance, savePaidLeaveBalance, submitLeaveRequest, updateLeaveRequestStatus, updateLeaveRequestWorkTime } from "./lib/leave-request-sync";
 import { SpecialDaySettings } from "./components/SpecialDaySettings";
 import { fetchSpecialDayRules, saveSpecialDayRules } from "./lib/special-day-sync";
-import { buildDisplayRemarks, colorForRemark, DEFAULT_SPECIAL_DAY_RULES, findSpecialDayRule, withDefaultSpecialDayRules, businessDaysFromRules, withBusinessDays } from "./lib/special-day-utils";
+import { buildDisplayRemarks, colorForRemark, DEFAULT_SPECIAL_DAY_RULES, findSpecialDayRule, withDefaultSpecialDayRules, businessDaysFromRules, shouldRestOnDate } from "./lib/special-day-utils";
 import { CalendarPeriodSettings, fetchCalendarPeriodSettings, saveCalendarPeriodSettings } from "./lib/calendar-period-sync";
 import { BoardVisibility, fetchBoardVisibility, saveBoardVisibility, fetchCorrectionVisibility, saveCorrectionVisibility } from "./lib/store-board-sync";
 import { getManagementApiKey, getShiftSession, logoutShiftSession, saveManagementApiKey, ShiftSession } from "./lib/auth-sync";
@@ -848,49 +848,28 @@ export default function App() {
       return generateConfiguredDateRange(anchor.getFullYear(), anchor.getMonth() + 1, calendarPeriodSettings.startDay, calendarPeriodSettings.endDay);
     });
     const allDates = targetRanges.flat();
-    const isDuty = (date: Date) => findSpecialDayRule(date, specialDayRules)?.behavior === "duty";
-    const isRed = (date: Date) => {
-      if (isDuty(date)) return false;
-      const rule = findSpecialDayRule(date, specialDayRules);
-      return rule?.behavior === "all-off";
-    };
     const mondayOf = (date: Date) => { const result = new Date(date); result.setDate(date.getDate() + (date.getDay() === 0 ? -6 : 1 - date.getDay())); result.setHours(0, 0, 0, 0); return result; };
-    const doubleRedWeek = (monday: Date) => { const thu = new Date(monday); thu.setDate(monday.getDate() + 3); const sat = new Date(monday); sat.setDate(monday.getDate() + 5); return isRed(thu) && isRed(sat); };
     const cycleWeekIndex = (date: Date, assignment: { cycleType: number; anchorDate: string }) => {
-      const anchor = new Date(`${assignment.anchorDate}T00:00:00`); const anchorMonday = mondayOf(anchor); const currentMonday = mondayOf(date);
-      let effectiveWeeks = 0; const direction = currentMonday >= anchorMonday ? 1 : -1; const cursor = new Date(anchorMonday);
-      while ((direction > 0 && cursor < currentMonday) || (direction < 0 && cursor > currentMonday)) { if (!doubleRedWeek(cursor)) effectiveWeeks += direction; cursor.setDate(cursor.getDate() + 7 * direction); }
+      const anchorMonday = mondayOf(new Date(`${assignment.anchorDate}T00:00:00`));
+      const currentMonday = mondayOf(date);
+      const weeks = Math.round((currentMonday.getTime() - anchorMonday.getTime()) / (7 * 24 * 60 * 60 * 1000));
       const length = Math.max(1, Math.min(4, cycleLengths[assignment.cycleType] || 2));
-      return ((effectiveWeeks % length) + length) % length;
+      return ((weeks % length) + length) % length;
     };
     const generatedEmployees = employees.map(employee => {
       const assignment = cycleAssignments[employee.id];
       if (!assignment) return employee;
       const shifts = [...employee.shifts];
-      const generatedDates = new Set<string>();
       allDates.forEach(date => {
         const key = getDateStr(date);
         if (shifts.some(item => item.date === key)) return;
         const weekIndex = cycleWeekIndex(date, assignment);
         let shift = resolveCycleShift(cyclePatterns, assignment.cycleType, date.getDay(), weekIndex);
-        if (isRed(date)) shift = "休み";
+        if (shouldRestOnDate(date, employee.id, specialDayRules)) shift = "休み";
         
         if (!shift) return;
         const times = calculateTimes(shift);
         shifts.push({ date: key, shift, breakTime: times.breakTime, workTime: times.workTime, comment: "" });
-        generatedDates.add(key);
-      });
-      const weekKeys = [...new Set(allDates.map(date => getDateStr(mondayOf(date))))];
-      weekKeys.forEach(weekKey => {
-        const monday = new Date(`${weekKey}T00:00:00`);
-        if (doubleRedWeek(monday)) return;
-        const week = Array.from({ length: 7 }, (_, index) => { const date = new Date(monday); date.setDate(monday.getDate() + index); return date; });
-        const lostWorkday = week.some(date => { const base = resolveCycleShift(cyclePatterns, assignment.cycleType, date.getDay(), cycleWeekIndex(date, assignment)); return Boolean(base && base !== "休み" && base !== "有休" && isRed(date)); });
-        if (!lostWorkday) return;
-        const replacement = week.map(date => ({ date, base: resolveCycleShift(cyclePatterns, assignment.cycleType, date.getDay(), cycleWeekIndex(date, assignment)) })).find(item => item.base === "休み" && !isRed(item.date));
-        if (!replacement) return;
-        const index = shifts.findIndex(item => item.date === getDateStr(replacement.date));
-        if (index >= 0 && generatedDates.has(getDateStr(replacement.date)) && shifts[index].shift === "休み") shifts[index] = { ...shifts[index], shift: "有休", breakTime: "0:00", workTime: "0:00" };
       });
       return { ...employee, shifts };
     });
@@ -1149,6 +1128,8 @@ export default function App() {
       .map(d => getDateStr(d))
       .filter(d => d >= startDateStr);
 
+    const affected = datesToUpdate.filter(date => emp.shifts.some(shift => shift.date === date)).length;
+    if (affected && !window.confirm(`${affected}件の既存シフトをクールで上書きします。続けますか？`)) return;
     setEmployees(prev => prev.map(e => {
       if (e.id !== employeeId) return e;
       const newShifts = [...e.shifts];
@@ -1161,13 +1142,14 @@ export default function App() {
         const weeksDiff = Math.floor(msDiff / (7 * 24 * 60 * 60 * 1000));
         const length = Math.max(1, Math.min(4, cycleLengths[cycleType] || 2));
         const weekIndex = ((weeksDiff % length) + length) % length;
-        const shift: ShiftType = resolveCycleShift(cyclePatterns, cycleType, dayOfWeek, weekIndex);
+        const cycleShift: ShiftType = resolveCycleShift(cyclePatterns, cycleType, dayOfWeek, weekIndex);
+        const shift: ShiftType = shouldRestOnDate(date, e.id, specialDayRules) ? "休み" : cycleShift;
 
         if (shift) {
           const { breakTime, workTime } = calculateTimes(shift);
           const idx = newShifts.findIndex(s => s.date === dateStr);
           if (idx >= 0) {
-            newShifts[idx] = { ...newShifts[idx], shift, breakTime, workTime };
+            newShifts[idx] = { ...newShifts[idx], shift, breakTime, workTime, customShiftText: undefined };
           } else {
             newShifts.push({ date: dateStr, shift, breakTime, workTime, comment: "" });
           }
@@ -1199,7 +1181,8 @@ export default function App() {
       const newShifts = [...emp.shifts];
       dateRange.forEach(date => {
         const dateStr = getDateStr(date);
-        const shift = getCycleShift(date, cycleType, assignment.anchorDate);
+        const baseShift = getCycleShift(date, cycleType, assignment.anchorDate);
+        const shift = shouldRestOnDate(date, emp.id, specialDayRules) ? "休み" : baseShift;
         if (!shift) return;
         const { breakTime, workTime } = calculateTimes(shift);
         const index = newShifts.findIndex(item => item.date === dateStr);
@@ -1983,7 +1966,7 @@ export default function App() {
               <TemplateResetSettings onBack={() => setSettingsPage("menu")} />
             ) : activeTab === "admin" && settingsPage === "store" ? (
               <motion.div key="settings-store" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">店舗マスタ</CardTitle><CardDescription>店舗全体の基本ルール</CardDescription></div></div></CardHeader><CardContent className="p-6 space-y-5"><StoreMasterSettings master={{ ...storeMaster, businessDays: businessDaysFromRules(specialDayRules) }} onMasterChange={setStoreMaster} period={calendarPeriodSettings} periodDraft={calendarPeriodDraft} saving={calendarPeriodSaving} onPeriodDraftChange={setCalendarPeriodDraft} onSavePeriod={handleSaveCalendarPeriod} onSaveBoardVisibility={handleSaveBoardVisibility} onSaveBusinessDays={days => handleSaveSpecialDayRules(withBusinessDays(specialDayRules, days))} onOpenBandSettings={() => setSettingsPage("special")} /></CardContent></Card>
+                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">店舗マスタ</CardTitle><CardDescription>店舗全体の基本ルール</CardDescription></div></div></CardHeader><CardContent className="p-6 space-y-5"><StoreMasterSettings master={{ ...storeMaster, businessDays: businessDaysFromRules(specialDayRules) }} onMasterChange={setStoreMaster} period={calendarPeriodSettings} periodDraft={calendarPeriodDraft} saving={calendarPeriodSaving} onPeriodDraftChange={setCalendarPeriodDraft} onSavePeriod={handleSaveCalendarPeriod} onSaveBoardVisibility={handleSaveBoardVisibility} onOpenBandSettings={() => setSettingsPage("special")} /></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "board" ? (
               <motion.div key="settings-board" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -1998,7 +1981,7 @@ export default function App() {
               <motion.div key="settings-autodraft" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><AutoDraftSettingsView settings={autoDraftSettings} onChange={value => void updateAutoDraftSettings(value)} onStart={startAutoDraft} /></motion.div>
             ) : activeTab === "admin" && settingsPage === "special" ? (
               <motion.div key="settings-special" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">カレンダー帯色設定</CardTitle><CardDescription>年ごとに変わる日付・店舗固有の定休日</CardDescription></div></div></CardHeader><CardContent className="p-6"><SpecialDaySettings rules={specialDayRules} loading={specialDayLoading} onSave={handleSaveSpecialDayRules} /></CardContent></Card>
+                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">カレンダー帯色設定</CardTitle><CardDescription>年ごとに変わる日付・店舗固有の定休日</CardDescription></div></div></CardHeader><CardContent className="p-6"><SpecialDaySettings rules={specialDayRules} employees={employeeMaster} loading={specialDayLoading} onSave={handleSaveSpecialDayRules} /></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "operations" ? (
               <motion.div key="settings-cycles" className="space-y-4"><Button variant="outline" onClick={() => setSettingsPage("shift")}>← シフトマスタへ戻る</Button><Card><CardHeader className="page-blue-header"><CardTitle className="admin-page-title">クール作成マスタ</CardTitle></CardHeader><CardContent className="p-6">                      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">

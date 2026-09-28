@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { BookOpen, X } from "lucide-react";
 
 type GuideSection = { title: string; points: string[] };
@@ -10,7 +11,7 @@ const commonSections: GuideSection[] = [
   ] },
   { title: "ホームと今日のシフト", points: [
     "前週・次週で週を切り替え、日付を選ぶと、その日に出勤する人と勤務内容を確認できます。従業員名から個人のシフトを開けます。",
-    "月の全体シフト、お知らせ掲示板、休み希望への入口があります。日付の帯色はカレンダー帯色設定を表示します。帯色は勤務内容に影響しません。",
+    "月の全体シフト、お知らせ掲示板、休み希望への入口があります。カレンダーの帯色と勤務の休み判定は別々に設定できます。",
   ] },
   { title: "全体・個人シフト", points: [
     "全体シフトでは期間内の全員の勤務を確認できます。従業員名を選ぶと個人シフトが開き、期間を切り替えられます。",
@@ -36,13 +37,13 @@ const adminSections: GuideSection[] = [
     "掲示板への表示範囲は設定画面で調整できます。非公開の申請をほかの従業員に共有しないよう注意してください。",
   ] },
   { title: "店舗・従業員・勤務の設定", points: [
-    "設定の店舗マスタで店舗名・営業曜日、従業員マスタで氏名・役職とホーム表示、シフトマスタで自動作成・クール・帯色を管理します。",
+    "設定の店舗マスタで店舗名、従業員マスタで氏名・役職とホーム表示、シフトマスタで自動作成・クール・帯色を管理します。",
     "自動作成は設定でONにして開始します。既に確定したシフトや手作業で変更した勤務は、実行後に画面で確認してください。",
   ] },
   { title: "管理者のお知らせ", points: ["掲示板の「管理者からのお知らせを作成」で本文を入れ、全員または指定従業員を選んで公開します。既定の公開範囲はお知らせ掲示板設定で変更できます。", "指定従業員のお知らせは対象の従業員と管理者だけが読めます。"] },
   { title: "カレンダーの帯色", points: [
-    "カレンダー帯色設定の初期値は日曜日と祝日だけ赤帯です。無効にすると帯は消えます。店舗マスタで日曜日を営業にすると日曜日の定休日帯も消えます。",
-    "帯色の優先順位は「特定日・毎年の日付 → 祝日 → 第何週の曜日 → 毎週の定休日」です。帯色は表示用で、シフト自体は変更しません。",
+    "定休日では曜日と祝日を一緒に設定します。初期値は日曜日と祝日が赤帯で、選択を外すと帯は消えます。名前の表示も切り替えられます。",
+    "各ルールで『勤務は変更しない』『全員を休みにする』『指定従業員を休みにする』を選べます。休み判定はシフト案の自動作成とクール適用時に反映し、設定を変えただけでは既存の勤務は変更しません。重複時は特定日・毎年の日付、祝日、第何週の曜日、毎週の定休日の順に優先します。",
   ] },
   { title: "データ出力・接続・初期化", points: [
     "シフトはCSV・Excelで出力できます。ブラウザが対応する場合はExcelの保存先フォルダも選べます。",
@@ -59,7 +60,7 @@ export function ShiftToolGuide({ role, onClose }: { role: "admin" | "employee"; 
     return () => window.removeEventListener("keydown", handleKey);
   }, [hideNextTime, onClose]);
 
-  return <div className="fixed inset-0 z-[150] overflow-y-auto bg-slate-950/65 p-3 sm:p-6" role="presentation">
+  return createPortal(<div className="fixed inset-0 z-[150] overflow-y-auto bg-slate-950/65 p-3 sm:p-6" role="presentation">
     <section role="dialog" aria-modal="true" aria-labelledby="shift-guide-title" className="mx-auto my-3 max-w-3xl rounded-2xl bg-white text-slate-900 shadow-2xl sm:my-8">
       <header className="sticky top-0 z-10 flex items-start justify-between gap-3 rounded-t-2xl border-b bg-white px-5 py-4 sm:px-7">
         <div><h2 id="shift-guide-title" className="flex items-center gap-2 text-xl font-black"><BookOpen className="h-6 w-6 text-blue-600" />シフトツールの使い方</h2><p className="mt-1 text-sm text-slate-600">読みたい項目を開いて確認できます。ホームからいつでも読み直せます。</p></div>
@@ -76,7 +77,7 @@ export function ShiftToolGuide({ role, onClose }: { role: "admin" | "employee"; 
         <button type="button" className="rounded-xl bg-blue-600 px-6 py-3 text-sm font-bold text-white" onClick={() => onClose(hideNextTime)}>使い始める</button>
       </footer>
     </section>
-  </div>;
+  </div>, document.body);
 }
 
 function GuideEntry({ section, initiallyOpen = false }: { key?: string; section: GuideSection; initiallyOpen?: boolean }) {
@@ -85,4 +86,3 @@ function GuideEntry({ section, initiallyOpen = false }: { key?: string; section:
     <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-700">{section.points.map(point => <li key={point}>{point}</li>)}</ul>
   </details>;
 }
-
