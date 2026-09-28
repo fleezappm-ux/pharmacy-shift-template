@@ -19,7 +19,6 @@ export function PersonalShiftList({ employee, dates, remarks }: Props) {
         <div className={`personal-shift-value ${isOff ? "is-off" : ""}`}>{label}</div>
         <div className="personal-work">{!isOff && shift?.workTime ? <><Clock3 className="w-3.5 h-3.5" />{shift.workTime}</> : "―"}</div>
         {remark && remark.type !== "なし" && <div className="personal-global-remark"><CalendarDays className="w-3.5 h-3.5" />{remark.type}{remark.text ? `：${remark.text}` : ""}</div>}
-        {shift?.comment && <div className="personal-comment">連絡：{shift.comment}</div>}
       </div>;
     })}
   </div>;

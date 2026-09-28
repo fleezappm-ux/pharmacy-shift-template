@@ -962,16 +962,6 @@ export default function App() {
     }
   };
 
-  // 祝日や日曜日の表示は特殊日ルールから算出する。備考や勤務には自動書き込みしない。
-  // 「全員休み」の特殊日ルールは、対象月の勤務初期値にも反映します。
-  useEffect(() => {
-    if (!initialSyncComplete) return;
-    dateRange.forEach(date => {
-      if (findSpecialDayRule(date, specialDayRules)?.behavior === "all-off") setAllEmployeesOff(getDateStr(date));
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMonthKey, initialSyncComplete, specialDayRules]);
-
   // Serialize saves so an older request cannot overwrite a newer edit.
   const saveCurrentMonth = (): Promise<void> => {
     if (!dateRange.length) return Promise.resolve();
@@ -1222,69 +1212,6 @@ export default function App() {
       return { ...emp, shifts: newShifts };
     }));
     toast.success(`${cycleNames[cycleType]}を今月分へ再適用しました`);
-  };
-
-  const handleCommentChange = (employeeId: string, date: string, comment: string) => {
-    if (isLocked) return;
-    setEmployees(prev => prev.map(emp => {
-      if (emp.id !== employeeId) return emp;
-      
-      const existingShiftIndex = emp.shifts.findIndex(s => s.date === date);
-      const newShifts = [...emp.shifts];
-      if (existingShiftIndex >= 0) {
-        newShifts[existingShiftIndex] = { ...newShifts[existingShiftIndex], comment };
-      } else {
-        newShifts.push({ date, shift: "", breakTime: "0:00", workTime: "0:00", comment });
-      }
-      
-      return { ...emp, shifts: newShifts };
-    }));
-  };
-
-  /** 指定日に未入力の行がない従業員だけ「休み」を追加します。登録済み勤務は上書きしません。 */
-  const setAllEmployeesOff = (dateStr: string) => {
-    setEmployees(prev => prev.map(emp => {
-      const idx = emp.shifts.findIndex(s => s.date === dateStr);
-      if (idx >= 0) return emp;
-      return { ...emp, shifts: [...emp.shifts, { date: dateStr, shift: "休み" as ShiftType, breakTime: "0:00", workTime: "0:00", comment: "" }] };
-    }));
-  };
-
-  const handleGlobalRemarkTypeChange = (date: string, type: GlobalRemark["type"]) => {
-    if (isLocked) return;
-    setGlobalRemarks(prev => {
-      // "なし"が選択された場合は、その日の備考レコード自体を削除して確実にリセット
-      if (type === "なし") {
-        return prev.filter(r => r.date !== date);
-      }
-      const existingIndex = prev.findIndex(r => r.date === date);
-      const newRemarks = [...prev];
-      const matchingRule = specialDayRules.find(rule => rule.name === type);
-      if (existingIndex >= 0) {
-        newRemarks[existingIndex] = { ...newRemarks[existingIndex], type, color: matchingRule?.color, source: "manual" };
-      } else {
-        newRemarks.push({ date, type, text: "", color: matchingRule?.color, source: "manual" });
-      }
-      return newRemarks;
-    });
-    // 祝日・店休日を選んだ場合は、その場で全従業員を休みにします。
-    if (type === "祝日" || type === "店休日" || specialDayRules.find(rule => rule.name === type)?.behavior === "all-off") {
-      setAllEmployeesOff(date);
-    }
-  };
-
-  const handleGlobalRemarkTextChange = (date: string, text: string) => {
-    if (isLocked) return;
-    setGlobalRemarks(prev => {
-      const existingIndex = prev.findIndex(r => r.date === date);
-      const newRemarks = [...prev];
-      if (existingIndex >= 0) {
-        newRemarks[existingIndex] = { ...newRemarks[existingIndex], text };
-      } else {
-        newRemarks.push({ date, type: "コメント", text });
-      }
-      return newRemarks;
-    });
   };
 
   const renameCycle = (num: number, name: string) => {
