@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format } from "date-fns";
-import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight, UserRound, Users } from "lucide-react";
+import { ArrowRight, BookOpen, CalendarDays, ChevronLeft, ChevronRight, UserRound, Users } from "lucide-react";
 import { motion } from "motion/react";
 import { Employee, GlobalRemark, LeaveRequest } from "../types";
 import { WorkforceHeatmap } from "./WorkforceHeatmap";
@@ -25,6 +25,7 @@ interface HomeViewProps {
   installLabel: string;
   operatorName: string;
   onLogout: () => void;
+  onOpenGuide: () => void;
   requests: LeaveRequest[];
   pendingCorrections: LeaveRequest[];
   boardMonthLabel: string;
@@ -51,7 +52,7 @@ function shiftLabel(employee: Employee, date: string): string {
 export function HomeView({
   employees, remarks, weekDates, selectedDate, today, weekOffset, heatmapEnabled, monthDates,
   onWeekOffsetChange, onDateSelect, onShowDashboard, onEmployeeSelect, onOpenLeaveRequest, onInstall, installLabel,
-  operatorName, onLogout, requests, pendingCorrections, boardMonthLabel, boardLocked, boardVisibility, correctionVisibility, isEditor, onOpenBoard
+  operatorName, onLogout, onOpenGuide, requests, pendingCorrections, boardMonthLabel, boardLocked, boardVisibility, correctionVisibility, isEditor, onOpenBoard
 }: HomeViewProps) {
   const [showLogout, setShowLogout] = useState(false);
   const orderedEmployees = sortEmployeesForDisplay(employees);
@@ -88,6 +89,7 @@ export function HomeView({
             </div>
           </div>
         </div>
+        <button type="button" className="inline-flex items-center gap-1 self-start rounded-lg border border-white/60 px-2 py-2 text-sm font-bold text-white hover:bg-white/15 sm:px-3 sm:py-1.5" onClick={onOpenGuide}><BookOpen className="h-4 w-4" /><span className="hidden sm:inline">使い方</span><span className="sr-only sm:hidden">使い方</span></button>
         <div className="home-header-week">
           <Button variant="outline" size="sm" className="home-week-button" onClick={() => onWeekOffsetChange(weekOffset - 1)}><ChevronLeft className="w-4 h-4" /> 前週</Button>
           <div className="home-header-period">

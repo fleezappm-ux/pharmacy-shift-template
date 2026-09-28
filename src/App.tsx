@@ -1,5 +1,6 @@
 import { templateStorage } from "./lib/template-storage";
 import { TemplateResetSettings } from "./components/TemplateResetSettings";
+import { ShiftToolGuide } from "./components/ShiftToolGuide";
 import { useState, useEffect, useRef } from "react";
 import { format, addMonths } from "date-fns";
 import { ja } from "date-fns/locale/ja";
@@ -120,6 +121,7 @@ function getCurrentShiftMonth(today = new Date(), settings = DEFAULT_CALENDAR_PE
 
 export default function App() {
   const [appSession, setAppSession] = useState<ShiftSession | null>(() => getShiftSession());
+  const [guideOpen, setGuideOpen] = useState(() => templateStorage.getItem("shift_guide_hidden_v1") !== "1");
   const [settingsPage, setSettingsPage] = useState<"menu" | "store" | "board" | "employee" | "shift" | "dropdown" | "special" | "operations" | "autodraft" | "reset">("menu");
   const [storeMaster, setStoreMaster] = useState<StoreMaster>(() => {
     const saved = templateStorage.getItem("store_master_settings");
@@ -1983,6 +1985,7 @@ export default function App() {
                 onInstall={installToHomeScreen}
                 installLabel={installLabel}
                 operatorName={appSession.employeeName || "未選択"}
+                onOpenGuide={() => setGuideOpen(true)}
                 onLogout={() => { logoutShiftSession(); setAppSession(null); setActiveTab("home"); setIsFromAdmin(false); }}
                 requests={homeBoardRequests}
                 pendingCorrections={homePendingCorrections}
@@ -2209,6 +2212,7 @@ export default function App() {
                       <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700"><item.icon className="h-6 w-6" /></span>
                       <span><strong className="flex items-center gap-2 text-base text-slate-900">{item.title}<ChevronRight className="h-4 w-4 transition group-hover:translate-x-1" /></strong><small className="mt-1 block leading-relaxed text-slate-500">{item.description}</small></span>
                     </button>)}
+                    <button type="button" onClick={() => setGuideOpen(true)} className="rounded-2xl border-2 border-slate-100 bg-white p-5 text-left font-bold text-blue-700 shadow-sm hover:border-blue-300">使い方・説明書を開く</button>
                   </CardContent>
                 </Card>
               </motion.div>
@@ -2629,6 +2633,7 @@ export default function App() {
           </div>
         </div>
       )}
+      {guideOpen && <ShiftToolGuide role={appSession.role} onClose={hideNextTime => { if (hideNextTime) templateStorage.setItem("shift_guide_hidden_v1", "1"); setGuideOpen(false); }} />}
       <Toaster position="top-center" />
     </Tabs>
   );
