@@ -1,8 +1,41 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BookOpen, X } from "lucide-react";
 
 type GuideSection = { title: string; points: string[] };
+export type EmployeeGuideSection = "home" | "dashboard" | "personal" | "board" | "requests" | "mypage";
+const SECTION_NUMBERS = ["①", "②", "③", "④", "⑤", "⑥"];
+
+const employeeSections: (GuideSection & { id: EmployeeGuideSection })[] = [
+  { id: "home", title: "ホーム", points: [
+    "ログイン直後は今日のシフトが表示されます。上部のカレンダーは1週間単位です。「前週」「次週」で移動し、日付を選ぶと、その日の出勤人数と登録された勤務を確認できます。名前を押すと個人シフトへ移動します。",
+    "「月の全体シフトを見る」または下部バーの「全体」から、集計期間単位の全体シフトを開けます。下部バーの「ホーム」を押すと、今日を含む期間と今週に戻ります。PCでは左側のメニューから移動します。",
+    "「操作員：名前」を押すとログアウトできます。シフトのアイコンから、対応端末のホーム画面やデスクトップへの追加方法を確認できます。",
+  ] },
+  { id: "dashboard", title: "全体シフト", points: [
+    "全員の勤務を集計期間ごとに確認します。「前の期間」「次の期間」で切り替え、名前を選ぶと個人シフトが開きます。従業員ログインでは閲覧用の画面です。",
+    "「シフト案」は編集中、「確定」は管理者が確定した状態です。帯色は日付の目印なので、休みかどうかは各人の勤務欄で確認してください。",
+    "下部バーの「全体」は現在選択中の集計期間を引き継ぎます。「ホーム」を押すと今日を含む期間と今週へ戻ります。",
+  ] },
+  { id: "personal", title: "個人シフト", points: [
+    "選んだ人の勤務を集計期間ごとに確認します。期間は前後へ切り替えられ、「戻る」で全体シフトへ戻ります。出勤日数、合計実働時間、その期間の有給取得数も表示します。",
+    "赤帯などの日付の色だけでは、個人の休みは決まりません。実際の勤務欄を確認してください。",
+  ] },
+  { id: "board", title: "お知らせ掲示板", points: [
+    "ホームには対象期間のお知らせと、公開対象の希望・訂正依頼が表示されます。「お知らせをすべて見る」で掲示板へ移動すると、選択した期間から3期間分を確認できます。",
+    "見える申請は店舗の公開設定と申請の状態によって異なります。",
+  ] },
+  { id: "requests", title: "休み希望の提出", points: [
+    "ホームの「休み希望日を提出する」、または下部バーの「休み希望」から開きます。受付中の期間で日付と希望の種類を選び、提出ノートを確認して「このノートを提出」を押してください。複数の日を選べます。",
+    "出勤希望では開始・終了時間を入力します。確定済みの期間を変更したい場合は「訂正依頼」を選び、変更内容をコメントに書いて提出してください。",
+    "提出後の内容や状態はマイページで確認できます。",
+  ] },
+  { id: "mypage", title: "マイページ", points: [
+    "下部バーの「マイページ」から、現在選択している操作員の希望と、申請中・承認・却下などの状態を確認できます。却下理由がある場合もここに表示されます。",
+    "「有休詳細・設定」では、残り有給日数、更新日、付与日数を任意の参考値として登録できます。「有休残数を表示」をOFFにすると、マイページ上部の残数表示が消えます。正式な残日数は会社の管理記録を確認してください。",
+    "有休情報は通常の画面では別の従業員のマイページに表示されません。ただし、現在は共通IDで操作員の名前を選ぶ方式です。個人情報としての非公開を保証する仕組みではありません。",
+  ] },
+];
 
 const commonSections: GuideSection[] = [
   { title: "ログインと操作員", points: [
@@ -52,8 +85,19 @@ const adminSections: GuideSection[] = [
   ] },
 ];
 
-export function ShiftToolGuide({ role, onClose }: { role: "admin" | "employee"; onClose: (hideNextTime: boolean) => void }) {
+export function ShiftToolGuide({ role, initialSection = "home", onClose }: { role: "admin" | "employee"; initialSection?: EmployeeGuideSection; onClose: (hideNextTime: boolean) => void }) {
   const [hideNextTime, setHideNextTime] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const jumpTo = (id: EmployeeGuideSection, behavior: ScrollBehavior = "smooth") => {
+    const container = scrollRef.current;
+    const target = container?.querySelector<HTMLElement>(`[data-guide-section="${id}"]`);
+    if (container && target) container.scrollTo({ top: target.offsetTop - container.offsetTop, behavior });
+  };
+  useEffect(() => {
+    if (role !== "employee") return;
+    const frame = requestAnimationFrame(() => jumpTo(initialSection, "instant"));
+    return () => cancelAnimationFrame(frame);
+  }, [initialSection, role]);
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(hideNextTime); };
     window.addEventListener("keydown", handleKey);
@@ -63,14 +107,18 @@ export function ShiftToolGuide({ role, onClose }: { role: "admin" | "employee"; 
   return createPortal(<div className="fixed inset-0 z-[150] overflow-y-auto bg-slate-950/65 p-3 sm:p-6" role="presentation">
     <section role="dialog" aria-modal="true" aria-labelledby="shift-guide-title" className="mx-auto my-3 max-w-3xl rounded-2xl bg-white text-slate-900 shadow-2xl sm:my-8">
       <header className="sticky top-0 z-10 flex items-start justify-between gap-3 rounded-t-2xl border-b bg-white px-5 py-4 sm:px-7">
-        <div><h2 id="shift-guide-title" className="flex items-center gap-2 text-xl font-black"><BookOpen className="h-6 w-6 text-blue-600" />シフトツールの使い方</h2><p className="mt-1 text-sm text-slate-600">読みたい項目を開いて確認できます。ホームからいつでも読み直せます。</p></div>
+        <div><h2 id="shift-guide-title" className="flex items-center gap-2 text-xl font-black"><BookOpen className="h-6 w-6 text-blue-600" />シフトツールの使い方</h2><p className="mt-1 text-sm text-slate-600">{role === "employee" ? "番号を選ぶと、そのページの説明へ移動します。" : "読みたい項目を開いて確認できます。"}</p></div>
         <button type="button" aria-label="説明書を閉じる" className="rounded-lg p-2 hover:bg-slate-100" onClick={() => onClose(hideNextTime)}><X className="h-5 w-5" /></button>
       </header>
-      <div className="max-h-[68vh] space-y-6 overflow-y-auto px-5 py-5 sm:px-7">
-        <div className="rounded-xl bg-blue-50 p-4 text-sm leading-6 text-blue-950">この説明書はシフトツールの基本操作をまとめています。初めて使うときは「ログインと操作員」から順に読んでください。</div>
-        <div><h3 className="mb-3 text-base font-black">全員共通</h3><div className="space-y-2">{commonSections.map((section, index) => <GuideEntry key={section.title} section={section} initiallyOpen={index === 0} />)}</div></div>
-        {role === "admin" && <div><h3 className="mb-3 text-base font-black">管理者の操作</h3><div className="space-y-2">{adminSections.map(section => <GuideEntry key={section.title} section={section} />)}</div></div>}
-        {role === "employee" && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-700">シフトの変更や設定は管理者が行います。提出した希望の扱いはマイページで確認してください。</p>}
+      <div ref={scrollRef} className="relative max-h-[68vh] space-y-6 overflow-y-auto px-5 py-5 sm:px-7">
+        {role === "employee" ? <>
+          <nav className="grid grid-cols-2 gap-2 rounded-xl bg-blue-50 p-3 sm:grid-cols-3" aria-label="説明書の目次">{employeeSections.map((section, index) => <button type="button" key={section.id} className="rounded-lg border border-blue-200 bg-white p-2 text-left text-sm font-bold text-blue-800 hover:bg-blue-100" onClick={() => jumpTo(section.id)}>{SECTION_NUMBERS[index]} {section.title}</button>)}</nav>
+          {employeeSections.map((section, index) => <section key={section.id} data-guide-section={section.id} className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5"><h3 className="mb-3 text-lg font-black text-blue-800">{SECTION_NUMBERS[index]} {section.title}</h3><div className="space-y-3 text-sm leading-7 text-slate-700">{section.points.map(point => <p key={point}>{point}</p>)}</div></section>)}
+        </> : <>
+          <div className="rounded-xl bg-blue-50 p-4 text-sm leading-6 text-blue-950">この説明書はシフトツールの基本操作をまとめています。</div>
+          <div><h3 className="mb-3 text-base font-black">全員共通</h3><div className="space-y-2">{commonSections.map((section, index) => <GuideEntry key={section.title} section={section} initiallyOpen={index === 0} />)}</div></div>
+          <div><h3 className="mb-3 text-base font-black">管理者の操作</h3><div className="space-y-2">{adminSections.map(section => <GuideEntry key={section.title} section={section} />)}</div></div>
+        </>}
       </div>
       <footer className="flex flex-col gap-3 rounded-b-2xl border-t bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
         <label className="flex cursor-pointer items-center gap-2 text-sm font-medium"><input type="checkbox" checked={hideNextTime} onChange={event => setHideNextTime(event.target.checked)} className="h-4 w-4 accent-blue-600" />次回からこの説明書を自動表示しない</label>

@@ -1,7 +1,7 @@
 import { AdminNotice, AdminNoticeVisibility, fetchAdminNotices, fetchAdminNoticeVisibility, saveAdminNoticeVisibility, createAdminNotice, removeAdminNotice } from "./lib/admin-notice-sync";
 import { templateStorage } from "./lib/template-storage";
 import { TemplateResetSettings } from "./components/TemplateResetSettings";
-import { ShiftToolGuide } from "./components/ShiftToolGuide";
+import { ShiftToolGuide, type EmployeeGuideSection } from "./components/ShiftToolGuide";
 import { useState, useEffect, useRef } from "react";
 import { format, addMonths } from "date-fns";
 import { ja } from "date-fns/locale/ja";
@@ -27,6 +27,7 @@ import {
   Building2,
   ListChecks,
   CalendarDays,
+  BookOpen,
   SlidersHorizontal
   ,MessageSquareText, UserRound, CalendarClock, Smartphone
 } from "lucide-react";
@@ -121,6 +122,8 @@ function getCurrentShiftMonth(today = new Date(), settings = DEFAULT_CALENDAR_PE
 export default function App() {
   const [appSession, setAppSession] = useState<ShiftSession | null>(() => getShiftSession());
   const [guideOpen, setGuideOpen] = useState(() => templateStorage.getItem("shift_guide_hidden_v1") !== "1");
+  const [guideSection, setGuideSection] = useState<EmployeeGuideSection>("home");
+  const openGuide = (section: EmployeeGuideSection) => { setGuideSection(section); setGuideOpen(true); };
   const [settingsPage, setSettingsPage] = useState<"menu" | "store" | "board" | "employee" | "shift" | "special" | "operations" | "autodraft" | "other" | "reset">("menu");
   const [storeMaster, setStoreMaster] = useState<StoreMaster>(() => {
     const saved = templateStorage.getItem("store_master_settings");
@@ -1723,6 +1726,7 @@ export default function App() {
 
       {/* Main Content */}
       <main className={`shift-main flex-1 flex flex-col overflow-hidden p-6 pb-24 md:pb-6 gap-6 ${activeTab === "dashboard" ? "dashboard-active" : ""}`}>
+        {appSession.role === "employee" && activeTab !== "home" && <div className="flex shrink-0 justify-end"><button type="button" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 text-sm font-bold text-blue-700" onClick={() => openGuide(activeTab === "dashboard" ? "dashboard" : activeTab === "board" ? "board" : activeTab === "requests" ? "requests" : activeTab === "mypage" ? "mypage" : "personal")}><BookOpen className="h-4 w-4" />このページの説明</button></div>}
         {activeTab === "mypage" && (
         <header className="shift-page-header period-navigation shrink-0">
           <Button variant="ghost" size="sm" className="period-back" onClick={goBack}><ArrowLeft className="w-4 h-4" />戻る</Button>
@@ -1755,7 +1759,7 @@ export default function App() {
                 onInstall={installToHomeScreen}
                 installLabel={installLabel}
                 operatorName={appSession.employeeName || "未選択"}
-                onOpenGuide={() => setGuideOpen(true)}
+                onOpenGuide={() => openGuide("home")}
                 onLogout={() => { logoutShiftSession(); setAppSession(null); setActiveTab("home"); setIsFromAdmin(false); }}
                 requests={homeBoardRequests}
                 pendingCorrections={homePendingCorrections}
@@ -2344,7 +2348,7 @@ export default function App() {
           </div>
         </div>
       )}
-      {guideOpen && <ShiftToolGuide role={appSession.role} onClose={hideNextTime => { if (hideNextTime) templateStorage.setItem("shift_guide_hidden_v1", "1"); setGuideOpen(false); }} />}
+      {guideOpen && <ShiftToolGuide role={appSession.role} initialSection={guideSection} onClose={hideNextTime => { if (hideNextTime) templateStorage.setItem("shift_guide_hidden_v1", "1"); setGuideOpen(false); }} />}
       <Toaster position="top-center" />
     </Tabs>
   );

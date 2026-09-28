@@ -97,7 +97,7 @@ export function HomeView({
             </div>
           </div>
         </div>
-        <button type="button" className="inline-flex items-center gap-1 self-start rounded-lg border border-white/60 px-2 py-2 text-sm font-bold text-white hover:bg-white/15 sm:px-3 sm:py-1.5" onClick={onOpenGuide}><BookOpen className="h-4 w-4" /><span className="hidden sm:inline">使い方</span><span className="sr-only sm:hidden">使い方</span></button>
+        <button type="button" className="inline-flex items-center gap-1 self-start rounded-lg border border-white/60 px-2 py-2 text-sm font-bold text-white hover:bg-white/15 sm:px-3 sm:py-1.5" onClick={onOpenGuide}><BookOpen className="h-4 w-4" /><span className="sm:hidden">説明</span><span className="hidden sm:inline">使い方</span></button>
         <div className="home-header-week">
           <Button variant="outline" size="sm" className="home-week-button" onClick={() => onWeekOffsetChange(weekOffset - 1)}><ChevronLeft className="w-4 h-4" /> 前週</Button>
           <div className="home-header-period">
