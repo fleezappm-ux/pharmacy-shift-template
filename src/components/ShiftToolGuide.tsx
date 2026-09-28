@@ -78,7 +78,7 @@ export function ShiftToolGuide({ role, onClose }: { role: "admin" | "employee"; 
   </div>;
 }
 
-function GuideEntry({ section, initiallyOpen = false }: { section: GuideSection; initiallyOpen?: boolean }) {
+function GuideEntry({ section, initiallyOpen = false }: { key?: string; section: GuideSection; initiallyOpen?: boolean }) {
   return <details defaultOpen={initiallyOpen} className="group rounded-xl border border-slate-200 bg-white p-4">
     <summary className="cursor-pointer text-sm font-bold">{section.title}</summary>
     <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-700">{section.points.map(point => <li key={point}>{point}</li>)}</ul>
