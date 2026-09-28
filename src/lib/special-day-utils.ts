@@ -62,30 +62,32 @@ export function withDefaultSpecialDayRules(rules: SpecialDayRule[]): SpecialDayR
 export function matchesSpecialDayRule(date: Date, rule: SpecialDayRule): boolean {
   if (!rule.enabled) return false;
   const key = format(date, "yyyy-MM-dd");
-  if ((rule.id === "national-holiday" || rule.id === "national-holiday-v2")) return getJapaneseHolidayDates(date, date).includes(key) && date.getDay() !== 0;
+  if (["national-holiday", "national-holiday-v2"].includes(rule.id.replace(/^band-v2:/, ""))) return getJapaneseHolidayDates(date, date).includes(key) && date.getDay() !== 0;
   if (rule.mode === "annual") return rule.dates.includes(key);
   const week = Math.ceil(date.getDate() / 7);
   return date.getDay() === rule.weekday && rule.weeks.includes(week);
 }
 
+/** 帯は特殊日設定で保存して有効にしたルールだけを描画する。 */
 export function buildDisplayRemarks(manualRemarks: GlobalRemark[], rules: SpecialDayRule[], dates: Date[]): GlobalRemark[] {
-  const byDate = new Map<string, GlobalRemark>(manualRemarks.map(remark => [remark.date, { ...remark, source: "manual" }]));
+  const byDate = new Map<string, GlobalRemark>(manualRemarks.map(remark => [remark.date, { ...remark, color: undefined, source: "manual" }]));
   dates.forEach(date => {
     const key = format(date, "yyyy-MM-dd");
-    if (byDate.has(key)) return;
-    const matching = rules.find(rule => matchesSpecialDayRule(date, rule));
-    if (matching) byDate.set(key, { date: key, type: matching.name, text: "", color: matching.color, source: "rule" });
+    const matching = rules.find(rule => rule.id.startsWith("band-v2:") && matchesSpecialDayRule(date, rule));
+    const manual = byDate.get(key);
+    if (manual) {
+      if (matching) byDate.set(key, { ...manual, color: matching.color });
+    } else if (matching) {
+      byDate.set(key, { date: key, type: matching.name, text: "", color: matching.color, source: "rule" });
+    }
   });
   return Array.from(byDate.values());
 }
 
 export function findSpecialDayRule(date: Date, rules: SpecialDayRule[]) {
-  return rules.find(rule => !rule.id.startsWith("dropdown-") && matchesSpecialDayRule(date, rule));
+  return rules.find(rule => rule.id.startsWith("band-v2:") && matchesSpecialDayRule(date, rule));
 }
 
-export function colorForRemark(remark: GlobalRemark | undefined, rules: SpecialDayRule[]) {
-  if (!remark) return undefined;
-  if (remark.color) return remark.color;
-
-  return rules.find(rule => rule.enabled && rule.name === remark.type)?.color;
+export function colorForRemark(remark: GlobalRemark | undefined, _rules: SpecialDayRule[]) {
+  return remark?.color;
 }

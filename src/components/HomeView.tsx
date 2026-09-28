@@ -106,7 +106,7 @@ export function HomeView({
             const label = shiftLabel(employee, dateStr);
             return label !== "未入力" && label !== "休み" && label !== "有休";
           }).length;
-          const isHoliday = date.getDay() === 0 || remark?.type === "祝日" || remark?.type === "店休日";
+          const isHoliday = remark?.color === "red";
           return (
             <button key={dateStr} onClick={() => onDateSelect(dateStr)} className={`home-day ${dateStr === selectedDate ? "is-selected" : ""} ${dateStr === today ? "is-today" : ""} ${remark?.color ? `special-${remark.color}` : ""}`} title={remark?.type}>
               <span className={isHoliday ? "text-red-500" : "text-slate-500"}>{WEEKDAYS[date.getDay()]}</span>

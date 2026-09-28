@@ -14,7 +14,7 @@ export function PersonalShiftList({ employee, dates, remarks }: Props) {
       const remark = remarks.find(item => item.date === key);
       const label = shift?.shift === "任意入力" ? shift.customShiftText || "任意入力" : shift?.shift || "未入力";
       const isOff = label === "休み" || label === "有休";
-      return <div key={key} className={`personal-shift-row ${date.getDay() === 0 || remark?.type === "祝日" || remark?.type === "店休日" ? "is-holiday" : ""} ${remark?.color ? `special-${remark.color}` : ""}`}>
+      return <div key={key} className={`personal-shift-row ${remark?.color === "red" ? "is-holiday" : ""} ${remark?.color ? `special-${remark.color}` : ""}`}>
         <div className="personal-date"><strong>{format(date, "M/d")}</strong><span>{format(date, "E", { locale: ja })}</span></div>
         <div className={`personal-shift-value ${isOff ? "is-off" : ""}`}>{label}</div>
         <div className="personal-work">{!isOff && shift?.workTime ? <><Clock3 className="w-3.5 h-3.5" />{shift.workTime}</> : "―"}</div>

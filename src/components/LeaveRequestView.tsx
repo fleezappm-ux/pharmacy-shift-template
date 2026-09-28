@@ -140,7 +140,7 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
   const remarkFor = (date: string) => remarks.find(item => item.date === date);
   const colorFor = (date: Date, key: string) => {
     const remark = remarkFor(key);
-    return remark?.color || (date.getDay() === 0 || remark?.type === "祝日" || remark?.type === "店休日" ? "red" : "");
+    return remark?.color || "";
   };
   const cellFor = (employee: Employee, date: Date) => {
     const key = format(date, "yyyy-MM-dd");

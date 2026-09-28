@@ -286,11 +286,9 @@ export default function App() {
           ? [...rules.map(rule => rule.id === "national-holiday" ? { ...rule, id: "national-holiday-v2" } : rule),
               ...(rules.some(rule => rule.id === "sunday") ? [] : [DEFAULT_SPECIAL_DAY_RULES[0]])]
           : rules;
-        setSpecialDayRules(withDefaultSpecialDayRules(migrated));
-        if (legacyHoliday && appSession.role === "admin") {
-          try { await saveSpecialDayRules(migrated); }
-          catch (error) { console.error("特殊日の旧設定を更新できませんでした", error); }
-        }
+        setSpecialDayRules(withDefaultSpecialDayRules(migrated.map(rule =>
+          rule.id.startsWith("dropdown-") || rule.id.startsWith("band-v2:") ? rule : { ...rule, enabled: false }
+        )));
       })
       .catch(error => console.error("特殊日設定の取得に失敗しました", error));
     return () => { cancelled = true; };
@@ -848,11 +846,10 @@ export default function App() {
   });
   const displayRemarks = buildDisplayRemarks(cleanedRemarks, specialDayRules.filter(rule => !rule.id.startsWith("dropdown-")), displayDates);
   const globalRemarkTypes = [...new Set(["なし", ...specialDayRules.filter(rule => rule.enabled).sort((a, b) => (a.order ?? 999) - (b.order ?? 999)).map(rule => rule.name).filter(Boolean), ...BASE_GLOBAL_REMARK_TYPES])];
-  const bandLegendItems = [
-    ...(storeMaster.yearEndEnabled && storeMaster.yearEndBandEnabled ? [{ color: storeMaster.yearEndColor, label: "年末年始" }] : []),
-    ...(storeMaster.obonEnabled && storeMaster.obonBandEnabled ? [{ color: storeMaster.obonColor, label: "お盆" }] : []),
-    ...specialDayRules.filter(rule => rule.enabled && !rule.id.startsWith("dropdown-")).sort((a, b) => (a.order ?? 999) - (b.order ?? 999)).map(rule => ({ color: rule.color, label: rule.name }))
-  ].filter((item, index, items) => items.findIndex(candidate => candidate.color === item.color && candidate.label === item.label) === index);
+  const bandLegendItems = specialDayRules
+    .filter(rule => rule.id.startsWith("band-v2:") && rule.enabled)
+    .sort((first, second) => (first.order ?? 999) - (second.order ?? 999))
+    .map(rule => ({ color: rule.color, label: rule.name }));
 
   useEffect(() => {
     if (!appSession?.employeeId) return;
@@ -1472,25 +1469,23 @@ export default function App() {
       row.height = 22;
       
       const day = date.getDay();
-      const isSunday = day === 0;
+      const isSunday = gr?.color === "red";
       const isSaturday = day === 6;
-      const isHoliday = gr?.type === "祝日" || gr?.type === "店休日";
-      const isClinicClosed = gr?.type === "谷川整形休診";
+      const bandColor = gr?.color;
+      const bandArgb = bandColor ? ({ red: "FFFEE2E2", blue: "FFDBEAFE", green: "FFDCFCE7", amber: "FFFEF3C7", purple: "FFF3E8FF", gray: "FFF1F5F9" } as Record<string, string>)[bandColor] : undefined;
 
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
         cell.border = borderStyle;
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
         
         // 背景色（帯色）の反映
-        if (isClinicClosed) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F2FE' } };
-        } else if (isHoliday || isSunday) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+        if (bandArgb) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bandArgb } };
         }
 
         // 日付列（1列目）のみフォント色を変更
         if (colNumber === 1) {
-          if (isSunday || isHoliday) {
+          if (isSunday) {
             cell.font = { color: { argb: 'FFFF0000' }, bold: true };
           } else if (isSaturday) {
             cell.font = { color: { argb: 'FF00B0F0' }, bold: true };
@@ -1601,25 +1596,23 @@ export default function App() {
         const row = empSheet.addRow(rowData);
         row.height = 22;
         const day = date.getDay();
-        const isSunday = day === 0;
+        const isSunday = gr?.color === "red";
         const isSaturday = day === 6;
-        const isHoliday = gr?.type === "祝日" || gr?.type === "店休日";
-        const isClinicClosed = gr?.type === "谷川整形休診";
+        const bandColor = gr?.color;
+        const bandArgb = bandColor ? ({ red: "FFFEE2E2", blue: "FFDBEAFE", green: "FFDCFCE7", amber: "FFFEF3C7", purple: "FFF3E8FF", gray: "FFF1F5F9" } as Record<string, string>)[bandColor] : undefined;
 
         row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
           cell.border = borderStyle;
           cell.alignment = { horizontal: 'center', vertical: 'middle' };
 
           // 背景色（帯色）の反映
-          if (isClinicClosed) {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F2FE' } };
-          } else if (isHoliday || isSunday) {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
-          }
+          if (bandArgb) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bandArgb } };
+        }
 
           // 日付列（1列目）のみフォント色を変更
           if (colNumber === 1) {
-            if (isSunday || isHoliday) {
+            if (isSunday) {
               cell.font = { color: { argb: 'FFFF0000' }, bold: true };
             } else if (isSaturday) {
               cell.font = { color: { argb: 'FF00B0F0' }, bold: true };
@@ -1698,14 +1691,8 @@ export default function App() {
   };
 
   const getRowBgClass = (date: Date) => {
-    const gr = getGlobalRemark(date);
-    const color = colorForRemark(gr, specialDayRules);
-    if (color) return `shift-row-special-${color}`;
-    const monthDay = format(date, "MM-dd");
-    const inRange = (start: string, end: string) => start <= end ? monthDay >= start && monthDay <= end : monthDay >= start || monthDay <= end;
-    if (storeMaster.yearEndEnabled && storeMaster.yearEndBandEnabled && inRange(storeMaster.yearEndStart, storeMaster.yearEndEnd)) return `shift-row-special-${storeMaster.yearEndColor}`;
-    if (storeMaster.obonEnabled && storeMaster.obonBandEnabled && inRange(storeMaster.obonStart, storeMaster.obonEnd)) return `shift-row-special-${storeMaster.obonColor}`;
-    return "";
+    const color = colorForRemark(getGlobalRemark(date), specialDayRules);
+    return color ? `shift-row-special-${color}` : "";
   };
 
   const getShift = (employee: Employee | undefined, date: Date) => {
@@ -2248,7 +2235,7 @@ export default function App() {
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "special" ? (
               <motion.div key="settings-special" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">特殊日設定管理者</CardTitle><CardDescription>年ごとに変わる日付・店舗固有の定休日</CardDescription></div></div></CardHeader><CardContent className="p-6"><SpecialDaySettings rules={specialDayRules.filter(rule => !rule.id.startsWith("dropdown-"))} loading={specialDayLoading} onSave={rules => handleSaveSpecialDayRules([...rules, ...specialDayRules.filter(rule => rule.id.startsWith("dropdown-"))])} /></CardContent></Card>
+                <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">特殊日設定管理者</CardTitle><CardDescription>年ごとに変わる日付・店舗固有の定休日</CardDescription></div></div></CardHeader><CardContent className="p-6"><SpecialDaySettings rules={specialDayRules.filter(rule => !rule.id.startsWith("dropdown-"))} loading={specialDayLoading} onSave={rules => handleSaveSpecialDayRules([...rules.map(rule => ({ ...rule, id: rule.id.startsWith("band-v2:") ? rule.id : `band-v2:${rule.id}` })), ...specialDayRules.filter(rule => rule.id.startsWith("dropdown-"))])} /></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" ? (
               <motion.div
