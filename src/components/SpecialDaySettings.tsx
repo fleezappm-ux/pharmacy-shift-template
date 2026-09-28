@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { format } from "date-fns";
 import { CalendarPlus, Check, Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { SpecialDayBehavior, SpecialDayColor, SpecialDayRule } from "../types";
+import { SpecialDayColor, SpecialDayRule } from "../types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -29,13 +30,14 @@ export function SpecialDaySettings({ rules, loading, onSave }: Props) {
   const add = () => {
     if (addLocked) return;
     const id = crypto.randomUUID();
-    const rule: SpecialDayRule = { id, name: "新しい特殊日", color: "amber", behavior: "information", enabled: true, mode: "annual", weekday: 0, weeks: [1], dates: [] };
+    const rule: SpecialDayRule = { id: `band-v3:${id}`, name: "新しい帯色ルール", color: "amber", behavior: "information", enabled: true, mode: "annual", weekday: 0, weeks: [1], dates: [] };
+    const ruleId = rule.id;
     setDrafts(current => [rule, ...current]);
-    setNewRuleId(id);
+    setNewRuleId(ruleId);
     setAddLocked(true);
     toast.success("新しい特殊日を一番上に追加しました");
     window.setTimeout(() => {
-      document.getElementById(`special-rule-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document.getElementById(`special-rule-${ruleId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
       setAddLocked(false);
     }, 250);
     window.setTimeout(() => setNewRuleId(""), 1600);
@@ -67,16 +69,20 @@ export function SpecialDaySettings({ rules, loading, onSave }: Props) {
 
   return <section className="special-day-settings">
     <div className="special-settings-title">
-      <div><CalendarPlus className="w-5 h-5" /><div><strong>薬局ごとの特殊日設定</strong><span>全カレンダーの備考・帯色へ自動反映します</span></div></div>
+      <div><CalendarPlus className="w-5 h-5" /><div><strong>カレンダー帯色設定</strong><span>有効にした日だけ、全カレンダーへ帯色を表示します</span></div></div>
       <Button variant="outline" disabled={addLocked || loading} onClick={add} className={addLocked ? "special-add-done" : ""}>{addLocked ? <Check className="w-4 h-4 mr-1" /> : <Plus className="w-4 h-4 mr-1" />}{addLocked ? "追加しました" : "特殊日を追加"}</Button>
     </div>
-    <p className="special-save-guide">項目を変更したら、一番下の「変更内容を保存」を押してください。ゴミ箱による削除だけは、その場で保存されます。</p>
+    <p className="special-save-guide">帯色は表示のみで、勤務を自動変更しません。重なる日は「指定した日付・毎年同じ日」→「祝日」→「第何週の曜日」→「毎週の定休日」の順に表示します。定休日の曜日は店舗マスタでも設定できます。変更後は一番下の保存を押してください。</p>
     <div className="special-rule-list">
       {drafts.map(rule => <div id={`special-rule-${rule.id}`} key={rule.id} className={`special-rule-card ${newRuleId === rule.id ? "is-new" : ""}`}>
         {newRuleId === rule.id && <div className="special-new-label">ここに追加しました</div>}
-        <div className="special-rule-main"><Input value={rule.name} aria-label="特殊日の名前" onChange={event => update(rule.id, { name: event.target.value })} /><select aria-label="帯色" value={rule.color} onChange={event => update(rule.id, { color: event.target.value as SpecialDayColor })}>{COLORS.map(color => <option key={color.value} value={color.value}>{color.label}</option>)}</select><select aria-label="日の扱い" value={rule.behavior} onChange={event => update(rule.id, { behavior: event.target.value as SpecialDayBehavior })}><option value="information">情報表示のみ</option><option value="all-off">全員休みにする</option><option value="duty">当番・勤務を優先</option></select><label><input type="checkbox" checked={rule.enabled} onChange={event => update(rule.id, { enabled: event.target.checked })} />有効</label><button type="button" className="special-delete" disabled={loading || deletingId === rule.id} aria-label={`${rule.name}を削除`} onClick={() => removeRule(rule.id)}><Trash2 className="w-4 h-4" /></button></div>
-        {rule.id !== "national-holiday" && <div className="special-mode-tabs"><button type="button" className={rule.mode === "recurring" ? "active" : ""} onClick={() => update(rule.id, { mode: "recurring" })}>毎月繰り返し</button><button type="button" className={rule.mode === "annual" ? "active" : ""} onClick={() => update(rule.id, { mode: "annual" })}>年間指定日</button></div>}
-        {(["national-holiday", "national-holiday-v2"].includes(rule.id.replace(/^band-v2:/, ""))) ? <p className="special-save-guide">日本の祝日を自動判定します。日曜日は「日曜日」の設定を使います。</p> : rule.mode === "recurring" ? <div className="special-recurring"><select value={rule.weekday} onChange={event => update(rule.id, { weekday: Number(event.target.value) })}>{WEEKDAYS.map((day, index) => <option key={day} value={index}>{day}曜日</option>)}</select><div>{[1,2,3,4,5].map(week => <label key={week}><input type="checkbox" checked={rule.weeks.includes(week)} onChange={event => update(rule.id, { weeks: event.target.checked ? [...rule.weeks, week].sort() : rule.weeks.filter(value => value !== week) })} />第{week}</label>)}</div></div> : <div className="special-annual">
+        <div className="special-rule-main"><Input value={rule.name} aria-label="特殊日の名前" onChange={event => update(rule.id, { name: event.target.value })} /><select aria-label="帯色" value={rule.color} onChange={event => update(rule.id, { color: event.target.value as SpecialDayColor })}>{COLORS.map(color => <option key={color.value} value={color.value}>{color.label}</option>)}</select><label><input type="checkbox" checked={rule.enabled} onChange={event => update(rule.id, { enabled: event.target.checked })} />有効</label><button type="button" className="special-delete" disabled={loading || deletingId === rule.id} aria-label={`${rule.name}を削除`} onClick={() => removeRule(rule.id)}><Trash2 className="w-4 h-4" /></button></div>
+        {rule.id !== "band-v3:holiday" && <div className="special-mode-tabs"><button type="button" className={rule.mode === "recurring" ? "active" : ""} onClick={() => update(rule.id, { mode: "recurring" })}>毎月の曜日</button><button type="button" className={rule.mode === "annual" ? "active" : ""} onClick={() => update(rule.id, { mode: "annual" })}>指定日</button><button type="button" className={rule.mode === "yearly" ? "active" : ""} onClick={() => update(rule.id, { mode: "yearly" })}>毎年同じ日</button></div>}
+        {rule.id === "band-v3:holiday" ? <p className="special-save-guide">日本の祝日を自動判定します。日曜日を営業にしても、祝日設定が有効なら祝日の赤帯が付きます。</p> : rule.mode === "recurring" ? <div className="special-recurring"><select value={rule.weekday} onChange={event => update(rule.id, { weekday: Number(event.target.value) })}>{WEEKDAYS.map((day, index) => <option key={day} value={index}>{day}曜日</option>)}</select><div>{[1,2,3,4,5].map(week => <label key={week}><input type="checkbox" checked={rule.weeks.includes(week)} onChange={event => update(rule.id, { weeks: event.target.checked ? [...rule.weeks, week].sort() : rule.weeks.filter(value => value !== week) })} />第{week}</label>)}</div></div> : rule.mode === "yearly" ? <div className="special-annual">
+          <label className="special-date-label">毎年の対象日（例：12-31）</label>
+          <div className="special-date-entry"><input type="text" inputMode="numeric" placeholder="MM-DD" maxLength={5} value={dateInputs[rule.id] || ""} onChange={event => setDateInputs(current => ({ ...current, [rule.id]: event.target.value }))} /><Button type="button" variant="outline" onClick={() => { const value = dateInputs[rule.id] || ""; const date = new Date(`2024-${value}T00:00:00`); if (!/^\d{2}-\d{2}$/.test(value) || Number.isNaN(date.getTime()) || format(date, "MM-dd") !== value) return toast.error("MM-DD形式で実在する日付を入力してください"); update(rule.id, { monthDays: [...new Set([...(rule.monthDays || []), value])].sort() }); setDateInputs(current => ({ ...current, [rule.id]: "" })); }}><Plus className="w-4 h-4 mr-1" />追加</Button></div>
+          <div className="special-date-list">{(rule.monthDays || []).map(day => <div key={day} className="special-date-chip"><span>{day}</span><button type="button" aria-label={`${day}を削除`} onClick={() => update(rule.id, { monthDays: (rule.monthDays || []).filter(value => value !== day) })}><Trash2 className="w-3.5 h-3.5" /></button></div>)}</div>
+        </div> : <div className="special-annual">
           <label className="special-date-label">反映する日付</label>
           <div className="special-date-entry"><input type="date" value={dateInputs[rule.id] || ""} onChange={event => setDateInputs(current => ({ ...current, [rule.id]: event.target.value }))} /><Button type="button" variant="outline" onClick={() => addDate(rule)}><Plus className="w-4 h-4 mr-1" />この日を追加</Button></div>
           <div className="special-date-list">{rule.dates.length ? rule.dates.map((date, index) => <div key={date} className="special-date-chip"><span><b>{index + 1}</b>{displayDate(date)}</span><button type="button" aria-label={`${date}を削除`} onClick={() => update(rule.id, { dates: rule.dates.filter(value => value !== date) })}><Trash2 className="w-3.5 h-3.5" /></button></div>) : <small>登録日はまだありません</small>}</div>
