@@ -293,6 +293,10 @@ body { margin:0; background:#f5f7fa; }
   .shift-main.dashboard-active>div:last-child{overflow:hidden!important}
   .shift-main.dashboard-active .dashboard-card{height:100%;min-height:0}
   .shift-main.dashboard-active .dashboard-table-wrap{overflow:auto!important;min-height:0}
+  .dashboard-table{width:max-content!important;min-width:0!important;table-layout:fixed;margin-inline:auto}
+  .dashboard-table .dashboard-date-col{width:76px!important;min-width:76px!important}
+  .dashboard-table .dashboard-day-col{width:48px!important;min-width:48px!important}
+  .dashboard-table .dashboard-employee-col,.dashboard-table .dashboard-employee-cell{width:160px!important;min-width:160px!important}
   .bulletin-heading-row{position:relative;justify-content:center!important}
   .bulletin-heading-row h1{justify-content:center;text-align:center}
   .bulletin-heading-row .bulletin-back{position:absolute;left:0;top:0}
@@ -400,7 +404,7 @@ body { margin:0; background:#f5f7fa; }
   .leave-shift-period-nav{margin-top:10px;padding-top:10px}
   .leave-shift-period-nav button{min-height:38px}
   .leave-shift-switch{padding:7px 18px}
-  .leave-shift-table{min-width:max(100%,calc(180px * var(--leave-employee-count, 1) + 340px));table-layout:fixed}
+  .leave-shift-table{width:calc(154px + 180px * var(--leave-employee-count, 1) + 220px);min-width:0;table-layout:fixed;margin-inline:auto}
   .leave-shift-table th:first-child{width:96px}
   .leave-shift-table th:nth-child(2){width:58px}
   .leave-shift-table .leave-shift-remark-heading,.leave-shift-table .leave-shift-remark-cell{display:table-cell;width:220px;text-align:left;padding-inline:12px}
