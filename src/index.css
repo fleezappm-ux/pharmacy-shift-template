@@ -81,6 +81,8 @@ body { margin:0; background:#f5f7fa; }
   .dashboard-period-label{display:inline-flex;margin-top:7px;padding:5px 11px;border:1px solid rgba(255,255,255,.32);border-radius:999px;background:rgba(255,255,255,.14);font-size:15px!important;font-weight:800;opacity:1!important}
   .admin-header-actions{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));width:min(100%,610px);gap:8px!important;padding:7px!important}.admin-header-actions button{width:100%;height:42px!important;padding:0 12px!important;font-size:12px!important;border-radius:10px!important;white-space:nowrap}.admin-header-actions svg{width:16px!important;height:16px!important}.admin-header-actions>div{grid-column:1/-1;justify-content:center;flex-wrap:wrap}
 }
+
+
 .page-blue-header .employee-stats>div { background:rgba(255,255,255,.14)!important; }
 .page-blue-header .employee-stats span { color:#fff!important; }
 .page-blue-header .employee-stats [data-slot="badge"] { background:#fff!important; color:#164e9b!important; border-color:rgba(255,255,255,.3)!important; }
@@ -475,4 +477,30 @@ body { margin:0; background:#f5f7fa; }
   .leave-shift-period-nav button:last-child{justify-self:start;width:130px}
   .leave-shift-period-nav strong{min-width:220px;font-size:24px}
   .leave-shift-full-period{font-size:27px}
+}
+
+/* Shift creation header and compact leave request entry */
+.dashboard-header-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0}
+.dashboard-header-actions .dashboard-list-toggle{height:36px!important;padding:0 11px!important;background:#fff!important;color:#1762bb!important;border-color:#fff!important;font-size:11px!important;font-weight:900!important}
+.dashboard-header-actions .dashboard-lock-button{position:static!important;height:36px!important;margin:0!important;padding:0 12px!important;border:1px solid #0f3f86!important;background:#0f3f86!important;color:#fff!important;font-size:11px!important;font-weight:900!important;white-space:nowrap;box-shadow:0 4px 12px rgba(15,63,134,.25)}
+.dashboard-header-actions .dashboard-lock-button.is-unlock{border-color:#fecaca!important;background:#fff!important;color:#b91c1c!important}
+.dashboard-leave-summary{display:flex;align-items:center;justify-content:center;gap:8px;margin:10px auto 0;padding:5px 12px;border:1px solid rgba(255,255,255,.45);border-radius:8px;background:rgba(255,255,255,.12);color:#fff;font-size:12px;font-weight:800;cursor:pointer}
+.dashboard-leave-summary.has-pending{background:#fff;color:#b91c1c;border-color:#fff}
+.dashboard-leave-summary:hover{background:rgba(255,255,255,.25)}
+.dashboard-leave-summary.has-pending:hover{background:#fff7ed}
+.dashboard-leave-summary span{font-size:10px}
+@media (min-width:901px){
+  .dashboard-blue-top{grid-template-columns:minmax(0,1fr) auto}
+  .dashboard-header-actions{grid-column:2;justify-self:end}
+  .dashboard-blue-controls{display:block;margin-top:8px;padding-top:8px}
+  .dashboard-period-step{width:max-content;max-width:100%;margin:auto;grid-template-columns:auto auto auto;gap:8px}
+  .dashboard-period-step>button:first-child,.dashboard-period-step>button:last-child{grid-column:auto;justify-self:auto;min-width:120px}
+  .dashboard-period-title{grid-column:auto;min-width:200px}
+}
+@media (max-width:900px){
+  .dashboard-blue-top{grid-template-columns:minmax(0,1fr) auto}
+  .dashboard-header-actions{grid-column:2;grid-row:1;flex-wrap:wrap;max-width:126px}
+  .dashboard-header-actions .dashboard-list-toggle,.dashboard-header-actions .dashboard-lock-button{height:30px!important;font-size:10px!important;padding:0 6px!important}
+  .dashboard-blue-brand{padding-right:0}
+  .dashboard-blue-period{grid-column:1/-1;grid-row:2}
 }
