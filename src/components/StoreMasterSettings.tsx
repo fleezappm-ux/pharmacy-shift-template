@@ -9,6 +9,7 @@ import { SpecialDayColor } from "../types";
 
 export interface StoreMaster {
   storeName: string;
+  showStoreNameOnHome: boolean;
   leaveRequestBoardVisibility: "immediate" | "after_approval" | "private";
   businessDays: number[];
   useJapaneseHolidays: boolean;
@@ -27,7 +28,7 @@ export interface StoreMaster {
 }
 
 export const DEFAULT_STORE_MASTER: StoreMaster = {
-  storeName: "薬局名を設定", leaveRequestBoardVisibility: "immediate", businessDays: [1, 2, 3, 4, 5, 6], useJapaneseHolidays: true,
+  storeName: "", showStoreNameOnHome: false, leaveRequestBoardVisibility: "immediate", businessDays: [1, 2, 3, 4, 5, 6], useJapaneseHolidays: true,
   yearEndEnabled: true, yearEndStart: "12-31", yearEndEnd: "01-03",
   obonEnabled: true, obonStart: "08-13", obonEnd: "08-15",
   holidayBandEnabled: true, holidayColor: "red", yearEndBandEnabled: true, yearEndColor: "red", obonBandEnabled: true, obonColor: "red"
@@ -62,8 +63,10 @@ export function StoreMasterSettings({ master, onMasterChange, period, periodDraf
 
   return <section className="space-y-4 font-sans text-slate-900">
     <div className={panel}>
-      <label className={heading}>店舗名</label><p className={description}>シフト画面で使用する店舗名です。</p>
-      <Input className="mt-3 h-11 rounded-xl text-sm" value={draft.storeName} onChange={event => setDraft(current => ({ ...current, storeName: event.target.value }))} />
+      <label className={heading}>店舗名</label><p className={description}>店舗名を入れてください。</p>
+      <Input className="mt-3 h-11 rounded-xl text-sm" placeholder="店舗名を入れてください" value={draft.storeName === "薬局名を設定" ? "" : draft.storeName} onChange={event => setDraft(current => ({ ...current, storeName: event.target.value }))} />
+      <label className="mt-4 flex items-center gap-3 text-sm font-bold"><input type="checkbox" className="h-5 w-5" checked={draft.showStoreNameOnHome} onChange={event => setDraft(current => ({ ...current, showStoreNameOnHome: event.target.checked }))} />店舗名＋シフトをホームに表示</label>
+      <p className={description}>OFFならホームの見出しは「シフト」です。店舗名が空欄の場合も「シフト」になります。</p>
     </div>
     <div className={panel}>
       <h4 className={heading}>シフトの集計期間</h4><p className={description}>シフトを1か月分として扱う開始日を選びます。終了日は自動で決まり、画面表示とCSV・Excelの出力期間も同じになります。</p>
@@ -77,6 +80,6 @@ export function StoreMasterSettings({ master, onMasterChange, period, periodDraf
       <h4 className={heading}>定休日</h4><p className={description}>曜日と祝日、帯色、シフト案・クール適用時の休み判定を一か所で設定できます。</p>
       <Button variant="outline" className="mt-3" onClick={onOpenBandSettings}>定休日を設定 →</Button>
     </div>
-    <Button className="h-11 w-full font-bold" disabled={saving || !draft.storeName.trim()} onClick={() => void save()}><Save className="mr-2 h-4 w-4" />店舗マスタを保存</Button>
+    <Button className="h-11 w-full font-bold" disabled={saving} onClick={() => void save()}><Save className="mr-2 h-4 w-4" />店舗マスタを保存</Button>
   </section>;
 }

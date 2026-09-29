@@ -128,7 +128,7 @@ export default function App() {
   const [storeMaster, setStoreMaster] = useState<StoreMaster>(() => {
     const saved = templateStorage.getItem("store_master_settings");
     if (!saved) return DEFAULT_STORE_MASTER;
-    try { return { ...DEFAULT_STORE_MASTER, ...JSON.parse(saved) }; } catch { return DEFAULT_STORE_MASTER; }
+    try { const stored = JSON.parse(saved); return { ...DEFAULT_STORE_MASTER, ...stored, storeName: stored.storeName === "薬局名を設定" ? "" : stored.storeName || "" }; } catch { return DEFAULT_STORE_MASTER; }
   });
   const [calendarPeriodSettings, setCalendarPeriodSettings] = useState<CalendarPeriodSettings>(() => {
     const saved = templateStorage.getItem("calendar_period_settings");
@@ -1571,7 +1571,7 @@ export default function App() {
         <div className="text-xl font-bold text-primary mb-8 flex items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" className="w-10 h-10 object-contain rounded-xl" />
-            <div className="leading-tight"><span className="block text-base">シフト管理</span><span className="block text-[10px] font-medium opacity-60 mt-1">PHARMACY SHIFT</span></div>
+            <div className="leading-tight"><span className="block text-base">シフト管理</span></div>
           </div>
         </div>
 
@@ -1743,6 +1743,7 @@ export default function App() {
               <HomeView
                 employees={employees}
                 storeName={storeMaster.storeName}
+                showStoreNameOnHome={storeMaster.showStoreNameOnHome}
                 roles={roles}
                 layout={homeLayout}
                 remarks={displayRemarks}
@@ -1792,7 +1793,7 @@ export default function App() {
                     <div className="dashboard-blue-top">
                       <div className="dashboard-blue-brand">
                         <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" />
-                        <div><small>PHARMACY SHIFT</small><CardTitle className={appSession.role === "admin" ? "admin-shift-title" : ""}>{isFromAdmin ? "シフト作成" : appSession.role === "admin" ? "全体シフト管理者" : "薬局シフト"}</CardTitle><span><UserRound className="h-3.5 w-3.5" />操作員：{appSession.employeeName || "未選択"}</span></div>
+                        <div><CardTitle className={appSession.role === "admin" ? "admin-shift-title" : ""}>{isFromAdmin ? "シフト作成" : appSession.role === "admin" ? "全体シフト管理者" : "全体シフト"}</CardTitle><span><UserRound className="h-3.5 w-3.5" />操作員：{appSession.employeeName || "未選択"}</span></div>
                       </div>
                       <div className="dashboard-blue-period">
                         {dateRange.length > 0 ? `${format(dateRange[0], "yyyy年M月d日")}〜${format(dateRange[dateRange.length - 1], "M月d日")}` : "期間未設定"}

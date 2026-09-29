@@ -387,10 +387,14 @@ body { margin:0; background:#f5f7fa; }
 /* Desktop-only leave submission layout. Mobile keeps its existing list and tap flow. */
 .leave-desktop-weekdays,.leave-desktop-select,.leave-admin-desktop{display:none}
 @media(min-width:901px){
+  .dashboard-blue-brand [data-slot="card-title"]{font-size:30px!important;line-height:1.2}
+  .bulletin-page-header h1{font-size:29px!important}
+  .mypage-period-header .mypage-heading{font-size:30px}
+  .leave-shift-brand h1{font-size:29px}
   .leave-shift-brand h1 .leave-admin-desktop{display:inline;margin:0;padding:0;color:inherit;font-size:inherit;font-weight:inherit}
   .leave-shift-hero{padding:18px 24px}
   .leave-shift-brand img{width:46px;height:46px}
-  .leave-shift-full-period{margin:8px 0 0 59px;font-size:20px}
+  .leave-shift-full-period{margin:12px 0 0;text-align:center;font-size:29px}
   .leave-shift-period-nav{margin-top:10px;padding-top:10px}
   .leave-shift-period-nav button{min-height:38px}
   .leave-shift-switch{padding:7px 18px}
