@@ -253,6 +253,7 @@ export default function App() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [managementApiKey, setManagementApiKey] = useState(() => getManagementApiKey());
   const [dashboardListView, setDashboardListView] = useState(false);
+  const [showLeaveManager, setShowLeaveManager] = useState(false);
   const [periodStatusLoading, setPeriodStatusLoading] = useState(false);
   const [paidLeaveBalance, setPaidLeaveBalance] = useState<PaidLeaveBalance | null>(null);
   const [autoDraftSettings, setAutoDraftSettings] = useState<AutoDraftSettings>(() => {
@@ -1798,13 +1799,18 @@ export default function App() {
                       <div className="dashboard-blue-period">
                         {dateRange.length > 0 ? `${format(dateRange[0], "yyyy年M月d日")}〜${format(dateRange[dateRange.length - 1], "M月d日")}` : "期間未設定"}
                       </div>
+                      <div className="dashboard-header-actions">
+                        <Button variant="outline" size="sm" className="dashboard-list-toggle" onClick={() => setDashboardListView(value => !value)}><Grid3X3 className="w-3.5 h-3.5 mr-1.5" />{dashboardListView ? "通常表示" : "一覧表示"}</Button>
+                        {isFromAdmin && <Button disabled={periodStatusLoading} size="sm" className={`dashboard-lock-button ${isLocked ? "is-unlock" : ""}`} onClick={toggleLock}>{isLocked ? <LockOpen className="w-3.5 h-3.5 mr-1" /> : <LockKeyhole className="w-3.5 h-3.5 mr-1" />}{periodStatusLoading ? "処理中…" : isLocked ? "確定を解除" : "シフトを確定"}</Button>}
+                      </div>
                       
                     </div>
                     <div className="dashboard-blue-controls">
                       
-                      <div className="dashboard-period-step"><Button variant="outline" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, -1))}><ChevronLeft className="h-4 w-4" />前の期間</Button><div className="dashboard-period-title"><div className="dashboard-title-status"><strong>{dateRange.length ? `${format(dateRange[0], "M/d")}〜${format(dateRange[dateRange.length - 1], "M/d")}` : "期間未設定"}</strong><span>{isLocked ? "公開中" : "編集中"}</span></div><Button variant="outline" size="sm" className="dashboard-list-toggle" onClick={() => setDashboardListView(value => !value)}><Grid3X3 className="w-3.5 h-3.5 mr-1.5" />{dashboardListView ? "通常表示" : "一覧表示"}</Button>{isFromAdmin && <Button disabled={periodStatusLoading} size="sm" className={`dashboard-lock-button ${isLocked ? "is-unlock" : ""}`} onClick={toggleLock}>{isLocked ? <LockOpen className="w-3.5 h-3.5 mr-1" /> : <LockKeyhole className="w-3.5 h-3.5 mr-1" />}{periodStatusLoading ? "処理中…" : isLocked ? "確定を解除" : "シフトを確定"}</Button>}</div><Button variant="outline" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, 1))}>次の期間<ChevronRight className="h-4 w-4" /></Button></div>
+                      <div className="dashboard-period-step"><Button variant="outline" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, -1))}><ChevronLeft className="h-4 w-4" />前の期間</Button><div className="dashboard-period-title"><div className="dashboard-title-status"><strong>{dateRange.length ? `${format(dateRange[0], "M/d")}〜${format(dateRange[dateRange.length - 1], "M/d")}` : "期間未設定"}</strong><span>{isLocked ? "公開中" : "編集中"}</span></div></div><Button variant="outline" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, 1))}>次の期間<ChevronRight className="h-4 w-4" /></Button></div>
                       
                     </div>
+                    {isFromAdmin && <button type="button" className={`dashboard-leave-summary ${leaveRequests.some(item => item.status === "申請中" && item.type !== "希望なし" && item.type !== "訂正依頼") ? "has-pending" : ""}`} aria-expanded={showLeaveManager} onClick={() => setShowLeaveManager(value => !value)}>{(() => { const count = leaveRequests.filter(item => item.status === "申請中" && item.type !== "希望なし" && item.type !== "訂正依頼").length; return count ? `対応待ちの申請希望あり（${count}件）` : "対応待ちの希望はありません"; })()} <span aria-hidden="true">{showLeaveManager ? "▲" : "▼"}</span></button>}
                   </CardHeader>
                   <CardContent className="p-0 md:flex-1 md:min-h-0 md:flex md:flex-col">
                     {isFromAdmin && (
@@ -1840,7 +1846,7 @@ export default function App() {
                         {dashboardEmployees.map(employee => <option key={employee.id} value={employee.id}>{employee.displayName || employee.name}</option>)}
                       </select>
                     </div>}
-                    {isFromAdmin && <LeaveRequestManager requests={leaveRequests} loading={leaveRequestLoading} onStatusChange={handleLeaveRequestStatus} onDelete={handleLeaveRequestDelete} />}
+                    {isFromAdmin && showLeaveManager && <LeaveRequestManager requests={leaveRequests} loading={leaveRequestLoading} onStatusChange={handleLeaveRequestStatus} onDelete={handleLeaveRequestDelete} />}
                     <div className="dashboard-table-wrap overflow-x-auto">
                       <Table className="dashboard-table text-[13px]">
                         <TableHeader>
@@ -1851,8 +1857,8 @@ export default function App() {
                               <TableHead key={emp.id} className="dashboard-employee-col font-bold text-muted-foreground border-r border-border min-w-[120px]">
                                 <button
                                   className="dashboard-employee-link"
-                                  onClick={() => { setActiveTab(emp.id); setIsFromAdmin(false); }}
-                                  title={`${emp.displayName || emp.name}さんの個人シフトを見る`}
+                                  onClick={() => setActiveTab(emp.id)}
+                                  title={`${emp.displayName || emp.name}さんの${isFromAdmin ? "シフトを編集" : "個人シフトを見る"}`}
                                 >
                                   {emp.displayName || emp.name}<ChevronRight className="w-3 h-3" />
                                 </button>
@@ -2107,7 +2113,7 @@ export default function App() {
                     <Card className="employee-shift-card border-border shadow-none">
                       <CardHeader className={`employee-card-header employee-blue-header page-blue-header border-b border-border ${isLocked ? "is-final" : "is-draft"}`}>
                         <div className="employee-blue-top">
-                          <Button variant="ghost" size="sm" className="employee-back-button" onClick={() => { setActiveTab("dashboard"); setIsFromAdmin(false); }}><ArrowLeft className="w-4 h-4" />戻る</Button>
+                          <Button variant="ghost" size="sm" className="employee-back-button" onClick={() => setActiveTab("dashboard")}><ArrowLeft className="w-4 h-4" />戻る</Button>
                           <div>
                           <div className="flex items-center gap-2 group">
                             <CardTitle className="text-base">{emp.displayName || emp.name} の個人シート</CardTitle>
