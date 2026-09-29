@@ -318,7 +318,7 @@ body { margin:0; background:#f5f7fa; }
 .page-blue-header .admin-page-title { color:#fff !important; }
 
 /* Leave request: shift grid and one note shared across periods and views */
-.leave-shift-page{max-width:100%}
+.leave-shift-page{width:100%;max-width:900px;margin-inline:auto}
 .leave-shift-hero{padding:22px;border-radius:22px 22px 0 0;background:linear-gradient(130deg,#98500a,#c76d0a 60%,#e99d1a);color:#fff;box-shadow:0 14px 30px rgba(143,78,10,.17)}
 .leave-shift-brand{display:flex;align-items:center;gap:13px}
 .leave-shift-brand img{width:58px;height:58px;padding:6px;border-radius:16px;background:rgba(255,255,255,.2)}
@@ -384,7 +384,7 @@ body { margin:0; background:#f5f7fa; }
   .leave-shift-page .leave-note-lines strong{font-size:10px}
 }
 
-/* Desktop-only leave submission layout. Mobile keeps its existing list and tap flow. */
+/* Leave submission keeps the same date list and tap flow on desktop and mobile. */
 .leave-desktop-weekdays,.leave-desktop-select,.leave-admin-desktop{display:none}
 @media(min-width:901px){
   .dashboard-blue-brand [data-slot="card-title"]{font-size:30px!important;line-height:1.2}
@@ -398,24 +398,7 @@ body { margin:0; background:#f5f7fa; }
   .leave-shift-period-nav{margin-top:10px;padding-top:10px}
   .leave-shift-period-nav button{min-height:38px}
   .leave-shift-switch{padding:7px 18px}
-  .leave-personal-list{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;overflow:visible;border-radius:12px;background:#cbd5e1}
-  .leave-desktop-weekdays{display:grid;grid-column:1/-1;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:#cbd5e1;text-align:center}
-  .leave-desktop-weekdays span{padding:7px;background:#edf2f7;color:#334155;font-size:13px;font-weight:850}
-  .leave-personal-row{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:5px;min-height:116px;padding:9px 10px;border:0;background:#fff}
-  .leave-personal-row:nth-child(2){grid-column:calc(var(--leave-first-day) + 1)}
-  .leave-personal-date{display:flex;justify-content:space-between;align-items:center}
-  .leave-personal-date strong{font-size:16px}
-  .leave-personal-work{gap:5px}
-  .leave-personal-work button{min-height:25px}
-  .leave-personal-remark{grid-column:auto;line-height:1.1}
-  .leave-desktop-select{display:block;width:100%}
-  .leave-mobile-select{display:none}
-  .leave-personal-work select,.leave-shift-cell select{min-height:33px;font-size:12px}
-  .leave-shift-cell{padding:5px!important}
-  .leave-shift-table tbody td{height:60px}
-  .leave-shift-table thead th{font-size:12px!important}
-  .leave-shift-pick strong{font-size:11px}
-  .leave-shift-page .leave-note-card{max-width:900px;margin:16px auto 0}
+  .leave-shift-page .leave-note-card{margin:16px auto 0}
 }
 
 /* Keep Android pull-to-refresh from interrupting mobile editing. */
