@@ -7,13 +7,34 @@ import { Input } from "@/components/ui/input";
 
 export function MyPage({ employee, requests, locked, initialBalance, onSaveBalance, onCancel, onSaveWorkTime }: { employee?: Employee; requests: LeaveRequest[]; locked: boolean; initialBalance: PaidLeaveBalance | null; onSaveBalance: (balance: PaidLeaveBalance) => Promise<void>; onCancel: (id: string) => Promise<void>; onSaveWorkTime: (id: string, start: string, end: string) => Promise<void>; onEdit?: (request: LeaveRequest) => void }) {
   const [balance, setBalance] = useState<PaidLeaveBalance>(() => initialBalance || { employeeId: employee?.id || "", enabled: false, remainingDays: 0, renewalDate: "", grantDays: 0, updatedAt: "" });
+  const [remainingDaysInput, setRemainingDaysInput] = useState(String(initialBalance?.remainingDays ?? 0));
+  const [grantDaysInput, setGrantDaysInput] = useState(String(initialBalance?.grantDays ?? 0));
   const [showLeaveSettings, setShowLeaveSettings] = useState(false);
   const [workTimes, setWorkTimes] = useState<Record<string, { start: string; end: string }>>({});
   const [savingTime, setSavingTime] = useState<string | null>(null);
-  useEffect(() => setBalance(initialBalance || { employeeId: employee?.id || "", enabled: false, remainingDays: 0, renewalDate: "", grantDays: 0, updatedAt: "" }), [initialBalance, employee?.id]);
+  useEffect(() => {
+    setBalance(initialBalance || { employeeId: employee?.id || "", enabled: false, remainingDays: 0, renewalDate: "", grantDays: 0, updatedAt: "" });
+    setRemainingDaysInput(String(initialBalance?.remainingDays ?? 0));
+    setGrantDaysInput(String(initialBalance?.grantDays ?? 0));
+  }, [initialBalance, employee?.id]);
   if (!employee) return <p className="p-6 text-center text-slate-500">操作員が見つかりません</p>;
   const mine = requests.filter(item => (item.employeeId ? item.employeeId === employee.id : item.employeeName === (employee.displayName || employee.name)) && item.status !== "取消");
-  const save = async () => { await onSaveBalance({ ...balance, employeeId: employee.id, updatedAt: new Date().toISOString() }); toast.success("有給情報を反映しました"); };
+  const save = async () => {
+    const remainingDays = remainingDaysInput.trim() === "" ? 0 : Number(remainingDaysInput);
+    const grantDays = grantDaysInput.trim() === "" ? 0 : Number(grantDaysInput);
+    if (![remainingDays, grantDays].every(value => Number.isFinite(value) && value >= 0 && value * 2 === Math.round(value * 2))) {
+      toast.error("日数は0以上で0.5日刻みで入力してください");
+      return;
+    }
+    try {
+      const next = { ...balance, remainingDays, grantDays, employeeId: employee.id, updatedAt: new Date().toISOString() };
+      await onSaveBalance(next);
+      setBalance(next);
+      setRemainingDaysInput(String(remainingDays));
+      setGrantDaysInput(String(grantDays));
+      toast.success("有給情報を反映しました");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "有給情報を保存できませんでした"); }
+  };
 
   if (showLeaveSettings) return <div className="space-y-4 pb-6">
     <Button variant="outline" onClick={() => setShowLeaveSettings(false)}>← マイページへ戻る</Button>
@@ -21,9 +42,9 @@ export function MyPage({ employee, requests, locked, initialBalance, onSaveBalan
       <h1 className="text-xl font-black">有休詳細設定</h1><p className="mt-1 text-xs text-slate-500">本人の任意入力による参考値です。正式な残日数は会社の管理記録を確認してください。</p>
       <div className="mt-5 grid gap-4">
         <div className="flex items-center justify-between"><strong>有休残数を表示</strong><Button variant={balance.enabled ? "default" : "outline"} onClick={() => setBalance(value => ({ ...value, enabled: !value.enabled }))}>{balance.enabled ? "ON" : "OFF"}</Button></div>
-        <label className="text-xs font-bold text-slate-600">残り有給日数<Input type="number" min="0" step="0.5" value={balance.remainingDays} onChange={e => setBalance(value => ({ ...value, remainingDays: Number(e.target.value) }))} className="mt-1" /></label>
+        <label className="text-xs font-bold text-slate-600">残り有給日数<Input type="number" min="0" step="0.5" value={remainingDaysInput} onChange={e => setRemainingDaysInput(e.target.value)} className="mt-1" /></label>
         <label className="text-xs font-bold text-slate-600">更新日<Input type="date" value={balance.renewalDate} onChange={e => setBalance(value => ({ ...value, renewalDate: e.target.value }))} className="mt-1" /></label>
-        <label className="text-xs font-bold text-slate-600">付与日数<Input type="number" min="0" step="0.5" value={balance.grantDays} onChange={e => setBalance(value => ({ ...value, grantDays: Number(e.target.value) }))} className="mt-1" /></label>
+        <label className="text-xs font-bold text-slate-600">付与日数<Input type="number" min="0" step="0.5" value={grantDaysInput} onChange={e => setGrantDaysInput(e.target.value)} className="mt-1" /></label>
         <Button className="h-11 font-bold" onClick={() => void save()}><Save className="mr-2 h-4 w-4" />設定を反映する</Button>
       </div>
     </section>
