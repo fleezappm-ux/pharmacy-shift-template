@@ -1347,8 +1347,8 @@ function getShiftSpecialDayRules() {
     if (props.getProperty("SHIFT_BAND_V3_MIGRATED") !== "1") {
       // The duplicate template's old store-specific presets are replaced once.
       rules = [
-        { id: "band-v3:closed-0", name: "定休日（日）", color: "red", behavior: "information", enabled: true, mode: "recurring", weekday: 0, weeks: [1,2,3,4,5], dates: [] },
-        { id: "band-v3:holiday", name: "祝日", color: "red", behavior: "information", enabled: true, mode: "annual", weekday: 0, weeks: [], dates: [] }
+        { id: "band-v3:closed-0", name: "定休日", color: "red", behavior: "information", enabled: true, mode: "recurring", weekday: 0, weeks: [1,2,3,4,5], dates: [], showName: true, restMode: "none", restEmployeeIds: [] },
+        { id: "band-v3:holiday", name: "定休日", color: "red", behavior: "information", enabled: true, mode: "annual", weekday: 0, weeks: [], dates: [], showName: true, restMode: "none", restEmployeeIds: [] }
       ];
       props.setProperty("SHIFT_SPECIAL_DAY_RULES_JSON", JSON.stringify(rules));
       props.setProperty("SHIFT_BAND_V3_MIGRATED", "1");
@@ -1367,11 +1367,16 @@ function saveShiftSpecialDayRules(data) {
     var source = Array.isArray(data.rules) ? data.rules : [];
     if (source.length > 30) throw new Error("特殊日ルールは30件までです。");
     var colors = ["red", "blue", "green", "amber", "purple", "gray"];
+    var activeEmployeeIds = {};
+    readShiftEmployeeMaster().forEach(function(item) { if (item.active) activeEmployeeIds[item.id] = true; });
     var rules = source.filter(function(rule) { return /^band-v3:/.test(String(rule.id || "")); }).map(function(rule) {
       var dates = Array.isArray(rule.dates) ? rule.dates.map(function(value) { return sanitizeText(value, 10); }).filter(function(value) { return /^\d{4}-\d{2}-\d{2}$/.test(value); }).slice(0, 366) : [];
       var monthDays = Array.isArray(rule.monthDays) ? rule.monthDays.map(function(value) { return sanitizeText(value, 5); }).filter(function(value) { return /^\d{2}-\d{2}$/.test(value); }).slice(0, 366) : [];
       var weeks = Array.isArray(rule.weeks) ? rule.weeks.map(Number).filter(function(value) { return value >= 1 && value <= 5; }) : [];
-      return { id: sanitizeText(rule.id, 100), name: sanitizeText(rule.name, 50), color: colors.indexOf(rule.color) >= 0 ? rule.color : "gray", behavior: "information", enabled: rule.enabled !== false, mode: ["recurring", "yearly"].indexOf(rule.mode) >= 0 ? rule.mode : "annual", weekday: Math.max(0, Math.min(6, Number(rule.weekday) || 0)), weeks: weeks, dates: dates, monthDays: monthDays };
+      var restMode = ["all", "selected"].indexOf(rule.restMode) >= 0 ? rule.restMode : "none";
+      var restEmployeeIds = (Array.isArray(rule.restEmployeeIds) ? rule.restEmployeeIds : []).map(function(id) { return sanitizeText(id, 100); }).filter(function(id) { return activeEmployeeIds[id]; });
+      if (restMode === "selected" && !restEmployeeIds.length) throw new Error("休みにする従業員を選んでください。");
+      return { id: sanitizeText(rule.id, 100), name: sanitizeText(rule.name, 50), color: colors.indexOf(rule.color) >= 0 ? rule.color : "gray", behavior: "information", enabled: rule.enabled !== false, mode: ["recurring", "yearly"].indexOf(rule.mode) >= 0 ? rule.mode : "annual", weekday: Math.max(0, Math.min(6, Number(rule.weekday) || 0)), weeks: weeks, dates: dates, monthDays: monthDays, showName: rule.showName !== false, restMode: restMode, restEmployeeIds: restMode === "selected" ? restEmployeeIds : [] };
     }).filter(function(rule) { return !!rule.name; });
     PropertiesService.getScriptProperties().setProperty("SHIFT_SPECIAL_DAY_RULES_JSON", JSON.stringify(rules));
     PropertiesService.getScriptProperties().setProperty("SHIFT_BAND_V3_MIGRATED", "1");
