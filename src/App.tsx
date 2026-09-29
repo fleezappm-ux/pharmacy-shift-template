@@ -121,7 +121,7 @@ function getCurrentShiftMonth(today = new Date(), settings = DEFAULT_CALENDAR_PE
 
 export default function App() {
   const [appSession, setAppSession] = useState<ShiftSession | null>(() => getShiftSession());
-  const [guideOpen, setGuideOpen] = useState(() => templateStorage.getItem("shift_guide_hidden_v1") !== "1");
+  const [guideOpen, setGuideOpen] = useState(false);
   const [guideSection, setGuideSection] = useState<EmployeeGuideSection>("home");
   const openGuide = (section: EmployeeGuideSection) => { setGuideSection(section); setGuideOpen(true); };
   const [settingsPage, setSettingsPage] = useState<"menu" | "store" | "board" | "employee" | "shift" | "special" | "operations" | "autodraft" | "other" | "reset">("menu");
@@ -1561,7 +1561,7 @@ export default function App() {
     return employee.shifts.find(s => s.date.startsWith(dateStr));
   };
 
-  if (!appSession) return <><ShiftLogin employees={loginEmployees} onLogin={session => { setAppSession(session); toast.success(session.role === "admin" ? "編集者としてログインしました" : "ログインしました"); }} /><Toaster position="top-center" /></>;
+  if (!appSession) return <><ShiftLogin employees={loginEmployees} onLogin={session => { setAppSession(session); if (templateStorage.getItem("shift_guide_hidden_v1") !== "1") openGuide("home"); toast.success(session.role === "admin" ? "編集者としてログインしました" : "ログインしました"); }} /><Toaster position="top-center" /></>;
   if (!initialSyncComplete) return <main className="flex min-h-screen items-center justify-center bg-slate-50"><div className="rounded-2xl bg-white px-8 py-7 text-center shadow-xl"><div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" /><strong className="text-slate-800">従業員マスターを同期しています</strong><p className="mt-2 text-xs text-slate-500">役職情報を確認してから表示します</p></div></main>;
 
   return (
