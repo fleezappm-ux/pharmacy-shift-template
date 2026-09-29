@@ -1858,7 +1858,7 @@ export default function App() {
                                 </button>
                               </TableHead>
                             ))}
-                            
+                            <TableHead className="dashboard-remarks-col h-10 font-bold text-muted-foreground border-r border-border">備考</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1896,7 +1896,7 @@ export default function App() {
                                     </TableCell>
                                   );
                                 })}
-
+                                <TableCell className="dashboard-remarks-col dashboard-band-name py-2 border-r border-border">{gr?.type || ""}</TableCell>
                               </TableRow>
                             );
                           })}
@@ -1933,7 +1933,7 @@ export default function App() {
                                 </TableCell>
                               );
                             })}
-                            
+                            <TableCell className="dashboard-remarks-col border-r border-border" />
                           </TableRow>
                         </TableBody>
                       </Table>
