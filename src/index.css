@@ -348,7 +348,7 @@ body { margin:0; background:#f5f7fa; }
 .leave-shift-table th:nth-child(2){width:6%}
 .leave-shift-remark-heading,.leave-shift-remark-cell{display:none}
 .leave-shift-table thead th.is-own{background:#ffedd5!important;color:#9a3412!important}
-.leave-shift-table tbody th{font-size:10px;font-weight:850}
+.leave-shift-table tbody th{font-size:10px;font-weight:850;color:#111827}
 .leave-shift-table tbody td{height:42px;font-size:10px;line-height:1.15}
 .leave-shift-table tbody tr.special-red>*,.leave-personal-row.special-red{background:#fee2e2!important}
 .leave-shift-table tbody tr.special-blue>*,.leave-personal-row.special-blue{background:#dbeafe!important}
@@ -359,7 +359,7 @@ body { margin:0; background:#f5f7fa; }
 .leave-shift-cell.is-own{background:#fff7ed}
 .leave-shift-cell.has-draft,.leave-personal-row.has-draft{box-shadow:inset 0 0 0 2px #f59e0b}
 .leave-shift-pick{display:grid;width:100%;min-height:0;place-items:center;padding:0;line-height:1.15}
-.leave-shift-pick strong{font-size:10px}.leave-personal-work strong{font-size:12px}
+.leave-shift-pick strong{font-size:10px;color:#111827}.leave-personal-work strong{font-size:12px;color:#111827}
 .leave-shift-pick small{font-size:9px}.leave-personal-work small{font-size:10px}
 .leave-shift-pick small,.leave-personal-work small{color:#b45309;font-weight:850}
 .leave-shift-cell select,.leave-personal-work select{width:100%;min-height:27px;border:1px solid #e7a73b;border-radius:7px;background:#fff;color:#172033;font-size:10px;font-weight:850}
@@ -368,7 +368,7 @@ body { margin:0; background:#f5f7fa; }
 .leave-shift-other{font-weight:800}
 .leave-personal-list{overflow:hidden;border:1px solid #dbe3ee;border-radius:12px;background:#fff}
 .leave-personal-row{display:grid;grid-template-columns:85px minmax(0,1fr);gap:10px;align-items:center;padding:12px;border-bottom:1px solid #e2e8f0}
-.leave-personal-date{display:grid;gap:2px}.leave-personal-date strong{font-size:17px}.leave-personal-date small{font-size:11px;color:#64748b}
+.leave-personal-date{display:grid;gap:2px}.leave-personal-date strong{font-size:17px;color:#111827}.leave-personal-date small{font-size:11px;color:#64748b}
 .leave-personal-work{display:grid;gap:8px}.leave-personal-work button{display:flex;justify-content:space-between;align-items:center;min-height:38px;text-align:left}
 .leave-personal-remark{grid-column:2;color:#475569}
 .leave-shift-page .leave-note-card{margin-top:18px}
@@ -409,7 +409,7 @@ body { margin:0; background:#f5f7fa; }
   .leave-shift-table{width:calc(154px + 180px * var(--leave-employee-count, 1) + 220px);min-width:0;table-layout:fixed;margin-inline:auto}
   .leave-shift-table th:first-child{width:96px}
   .leave-shift-table th:nth-child(2){width:58px}
-  .leave-shift-table .leave-shift-remark-heading,.leave-shift-table .leave-shift-remark-cell{display:table-cell;width:220px;text-align:left;padding-inline:12px}
+  .leave-shift-table .leave-shift-remark-heading,.leave-shift-table .leave-shift-remark-cell{display:table-cell;width:220px;text-align:center;padding-inline:12px}
   .leave-shift-table tbody td{height:49px;font-size:12px}
   .leave-shift-table thead th{font-size:12px!important}
   .leave-shift-table .leave-shift-cell{padding-inline:8px}
