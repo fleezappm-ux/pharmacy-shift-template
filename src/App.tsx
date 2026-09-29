@@ -1570,7 +1570,7 @@ export default function App() {
       <aside className="shift-sidebar hidden md:flex w-64 bg-card border-r border-border p-6 flex-col shrink-0 overflow-y-auto">
         <div className="text-xl font-bold text-primary mb-8 flex items-center justify-between gap-2">
           <div className="flex items-center gap-3">
-            <img src="${import.meta.env.BASE_URL}icon-192.png" alt="" className="w-10 h-10 object-contain rounded-xl" />
+            <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" className="w-10 h-10 object-contain rounded-xl" />
             <div className="leading-tight"><span className="block text-base">シフト管理</span><span className="block text-[10px] font-medium opacity-60 mt-1">PHARMACY SHIFT</span></div>
           </div>
         </div>
@@ -1777,6 +1777,11 @@ export default function App() {
               <BulletinBoard onBack={goBack} notices={adminNotices} employees={employeeMaster} defaultNoticeVisibility={adminNoticeVisibility} onCreateNotice={async (text, visibility, ids) => { try { const notice = await createAdminNotice(text, visibility, ids); setAdminNotices(items => [notice, ...items]); toast.success("お知らせを公開しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "公開できませんでした"); throw error; } }} onDeleteNotice={async id => { if (!window.confirm("このお知らせを削除しますか？")) return; try { await removeAdminNotice(id); setAdminNotices(items => items.filter(item => item.id !== id)); } catch (error) { toast.error(error instanceof Error ? error.message : "削除できませんでした"); } }} periods={boardPeriods} isEditor={appSession.role === "admin"} visibility={storeMaster.leaveRequestBoardVisibility || "immediate"} correctionVisibility={correctionVisibility} operatorName={appSession.employeeName} onShiftPeriod={direction => setBoardAnchor(prev => addMonths(prev, direction))} onResolve={async item => { const saved = await updateLeaveRequestStatus(item.id, "対応済み"); setBoardPeriods(prev => prev.map(period => ({ ...period, requests: period.requests.map(request => request.id === saved.id ? saved : request) }))); setHomeBoardRequests(prev => prev.map(request => request.id === saved.id ? saved : request)); setHomePendingCorrections(prev => prev.filter(request => request.id !== saved.id)); }} />
             ) : activeTab === "mypage" ? (
               <MyPage employee={operatorEmployee} requests={leaveRequests} locked={isLocked} initialBalance={paidLeaveBalance} onSaveBalance={async balance => { const saved = await savePaidLeaveBalance(balance); setPaidLeaveBalance(saved); }} onCancel={handleLeaveRequestCancel} onSaveWorkTime={async (id, start, end) => { const saved = await updateLeaveRequestWorkTime(id, start, end); setLeaveRequests(prev => prev.map(item => item.id === id ? saved : item)); }} onEdit={() => setActiveTab("requests")} />
+            ) : activeTab === "dashboard" && dashboardEmployees.length === 1 && !isFromAdmin ? (
+              <div className="mx-auto w-full max-w-3xl rounded-2xl border bg-white p-5 shadow-sm">
+                <h2 className="mb-3 text-lg font-bold">{dashboardEmployees[0].displayName || dashboardEmployees[0].name} のシフト</h2>
+                <PersonalShiftList employee={dashboardEmployees[0]} dates={dateRange} remarks={displayRemarks} />
+              </div>
             ) : activeTab === "dashboard" ? (
               <motion.div
                 key="dashboard"
@@ -1790,7 +1795,7 @@ export default function App() {
                   <CardHeader className={`dashboard-card-header dashboard-blue-header page-blue-header border-b border-border ${isLocked ? "is-final" : "is-draft"}`}>
                     <div className="dashboard-blue-top">
                       <div className="dashboard-blue-brand">
-                        <img src="${import.meta.env.BASE_URL}icon-192.png" alt="" />
+                        <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" />
                         <div><small>PHARMACY SHIFT</small><CardTitle className={appSession.role === "admin" ? "admin-shift-title" : ""}>{isFromAdmin ? "シフト作成" : appSession.role === "admin" ? "全体シフト管理者" : "薬局シフト"}</CardTitle><span><UserRound className="h-3.5 w-3.5" />操作員：{appSession.employeeName || "未選択"}</span></div>
                       </div>
                       <div className="dashboard-blue-period">
