@@ -1728,8 +1728,9 @@ export default function App() {
       <main className={`shift-main flex-1 flex flex-col overflow-hidden p-6 pb-24 md:pb-6 gap-6 ${activeTab === "dashboard" ? "dashboard-active" : ""}`}>
         {appSession.role === "employee" && activeTab !== "home" && <div className="flex shrink-0 justify-end"><button type="button" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 text-sm font-bold text-blue-700" onClick={() => openGuide(activeTab === "dashboard" ? "dashboard" : activeTab === "board" ? "board" : activeTab === "requests" ? "requests" : activeTab === "mypage" ? "mypage" : "personal")}><BookOpen className="h-4 w-4" />このページの説明</button></div>}
         {activeTab === "mypage" && (
-        <header className="shift-page-header period-navigation shrink-0">
+        <header className="shift-page-header period-navigation mypage-period-header shrink-0">
           <Button variant="ghost" size="sm" className="period-back" onClick={goBack}><ArrowLeft className="w-4 h-4" />戻る</Button>
+          <h1 className="mypage-heading">マイページ</h1>
           <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, -1))}><ChevronLeft className="w-4 h-4" />前の期間</Button>
           <strong>{dateRange.length ? `${format(dateRange[0], "M/d")}〜${format(dateRange[dateRange.length - 1], "M/d")}` : "期間未設定"}</strong>
           <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, 1))}>次の期間<ChevronRight className="w-4 h-4" /></Button>
@@ -1777,11 +1778,6 @@ export default function App() {
               <BulletinBoard onBack={goBack} notices={adminNotices} employees={employeeMaster} defaultNoticeVisibility={adminNoticeVisibility} onCreateNotice={async (text, visibility, ids) => { try { const notice = await createAdminNotice(text, visibility, ids); setAdminNotices(items => [notice, ...items]); toast.success("お知らせを公開しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "公開できませんでした"); throw error; } }} onDeleteNotice={async id => { if (!window.confirm("このお知らせを削除しますか？")) return; try { await removeAdminNotice(id); setAdminNotices(items => items.filter(item => item.id !== id)); } catch (error) { toast.error(error instanceof Error ? error.message : "削除できませんでした"); } }} periods={boardPeriods} isEditor={appSession.role === "admin"} visibility={storeMaster.leaveRequestBoardVisibility || "immediate"} correctionVisibility={correctionVisibility} operatorName={appSession.employeeName} onShiftPeriod={direction => setBoardAnchor(prev => addMonths(prev, direction))} onResolve={async item => { const saved = await updateLeaveRequestStatus(item.id, "対応済み"); setBoardPeriods(prev => prev.map(period => ({ ...period, requests: period.requests.map(request => request.id === saved.id ? saved : request) }))); setHomeBoardRequests(prev => prev.map(request => request.id === saved.id ? saved : request)); setHomePendingCorrections(prev => prev.filter(request => request.id !== saved.id)); }} />
             ) : activeTab === "mypage" ? (
               <MyPage employee={operatorEmployee} requests={leaveRequests} locked={isLocked} initialBalance={paidLeaveBalance} onSaveBalance={async balance => { const saved = await savePaidLeaveBalance(balance); setPaidLeaveBalance(saved); }} onCancel={handleLeaveRequestCancel} onSaveWorkTime={async (id, start, end) => { const saved = await updateLeaveRequestWorkTime(id, start, end); setLeaveRequests(prev => prev.map(item => item.id === id ? saved : item)); }} onEdit={() => setActiveTab("requests")} />
-            ) : activeTab === "dashboard" && dashboardEmployees.length === 1 && !isFromAdmin ? (
-              <div className="mx-auto w-full max-w-3xl rounded-2xl border bg-white p-5 shadow-sm">
-                <h2 className="mb-3 text-lg font-bold">{dashboardEmployees[0].displayName || dashboardEmployees[0].name} のシフト</h2>
-                <PersonalShiftList employee={dashboardEmployees[0]} dates={dateRange} remarks={displayRemarks} />
-              </div>
             ) : activeTab === "dashboard" ? (
               <motion.div
                 key="dashboard"
