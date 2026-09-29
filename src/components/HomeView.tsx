@@ -127,7 +127,7 @@ export function HomeView({
         })}
       </div>
 
-      <section className="home-roster">
+      <div className="home-desktop-columns"><section className="home-roster">
         <div className="home-roster-header">
           <div className="home-roster-heading"><h2>{selectedDate === today ? "今日のシフト" : "この日のシフト"}</h2><div className="home-roster-count"><Users className="w-4 h-4" /> 出勤 {workingCount}人</div></div>
           <p className="home-roster-date">{format(selectedDateObject, "M月d日")}（{WEEKDAYS[selectedDateObject.getDay()]}）</p>
@@ -141,7 +141,7 @@ export function HomeView({
         <Button variant="outline" className="w-full mt-3 h-10 font-bold" onClick={onShowDashboard}>月の全体シフトを見る <ArrowRight className="w-4 h-4 ml-2" /></Button>
       </section>
 
-      <BulletinBoard compact notices={notices} periods={[{ label: boardMonthLabel, locked: boardLocked, requests }]} pendingCorrections={pendingCorrections} isEditor={isEditor} visibility={boardVisibility} correctionVisibility={correctionVisibility} operatorName={operatorName} onOpenBoard={onOpenBoard} />
+      <BulletinBoard compact notices={notices} periods={[{ label: boardMonthLabel, locked: boardLocked, requests }]} pendingCorrections={pendingCorrections} isEditor={isEditor} visibility={boardVisibility} correctionVisibility={correctionVisibility} operatorName={operatorName} onOpenBoard={onOpenBoard} /></div>
 
       <button className="home-leave-request" onClick={onOpenLeaveRequest}>
         <CalendarDays className="w-5 h-5" /><div><strong>休み希望日を提出する</strong><span>希望受付中のシフト案に提出できます</span></div><ArrowRight className="w-5 h-5" />

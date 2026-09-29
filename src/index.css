@@ -278,6 +278,15 @@ body { margin:0; background:#f5f7fa; }
 
 .leave-note-lines>div.work-time-missing{border:2px solid #f59e0b;background:#fffbeb}
 .home-title-line .home-admin-title{display:inline-block;border-radius:8px;background:#fff1f2;color:#bd1830;padding:2px 10px;font-weight:950;letter-spacing:.03em}
+/* Keep the operator menu above the homepage cards on desktop and mobile. */
+.home-brand-header{overflow:visible;z-index:5}
+.home-brand-header .home-title-line>span{z-index:10}
+.home-brand-header .home-title-line>span>button:last-child{letter-spacing:normal;opacity:1}
+@media(min-width:901px){
+  .home-desktop-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:18px}
+  .home-desktop-columns>*{min-width:0}
+  .shift-main:has(.employee-shift-card) .employee-shift-card{width:min(100%,980px);margin-inline:auto}
+}
 .home-app-icon{flex:0 0 auto}.home-app-icon img{object-fit:contain}.home-title-line{min-width:0;flex-wrap:wrap}.home-title-line h1{max-width:100%;overflow-wrap:anywhere;line-height:1.15}.home-brand-header .home-operator{white-space:nowrap;max-width:100%;text-align:left}.home-brand-header .home-operator svg{flex:0 0 auto}
 @media(max-width:767px){.home-brand-header{grid-template-columns:minmax(0,1fr) auto}.home-brand-cluster{align-items:flex-start}.home-brand-copy{flex:1;min-width:0}.home-brand-header .home-operator{padding-left:0;border-left:0;font-size:11px}.home-title-line{align-items:flex-start;flex-direction:column;gap:5px}.home-title-line .home-admin-title{font-size:22px!important}.home-title-line .home-store-title{max-width:100%;font-size:clamp(13px,5vw,22px)!important}.home-app-icon img{width:45px;height:45px}}
 .leave-period-nav{display:flex;align-items:center;justify-content:space-between;gap:8px}
