@@ -425,6 +425,12 @@ body { margin:0; background:#f5f7fa; }
 
 /* Desktop header rhythm across the four main pages. */
 @media (min-width:901px) {
+  .home-roster-header{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px}
+  .home-roster-heading{display:contents}
+  .home-roster-heading h2{grid-column:1;grid-row:1;white-space:nowrap;font-size:22px}
+  .home-roster-date{grid-column:2;grid-row:1;justify-self:center!important;white-space:nowrap;font-size:21px!important}
+  .home-roster-count{grid-column:3;grid-row:1;justify-self:end;white-space:nowrap}
+  .home-roster-header-spacer{display:none}
   .home-bulletin-heading{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
   .home-bulletin-heading h2{grid-column:1;white-space:nowrap}
   .home-bulletin-heading .home-bulletin-period{grid-column:2;justify-self:center;font-size:22px;line-height:1.2;white-space:nowrap}
