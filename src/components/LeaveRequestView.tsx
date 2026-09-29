@@ -150,7 +150,7 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
     return <td key={employee.id} className={`leave-shift-cell ${own ? "is-own" : ""} ${selected ? "has-draft" : ""}`}>
       {own ? <>
         <button type="button" className="leave-shift-pick" disabled={loading || submitting} onClick={() => setOpenDate(openDate === key ? null : key)} aria-label={`${format(date, "M/d")}の自分の希望を選ぶ`}>
-          <strong>{shiftLabelFor(employee, key)}</strong>{selected && <small>{selected}</small>}
+          <strong>{shiftLabelFor(employee, key)}</strong>{selected ? <small>{selected}</small> : <span className="leave-shift-click-hint">クリックして希望を選ぶ ›</span>}
         </button>
         <span className="leave-desktop-select">{selectFor(key)}</span><span className="leave-mobile-select">{(openDate === key || selected) && selectFor(key)}</span>
         {existing && !selected && <span className="leave-shift-existing">提出済：{existing.type}</span>}
@@ -177,7 +177,7 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
       <button type="button" onClick={() => { setView(view === "overall" ? "personal" : "overall"); setOpenDate(null); }}>
         {view === "overall" ? "個人シフトに切り替え" : "全体シフトに切り替え"} ›
       </button>
-      <span>本人の欄を押して希望を選択</span>
+      <span className="leave-mobile-instruction">本人の欄を押して希望を選択</span><span className="leave-desktop-instruction">本人の欄をクリックして希望を選択</span>
     </div>
 
     {locked && <p className="leave-locked-message">確定済みの期間です。希望を変更する場合は「訂正依頼」を選び、コメントに内容を書いてください。</p>}
