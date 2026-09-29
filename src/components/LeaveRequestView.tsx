@@ -62,7 +62,7 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
   const [drafts, setDrafts] = useState<DraftMap>(initialNote.drafts);
   const [times, setTimes] = useState<WorkTimes>(initialNote.times);
   const [comment, setComment] = useState(initialNote.comment);
-  const [view, setView] = useState<"overall" | "personal">(() => window.matchMedia("(min-width: 901px)").matches ? "personal" : "overall");
+  const [view, setView] = useState<"overall" | "personal">("overall");
   const [openDate, setOpenDate] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -183,25 +183,26 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
     {locked && <p className="leave-locked-message">確定済みの期間です。希望を変更する場合は「訂正依頼」を選び、コメントに内容を書いてください。</p>}
     {employeeName ? <>
       {view === "overall" ? <div className="leave-shift-table-scroll">
-        <table className="leave-shift-table">
-          <thead><tr><th>日付</th><th>曜</th>{employees.map(employee => <th key={employee.id} className={employee.id === operatorId ? "is-own" : ""}>{employee.displayName || employee.name}</th>)}</tr></thead>
+        <table className="leave-shift-table" style={{ "--leave-employee-count": employees.length } as CSSProperties}>
+          <thead><tr><th>日付</th><th>曜</th>{employees.map(employee => <th key={employee.id} className={employee.id === operatorId ? "is-own" : ""}>{employee.displayName || employee.name}</th>)}<th className="leave-shift-remark-heading">帯の名前</th></tr></thead>
           <tbody>{dates.map(date => {
             const key = format(date, "yyyy-MM-dd");
             return <tr key={key} className={colorFor(date, key) ? `special-${colorFor(date, key)}` : ""}>
               <th scope="row">{format(date, "M/d")}</th><td>{format(date, "E", { locale: ja })}</td>
               {employees.map(employee => cellFor(employee, date))}
+              <td className="leave-shift-remark-cell">{remarkFor(key)?.type || ""}</td>
             </tr>;
           })}</tbody>
         </table>
-      </div> : <div className="leave-personal-list" style={{ "--leave-first-day": dates[0]?.getDay() ?? 0 } as CSSProperties}>
-        <div className="leave-desktop-weekdays" aria-hidden="true">{["日", "月", "火", "水", "木", "金", "土"].map(day => <span key={day}>{day}</span>)}</div>
+      </div> : <div className="leave-personal-list">
+        <div className="leave-desktop-weekdays" aria-hidden="true"><span>日付</span><span>勤務・希望</span><span>帯の名前</span></div>
         {dates.map(date => {
           const key = format(date, "yyyy-MM-dd");
           const remark = remarkFor(key);
           return <div key={key} className={`leave-personal-row ${colorFor(date, key) ? `special-${colorFor(date, key)}` : ""} ${drafts[key] ? "has-draft" : ""}`}>
             <div className="leave-personal-date"><strong>{format(date, "M/d")}</strong><small>{format(date, "E", { locale: ja })}</small></div>
             <div className="leave-personal-work"><button type="button" disabled={loading || submitting} onClick={() => setOpenDate(openDate === key ? null : key)} aria-label={`${format(date, "M/d")}の自分の希望を選ぶ`}><strong>{shiftLabelFor(operator, key)}</strong>{drafts[key] && <small>{drafts[key].type}</small>}</button><span className="leave-desktop-select">{selectFor(key)}</span><span className="leave-mobile-select">{(openDate === key || drafts[key]) && selectFor(key)}</span>{requestByDate.get(key) && !drafts[key] && <span className="leave-shift-existing">提出済：{requestByDate.get(key)?.type}</span>}</div>
-            {remark?.type && remark.type !== "なし" && <small className="leave-personal-remark">{remark.type}{remark.text ? `：${remark.text}` : ""}</small>}
+            <small className="leave-personal-remark">{remark?.type || ""}</small>
           </div>;
         })}
       </div>}
