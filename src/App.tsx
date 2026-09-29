@@ -1730,7 +1730,7 @@ export default function App() {
         {activeTab === "mypage" && (
         <header className="shift-page-header period-navigation mypage-period-header shrink-0">
           <Button variant="ghost" size="sm" className="period-back" onClick={goBack}><ArrowLeft className="w-4 h-4" />戻る</Button>
-          <h1 className="mypage-heading">マイページ</h1>
+          <h1 className="mypage-heading"><UserRound className="h-7 w-7" />マイページ</h1>
           <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, -1))}><ChevronLeft className="w-4 h-4" />前の期間</Button>
           <strong>{dateRange.length ? `${format(dateRange[0], "M/d")}〜${format(dateRange[dateRange.length - 1], "M/d")}` : "期間未設定"}</strong>
           <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, 1))}>次の期間<ChevronRight className="w-4 h-4" /></Button>

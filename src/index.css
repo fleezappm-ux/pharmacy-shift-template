@@ -422,3 +422,36 @@ body { margin:0; background:#f5f7fa; }
 @media (max-width: 767px) {
   html, body { overscroll-behavior-y: contain; }
 }
+
+/* Desktop header rhythm across the four main pages. */
+@media (min-width:901px) {
+  .home-bulletin-heading{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
+  .home-bulletin-heading h2{grid-column:1;white-space:nowrap}
+  .home-bulletin-heading .home-bulletin-period{grid-column:2;justify-self:center;font-size:22px;line-height:1.2;white-space:nowrap}
+
+  .dashboard-blue-top{grid-template-columns:1fr}
+  .dashboard-blue-brand>div{display:flex;align-items:center;flex-wrap:wrap;gap:8px 18px}
+  .dashboard-blue-brand>div>[data-slot="card-title"]{margin:0}
+  .dashboard-blue-brand>div>span{margin:0;font-size:14px;font-weight:800}
+  .dashboard-blue-period{display:none}
+  .dashboard-blue-header{position:relative}
+  .dashboard-blue-controls{margin-top:14px}
+  .dashboard-period-step{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:16px}
+  .dashboard-period-step>button:first-child{grid-column:1;justify-self:end;min-width:126px}
+  .dashboard-period-step>button:last-child{grid-column:3;justify-self:start;min-width:126px}
+  .dashboard-period-title{grid-column:2;position:static;min-width:260px}
+  .dashboard-period-title .dashboard-title-status strong{font-size:25px}
+  .dashboard-period-title .dashboard-list-toggle{position:absolute;right:22px;top:22px;margin:0}
+
+  .mypage-period-header .mypage-heading{display:flex;align-items:center;justify-content:center;gap:10px}
+  .mypage-period-header .period-back{grid-row:2;align-self:center;min-height:42px}
+
+  .leave-shift-brand>div{display:flex;align-items:center;flex-wrap:wrap;gap:8px 18px}
+  .leave-shift-brand>div>span{margin:0;font-size:14px;font-weight:800}
+  .leave-shift-brand .leave-help-button{margin-left:auto}
+  .leave-shift-period-nav{width:min(100%,760px);margin:14px auto 0;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:16px}
+  .leave-shift-period-nav button:first-child{justify-self:end;width:130px}
+  .leave-shift-period-nav button:last-child{justify-self:start;width:130px}
+  .leave-shift-period-nav strong{min-width:220px;font-size:24px}
+  .leave-shift-full-period{font-size:27px}
+}
