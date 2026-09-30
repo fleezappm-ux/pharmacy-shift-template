@@ -8,6 +8,7 @@ function doPost(e) {
     if (viewActions.indexOf(data.action) >= 0) requireShiftSession(data.sessionToken);
     if (adminActions.indexOf(data.action) >= 0) requireShiftSession(data.sessionToken, "admin");
     if (data.action === "previewTemplateReset") return previewTemplateReset(data);
+    if (data.action === "getTemplateResetStatus") return getTemplateResetStatus(data);
     if (data.action === "runTemplateReset") return runTemplateReset(data);
     if (data.action === "clearTemplateShiftRemarks") return clearTemplateShiftRemarks(data);
     if (data.action === "loginShift") return loginShift(data);
@@ -1822,10 +1823,23 @@ function previewTemplateReset(data) {
     if (!operator) throw new Error("操作員が見つかりません。ログインし直してください。");
     var token = Utilities.getUuid();
     p.setProperty("SHIFT_TEMPLATE_RESET_AUTH", JSON.stringify({
-      token: token, operator: operator, expiresAt: Date.now() + 60 * 60 * 1000
+      token: token, operator: operator, archived: 0, expiresAt: Date.now() + 60 * 60 * 1000
     }));
     return createJsonDataResponse({ success: true, counts: counts, employees: readShiftEmployeeMaster().length, token: token, operatorName: operator.displayName });
   } catch (error) { return createJsonResponse(false, error.message || "初期化対象を確認できませんでした。"); }
+}
+
+function getTemplateResetStatus(data) {
+  try {
+    var session = requireShiftSession(data.sessionToken, "admin");
+    verifyShiftApiKey(data.apiKey);
+    var p = assertTemplateResetTarget();
+    var authorization = JSON.parse(p.getProperty("SHIFT_TEMPLATE_RESET_AUTH") || "null");
+    if (!authorization || authorization.token !== data.token || authorization.operator.id !== session.employeeId || authorization.expiresAt <= Date.now()) {
+      throw new Error("初期化の確認期限が切れました。対象件数を再確認してください。");
+    }
+    return createJsonDataResponse({ success: true, archived: Number(authorization.archived) || 0, active: true });
+  } catch (error) { return createJsonResponse(false, error.message || "初期化の進行状況を確認できませんでした。"); }
 }
 
 function runTemplateReset(data) {
@@ -1853,12 +1867,16 @@ function runTemplateReset(data) {
       budget -= selected.length;
       remaining += rows.length - selected.length;
     });
+    authorization.archived = (Number(authorization.archived) || 0) + archived;
+    authorization.expiresAt = Date.now() + 60 * 60 * 1000;
+    p.setProperty("SHIFT_TEMPLATE_RESET_AUTH", JSON.stringify(authorization));
     // 次のバッチで最終確認を行う。失敗時は同じ確認トークンで安全に再試行できる。
     if (budget === 0 || remaining > 0) {
       return createJsonDataResponse({ success: true, done: false, archived: archived });
     }
     var businessKeys = [
       "SHIFT_CYCLE_MASTER_JSON", "SHIFT_AUTO_DRAFT_SETTINGS_JSON", "SHIFT_SPECIAL_DAY_RULES_JSON",
+      "SHIFT_WORK_TIME_MASTER_" + getStoreId(),
       "SHIFT_CALENDAR_PERIOD_JSON", "SHIFT_PERIOD_STATUSES_JSON", "SHIFT_PAID_LEAVE_BALANCES_JSON",
       "SHIFT_PAID_LEAVE_LEDGER_JSON", "SHIFT_AUDIT_LOG_JSON",
       "SHIFT_BOARD_VISIBILITY_FALLBACK_" + getStoreId(),

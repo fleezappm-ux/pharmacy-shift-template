@@ -1,6 +1,6 @@
 import { AdminNotice, AdminNoticeVisibility, fetchAdminNotices, fetchAdminNoticeVisibility, saveAdminNoticeVisibility, createAdminNotice, removeAdminNotice } from "./lib/admin-notice-sync";
 import { templateStorage } from "./lib/template-storage";
-import { TemplateResetSettings } from "./components/TemplateResetSettings";
+import { TemplateResetSettings, RESET_PENDING_KEY } from "./components/TemplateResetSettings";
 import { ShiftToolGuide, type EmployeeGuideSection } from "./components/ShiftToolGuide";
 import { useState, useEffect, useRef } from "react";
 import { format, addMonths } from "date-fns";
@@ -125,10 +125,12 @@ function getCurrentShiftMonth(today = new Date(), settings = DEFAULT_CALENDAR_PE
 
 export default function App() {
   const [appSession, setAppSession] = useState<ShiftSession | null>(() => getShiftSession());
+  const [resetProgress, setResetProgress] = useState({ running: false, archived: 0, completed: false });
+  const [workTimePending, setWorkTimePending] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [guideSection, setGuideSection] = useState<EmployeeGuideSection>("home");
   const openGuide = (section: EmployeeGuideSection) => { setGuideSection(section); setGuideOpen(true); };
-  const [settingsPage, setSettingsPage] = useState<"menu" | "store" | "board" | "employee" | "shift" | "worktime" | "special" | "operations" | "autodraft" | "other" | "reset">("menu");
+  const [settingsPage, setSettingsPage] = useState<"menu" | "store" | "board" | "employee" | "shift" | "worktime" | "special" | "operations" | "autodraft" | "other" | "reset">(() => templateStorage.getItem(RESET_PENDING_KEY) ? "reset" : "menu");
   const [workTimes, setWorkTimes] = useState(readWorkTimes);
   const [workTimeReady, setWorkTimeReady] = useState(false);
   const [workTimeRevision, setWorkTimeRevision] = useState("");
@@ -203,7 +205,7 @@ export default function App() {
     return saved ? new Date(saved) : getCurrentShiftMonth(new Date(), calendarPeriodSettings);
   });
   // 起動時は、前回閉じた画面に関係なく必ずホームから開始します。
-  const [activeTab, setActiveTab] = useState("home");
+  const [activeTab, setActiveTab] = useState(() => getShiftSession()?.role === "admin" && templateStorage.getItem(RESET_PENDING_KEY) ? "admin" : "home");
   const [lockedMonths, setLockedMonths] = useState<string[]>(() => {
     const saved = templateStorage.getItem("locked_months");
     if (saved) {
@@ -1588,7 +1590,15 @@ export default function App() {
   if (!initialSyncComplete) return <main className="flex min-h-screen items-center justify-center bg-slate-50"><div className="rounded-2xl bg-white px-8 py-7 text-center shadow-xl"><div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" /><strong className="text-slate-800">従業員マスターを同期しています</strong><p className="mt-2 text-xs text-slate-500">役職情報を確認してから表示します</p></div></main>;
 
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="shift-shell flex h-screen w-full overflow-hidden bg-background text-foreground font-sans">
+    <Tabs value={activeTab} onValueChange={value => {
+      if (!workTimePending || window.confirm("勤務時間の追加・変更がまだ完了していません。画面を離れますか？")) setActiveTab(value);
+    }} onClickCapture={event => {
+      if (activeTab !== "admin" || settingsPage !== "worktime" || !workTimePending ||
+        (event.target instanceof Element && event.target.closest("[data-work-time-settings]"))) return;
+      if (!window.confirm("勤務時間の追加・変更がまだ完了していません。画面を離れますか？")) {
+        event.preventDefault(); event.stopPropagation();
+      }
+    }} className="shift-shell flex h-screen w-full overflow-hidden bg-background text-foreground font-sans">
       {/* Sidebar */}
       <aside className="shift-sidebar hidden md:flex w-64 bg-card border-r border-border p-6 flex-col shrink-0 overflow-y-auto">
         <div className="text-xl font-bold text-primary mb-8 flex items-center justify-between gap-2">
@@ -1999,7 +2009,7 @@ export default function App() {
                 </Card>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "reset" ? (
-              <TemplateResetSettings onBack={() => setSettingsPage("menu")} />
+              <TemplateResetSettings onBack={() => setSettingsPage("menu")} onProgress={setResetProgress} />
             ) : activeTab === "admin" && settingsPage === "store" ? (
               <motion.div key="settings-store" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                 <Card><CardHeader className="page-blue-header rounded-t-xl border-b py-5"><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><div><CardTitle className="admin-page-title">店舗マスタ</CardTitle><CardDescription>店舗全体の基本ルール</CardDescription></div></div></CardHeader><CardContent className="p-6 space-y-5"><StoreMasterSettings master={{ ...storeMaster, businessDays: businessDaysFromRules(specialDayRules) }} onMasterChange={setStoreMaster} period={calendarPeriodSettings} periodDraft={calendarPeriodDraft} saving={calendarPeriodSaving} onPeriodDraftChange={setCalendarPeriodDraft} onSavePeriod={handleSaveCalendarPeriod} onSaveBoardVisibility={handleSaveBoardVisibility} onOpenBandSettings={() => setSettingsPage("special")} /></CardContent></Card>
@@ -2014,7 +2024,7 @@ export default function App() {
             ) : activeTab === "admin" && settingsPage === "shift" ? (
               <motion.div key="settings-shift" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}><Card><CardHeader className="page-blue-header rounded-t-xl"><CardTitle className="admin-page-title">シフトマスタ</CardTitle><CardDescription>各マスターを選択してください</CardDescription></CardHeader><CardContent className="grid gap-3 p-6"><Button variant="outline" onClick={() => setSettingsPage("worktime")}>勤務時間設定</Button><Button variant="outline" onClick={() => setSettingsPage("autodraft")}>シフト案自動作成マスタ</Button><Button variant="outline" onClick={() => setSettingsPage("operations")}>クール作成マスタ</Button><Button variant="outline" onClick={() => setSettingsPage("special")}>帯色マスタ</Button><Button variant="ghost" onClick={() => setSettingsPage("menu")}>設定へ戻る</Button></CardContent></Card></motion.div>
             ) : activeTab === "admin" && settingsPage === "worktime" ? (
-              <motion.div key="settings-worktime" className="space-y-4"><Button variant="outline" onClick={() => setSettingsPage("shift")}>← シフトマスタへ戻る</Button><Card><CardHeader className="page-blue-header rounded-t-xl"><CardTitle className="admin-page-title">勤務時間設定</CardTitle></CardHeader><CardContent className="p-5 sm:p-6"><WorkTimeSettings values={workTimes} ready={workTimeReady} onSave={async values => { const master = await saveWorkTimeMaster(values, workTimeRevision); saveWorkTimes(master.items); setWorkTimes(master.items); setWorkTimeRevision(master.revision); toast.success("勤務時間設定を共通保存しました"); }} /></CardContent></Card></motion.div>
+              <motion.div key="settings-worktime" className="space-y-4"><Button variant="outline" onClick={() => setSettingsPage("shift")}>← シフトマスタへ戻る</Button><Card><CardHeader className="page-blue-header rounded-t-xl"><CardTitle className="admin-page-title">勤務時間設定</CardTitle></CardHeader><CardContent className="p-5 sm:p-6"><WorkTimeSettings values={workTimes} ready={workTimeReady} onPendingChange={setWorkTimePending} onSave={async values => { const master = await saveWorkTimeMaster(values, workTimeRevision); saveWorkTimes(master.items); setWorkTimes(master.items); setWorkTimeRevision(master.revision); toast.success("勤務時間設定を共通保存しました"); }} /></CardContent></Card></motion.div>
             ) : activeTab === "admin" && settingsPage === "autodraft" ? (
               <motion.div key="settings-autodraft" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><AutoDraftSettingsView settings={autoDraftSettings} onChange={value => void updateAutoDraftSettings(value)} onStart={startAutoDraft} /></motion.div>
             ) : activeTab === "admin" && settingsPage === "special" ? (
@@ -2347,6 +2357,14 @@ export default function App() {
           </AnimatePresence>
         </div>
       </main>
+      {(resetProgress.running || resetProgress.completed) && <div role="status" aria-live="polite" className="fixed inset-0 z-[250] flex items-center justify-center bg-slate-950/75 p-5">
+        <div className="w-full max-w-md rounded-2xl border-2 border-red-300 bg-white p-6 text-center shadow-2xl">
+          <strong className={`block text-xl font-black ${resetProgress.completed ? "text-green-700" : "text-red-700"}`}>{resetProgress.completed ? "初期化が完了しました" : "初期化を実行中です"}</strong>
+          <p className="mt-3 text-base font-bold text-red-700">処理済み：{resetProgress.archived}件</p>
+          <p className="mt-3 text-sm text-slate-700">{resetProgress.completed ? "初期化は終了しました。" : "件数が多い場合は数分以上かかります。完了まで画面を閉じないでください。"}</p>
+          {resetProgress.completed && <Button className="mt-5" onClick={() => window.location.reload()}>ログイン画面へ戻る</Button>}
+        </div>
+      </div>}
       {saveFeedback && (
         <div
           role="status"
