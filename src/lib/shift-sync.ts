@@ -4,7 +4,7 @@ import { SHIFT_OPTIONS } from "../constants";
 import { isWorkTime } from "./work-time-options";
 import { getShiftSession } from "./auth-sync";
 
-// ファーマシーOSのGAS（Web App）のURL。デプロイし直してもURLは変わらない想定。
+// この店舗専用GAS（Web App）のURL。既存デプロイの新バージョンならURLは変わりません。
 import { getGasUrl } from "./gas-config";
 
 const SHIFT_API_KEY_STORAGE = "shift_api_key";

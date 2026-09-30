@@ -3,10 +3,11 @@ function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
     if (!data || !data.action) throw new Error("actionが必要です。");
-    var viewActions = ["getShifts", "getShiftHolidays", "getShiftLeaveRequests", "saveShiftLeaveRequest", "cancelShiftLeaveRequest", "updateShiftLeaveRequestWorkTime", "getShiftSpecialDayRules", "getShiftCalendarPeriodSettings", "getShiftPeriodStatus", "getShiftPaidLeaveBalance", "saveShiftPaidLeaveBalance"];
-    var adminActions = ["updateShiftLeaveRequestStatus", "deleteShiftLeaveRequest", "saveShiftCorrectionVisibility", "saveShiftSpecialDayRules", "saveShiftCalendarPeriodSettings", "saveShiftPeriodStatus", "saveShift", "saveShiftMonth", "deleteShift"];
-    if (viewActions.indexOf(data.action) >= 0) requireShiftSession(data.sessionToken);
-    if (adminActions.indexOf(data.action) >= 0) requireShiftSession(data.sessionToken, "admin");
+    // 公開ログイン操作以外は、ルーティング時に必ずセッションを検証する。
+    // 各関数内の本人・接続キー・管理者チェックも引き続き適用する。
+    var publicActions = ["loginShift", "loginShiftAdmin", "loginShiftEmployee", "getShiftLoginEmployees"];
+    var adminActions = ["previewTemplateReset", "getTemplateResetStatus", "runTemplateReset", "clearTemplateShiftRemarks", "saveShiftEmployeeMaster", "saveShiftRoleMaster", "saveShiftHomeLayout", "saveShiftAdminNotice", "deleteShiftAdminNotice", "saveShiftAdminNoticeVisibility", "saveShiftWorkTimeMaster", "saveShiftCycleMaster", "saveShiftAutoDraftSettings", "saveShiftStoreBoardVisibility", "saveShiftCorrectionVisibility", "updateShiftLeaveRequestStatus", "deleteShiftLeaveRequest", "saveShiftSpecialDayRules", "saveShiftCalendarPeriodSettings", "saveShiftPeriodStatus", "saveShift", "saveShiftMonth", "deleteShift"];
+    if (publicActions.indexOf(data.action) < 0) requireShiftSession(data.sessionToken, adminActions.indexOf(data.action) >= 0 ? "admin" : null);
     if (data.action === "previewTemplateReset") return previewTemplateReset(data);
     if (data.action === "getTemplateResetStatus") return getTemplateResetStatus(data);
     if (data.action === "runTemplateReset") return runTemplateReset(data);
@@ -613,6 +614,15 @@ function createShiftSession(role, employeeName, employeeId) {
   // 全セッションを1個のJSONへ追記する方式は、同時ログイン時の競合と
   // Script Propertiesの1値サイズ上限に弱いため、1セッション=1プロパティで保存します。
   var p = PropertiesService.getScriptProperties();
+  // 期限切れトークンは再アクセスされないこともあるため、ログイン時に掃除する。
+  var properties = p.getProperties();
+  var now = Date.now();
+  Object.keys(properties).forEach(function(key) {
+    if (key.indexOf("SHIFT_SESSION_") !== 0) return;
+    var session;
+    try { session = JSON.parse(properties[key]); } catch (_) {}
+    if (!session || Number(session.expiresAtMs) <= now) p.deleteProperty(key);
+  });
   var token = Utilities.getUuid() + Utilities.getUuid();
   var expiresAtMs = Date.now() + 30 * 24 * 60 * 60 * 1000;
   var session = { role: role, employeeName: employeeName || "", employeeId: employeeId || "", expiresAtMs: expiresAtMs };
@@ -648,7 +658,19 @@ function appendShiftAudit(data, action, target, beforeValue, afterValue) {
     try { items = JSON.parse(p.getProperty("SHIFT_AUDIT_LOG_JSON") || "[]"); } catch (_) { items = []; }
     items.push({ id: Utilities.getUuid(), at: new Date().toISOString(), operatorId: session.employeeId || "", operatorName: session.employeeName || "", role: session.role, action: action, target: sanitizeText(target, 200), before: beforeValue || null, after: afterValue || null });
     if (items.length > 500) items = items.slice(items.length - 500);
-    p.setProperty("SHIFT_AUDIT_LOG_JSON", JSON.stringify(items));
+    // Script Propertiesの1値9KB上限に収まるよう古い記録から整理する。
+    var json = JSON.stringify(items);
+    while (items.length > 1 && Utilities.newBlob(json).getBytes().length > 8000) {
+      items.shift();
+      json = JSON.stringify(items);
+    }
+    if (Utilities.newBlob(json).getBytes().length > 8000) {
+      items[0].before = "サイズ上限により省略";
+      items[0].after = "サイズ上限により省略";
+      json = JSON.stringify(items);
+    }
+    if (Utilities.newBlob(json).getBytes().length > 8000) throw new Error("監査ログのサイズが上限を超えました。");
+    p.setProperty("SHIFT_AUDIT_LOG_JSON", json);
   } catch (error) { console.error("監査ログ保存失敗: " + error); }
 }
 
@@ -1759,16 +1781,19 @@ function deactivateImportedTemplateEmployees() {
   Logger.log("複製用従業員マスターを復旧しました。操作員1名を残し、" + (active.length - 1) + "名を無効化しました。");
 }
 
-/** 複製用の3DB以外に向いたGASでは初期化を一切受け付けない。 */
+/** GAS管理者が許可した3DB以外に向いたGASでは初期化を一切受け付けない。 */
 function assertTemplateResetTarget() {
   var p = PropertiesService.getScriptProperties();
-  var expected = {
+  // 既存の複製版は従来の安全装置を維持。新店舗はGAS側で許可DBを明示する。
+  var defaultExpected = {
     NOTION_SHIFT_DATABASE_ID: "665ef4863f6040e9b542586083764148",
     NOTION_SHIFT_REQUEST_DATABASE_ID: "a4d434ce8dbc4e9d860167971c631738",
     NOTION_STORE_DATABASE_ID: "23de2613332d4ef3b809d21006cec516"
   };
-  Object.keys(expected).forEach(function(key) {
-    if (normalizeNotionId(p.getProperty(key)) !== expected[key]) {
+  var configured = p.getProperty("SHIFT_RESET_ALLOWED_DB_IDS");
+  var expected = configured ? JSON.parse(configured) : defaultExpected;
+  Object.keys(defaultExpected).forEach(function(key) {
+    if (!expected[key] || normalizeNotionId(p.getProperty(key)) !== normalizeNotionId(expected[key])) {
       throw new Error("複製用DBの設定が一致しません。初期化できません。");
     }
   });
