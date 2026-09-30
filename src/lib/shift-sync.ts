@@ -1,6 +1,7 @@
 import { templateStorage } from "./template-storage";
 import { Employee, DayShift, ShiftType, GlobalRemark } from "../types";
 import { SHIFT_OPTIONS } from "../constants";
+import { isWorkTime } from "./work-time-options";
 import { getShiftSession } from "./auth-sync";
 
 // ファーマシーOSのGAS（Web App）のURL。デプロイし直してもURLは変わらない想定。
@@ -82,7 +83,7 @@ async function callGas(action: string, extra: Record<string, unknown> = {}, requ
 /** シフト内容の文字列を、アプリ内の shift / customShiftText の形に変換します。 */
 function parseShiftContent(content: string): { shift: ShiftType; customShiftText?: string } {
   if (!content) return { shift: "" };
-  if ((SHIFT_OPTIONS as string[]).includes(content) && content !== "任意入力") {
+  if (((SHIFT_OPTIONS as string[]).includes(content) && content !== "任意入力") || isWorkTime(content)) {
     return { shift: content as ShiftType };
   }
   return { shift: "任意入力", customShiftText: content };
