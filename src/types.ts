@@ -1,15 +1,5 @@
 
-export type ShiftType = 
-  | "8:45～18:15" 
-  | "8:30～18:00" 
-  | "8:30～13:30" 
-  | "8:30～16:30" 
-  | "9:30～13:30" 
-  | "9:00～13:00" 
-  | "有休" 
-  | "休み" 
-  | "任意入力"
-  | "";
+export type ShiftType = string;
 
 export interface DayShift {
   date: string; // ISO string
