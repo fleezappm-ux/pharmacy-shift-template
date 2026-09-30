@@ -493,7 +493,7 @@ export default function App() {
 
   const getDateStr = (date: Date) => format(date, "yyyy-MM-dd");
 
-  // 起動時に、他の端末で保存されたシフトをNotion（ファーマシーOS経由）から読み込みます。
+  // 起動時に、他の端末で保存されたシフトを複製版専用GAS経由で読み込みます。
   // 取得できた場合はそちらを優先し、取得できない場合（オフライン等）はlocalStorageの内容のまま使います。
   const syncReadyRef = useRef(false);
   const [initialSyncComplete, setInitialSyncComplete] = useState(cachedEmployeeMaster !== null);

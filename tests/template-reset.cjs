@@ -27,4 +27,21 @@ assert.equal(sandbox.getTemplateResetStatus({token:preview.token}).archived,20);
 let second=sandbox.runTemplateReset({token:preview.token,confirmation:'初期化'});assert.equal(second.done,true);assert.equal(second.archived,4);
 assert.equal(keys.SHIFT_WORK_TIME_MASTER_TEST_ONLY,undefined);
 assert.equal(Object.values(pages).flat().filter(p=>!p.archived).length,0);
+// 入口の管理者認証が個別の保存APIより先に適用される。
+let requestedRole = null;
+sandbox.requireShiftSession=(_token,role)=>{requestedRole=role;if(role==='admin')throw new Error('admin required');return {employeeId:'operator',role:'employee'}};
+sandbox.doPost({postData:{contents:JSON.stringify({action:'saveShiftWorkTimeMaster',sessionToken:'employee'})}});
+assert.equal(requestedRole,'admin');
+// ログイン時に使用されなくなった期限切れセッションを削除する。
+keys.SHIFT_SESSION_EXPIRED=JSON.stringify({expiresAtMs:1});
+keys.SHIFT_SESSION_CURRENT=JSON.stringify({expiresAtMs:Date.now()+100000});
+sandbox.shiftSessionPropertyKey=()=> 'SHIFT_SESSION_NEW';
+sandbox.createShiftSession('admin','テスト','operator');
+assert.equal(keys.SHIFT_SESSION_EXPIRED,undefined);
+assert.ok(keys.SHIFT_SESSION_CURRENT);
+// 大きな監査対象も1値の保存上限内に収める。
+sandbox.requireShiftSession=()=>({employeeId:'operator',employeeName:'テスト',role:'admin'});
+sandbox.Utilities.newBlob=value=>({getBytes:()=>Buffer.from(value,'utf8')});
+sandbox.appendShiftAudit({sessionToken:'admin'},'テスト','test','x'.repeat(12000),'y'.repeat(12000));
+assert.ok(Buffer.byteLength(keys.SHIFT_AUDIT_LOG_JSON,'utf8')<=8000);
 assert.equal(held,false);console.log('PASS: reset preview, status after batch, continued processing, completion and working-hour master removal');

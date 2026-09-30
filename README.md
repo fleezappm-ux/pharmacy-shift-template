@@ -1,6 +1,6 @@
 # 薬局シフトツール 配布用テンプレート（完成版・仮）
 
-シフト画面とシフト専用GASコードのひな型です。実運用の従業員、シフト、希望、認証情報は含みません。元の店舗のGAS URLやNotion IDはコードから除いてあります。未設定のままではGASへ通信しません。
+シフト画面とシフト専用GASコードのひな型です。実運用の従業員、シフト、希望、認証情報は含みません。公開サイト用GAS URLはリポジトリに含めません。NotionテンプレートのDB IDは設定例と初期化の安全装置に記載しています。
 
 ## 先に用意するもの
 
@@ -26,9 +26,21 @@
 
 ## フロントの設定
 
-`.env.example` を `.env.local` にコピーし、新しくデプロイしたGAS URLを `VITE_SHIFT_GAS_URL` に設定します。`npm ci`、`npm run dev` でローカル確認できます。GitHub Pages等の公開ビルド時にも同じ環境変数を設定してください。サブパスは `VITE_BASE_PATH` で変更できます。標準値は `/pharmacy-shift-template/` です。接続先未設定のまま公開しても実運用データには接続しません。
+`.env.example` を `.env.local` にコピーし、新しくデプロイしたGAS URLを `VITE_SHIFT_GAS_URL` に設定します。`npm ci`、`npm run dev` でローカル確認できます。GitHub Pagesではリポジトリの **Settings → Secrets and variables → Actions → New repository secret** に `VITE_SHIFT_GAS_URL` を設定します。デプロイ処理は未設定なら失敗し、誤った接続先のサイトを公開しません。サブパスは `VITE_BASE_PATH` で変更できます。標準値は `/pharmacy-shift-template/` です。GAS URLはブラウザの通信先として閲覧者にも見えるため、認証情報として扱わないでください。
+
+既に公開されたGAS URLを後からGit履歴やビルドから完全に秘匿することはできません。既存の公開URLは元の店舗ではなく、この複製版専用GASのものか確認してください。店舗ごとに新しいGASプロジェクトとURLを使い、接続キーとログイン認証を別に設定します。
 
 初回は `initializeShiftOperator()` で登録した操作員を選んでログインし、設定画面で従業員マスターを整えます。
+
+### 複製先で業務データ初期化を使う場合
+
+初期化は誤接続防止のため、デフォルトでは上記Notionテンプレートの3DBだけを対象にします。各店舗でDBを複製した場合、GASのスクリプトプロパティ `SHIFT_RESET_ALLOWED_DB_IDS` に、その店舗で初期化を許可する3つのIDを次の形で設定してください。`NOTION_*_DATABASE_ID` と3件すべて一致しない限り初期化できません。値はGAS管理者が設定し、ブラウザから変更できません。
+
+```json
+{"NOTION_SHIFT_DATABASE_ID":"店舗のシフトDB ID","NOTION_SHIFT_REQUEST_DATABASE_ID":"店舗の希望届DB ID","NOTION_STORE_DATABASE_ID":"店舗の店舗設定DB ID"}
+```
+
+この操作は対象DBのページをアーカイブします。3つのIDを複製先のものと照合してから設定してください。
 
 ## 2026年9月28日：複製版の公開手順
 
