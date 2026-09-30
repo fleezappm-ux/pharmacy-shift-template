@@ -116,7 +116,9 @@ export function TemplateResetSettings({ onBack, onProgress }: { onBack: () => vo
       toast.success("複製版の業務データを初期化しました。ログイン画面に戻ります。");
     } catch (error) {
       const message = error instanceof Error ? error.message : "処理を中断しました。進行状況を確認してから再開してください。";
-      setFailure(message);
+      setFailure(message.includes("504") ? "Notionが一時的に応答しませんでした。進行状況を確認してから再開してください。" : message);
+      setStatusReady(false);
+      templateStorage.setItem(RESET_PENDING_KEY, JSON.stringify({ preview, archived: count }));
       setArchived(count);
       onProgress({ running: false, archived: count, completed: false });
       toast.error("初期化が中断しました。画面の進行状況を確認してください。");

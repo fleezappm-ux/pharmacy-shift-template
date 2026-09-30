@@ -8,7 +8,7 @@ const keys = {
 const pages = { shifts: Array.from({length: 22}, (_, i) => ({id: `s${i}`, archived:false})), requests: [{id:'r0',archived:false}], store: [{id:'t0',archived:false}] };
 let held = false;
 const props = {getProperty:k=>keys[k] || null,setProperty:(k,v)=>{keys[k]=v},deleteProperty:k=>{delete keys[k]},getProperties:()=>({...keys})};
-const sandbox = { console, Date, PropertiesService:{getScriptProperties:()=>props}, Utilities:{getUuid:()=>`token-${Date.now()}`}, LockService:{getScriptLock:()=>({tryLock:()=>{held=true;return true},hasLock:()=>held,releaseLock:()=>{held=false}})} };
+const sandbox = { console, Date, PropertiesService:{getScriptProperties:()=>props}, Utilities:{getUuid:()=>`token-${Date.now()}`,sleep:()=>{}}, LockService:{getScriptLock:()=>({tryLock:()=>{held=true;return true},hasLock:()=>held,releaseLock:()=>{held=false}})} };
 vm.createContext(sandbox);vm.runInContext(fs.readFileSync('gas/Code.gs','utf8'),sandbox);
 sandbox.requireShiftSession=()=>({employeeId:'operator',role:'admin'});sandbox.verifyShiftApiKey=()=>{};
 sandbox.assertTemplateResetTarget=()=>props;sandbox.getStoreId=()=> 'TEST_ONLY';
@@ -18,7 +18,11 @@ sandbox.requestNotion=(_,url)=>{const id=url.split('/').pop();for(const db of Ob
 sandbox.createJsonDataResponse=x=>x;sandbox.createJsonResponse=(success,message)=>({success,message});
 const preview=sandbox.previewTemplateReset({});assert.equal(preview.success,true);assert.equal(preview.counts[0].count,22);
 assert.equal(sandbox.getTemplateResetStatus({token:preview.token}).archived,0);
+let transientFailures=2;
+const originalQuery=sandbox.queryNotionDatabase;
+sandbox.queryNotionDatabase=(...args)=>{if(transientFailures-->0)throw new Error('Notion API Error: error code: 504');return originalQuery(...args)};
 let first=sandbox.runTemplateReset({token:preview.token,confirmation:'初期化'});assert.equal(first.done,false);assert.equal(first.archived,20);
+sandbox.queryNotionDatabase=originalQuery;
 assert.equal(sandbox.getTemplateResetStatus({token:preview.token}).archived,20);
 let second=sandbox.runTemplateReset({token:preview.token,confirmation:'初期化'});assert.equal(second.done,true);assert.equal(second.archived,4);
 assert.equal(keys.SHIFT_WORK_TIME_MASTER_TEST_ONLY,undefined);

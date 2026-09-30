@@ -1842,26 +1842,41 @@ function getTemplateResetStatus(data) {
   } catch (error) { return createJsonResponse(false, error.message || "初期化の進行状況を確認できませんでした。"); }
 }
 
+function retryTemplateResetNotion(operation) {
+  for (var attempt = 0; attempt < 3; attempt++) {
+    try { return operation(); }
+    catch (error) {
+      var message = String(error && error.message || error);
+      if (attempt === 2 || !/(?:\b429\b|\b500\b|\b502\b|\b503\b|\b504\b)/.test(message)) throw error;
+      Utilities.sleep(700 * Math.pow(2, attempt));
+    }
+  }
+}
+
 function runTemplateReset(data) {
   var lock = LockService.getScriptLock();
+  var p, authorization, archived = 0, checkpointed = false;
   try {
     if (!lock.tryLock(10000)) throw new Error("別の処理中です。少し待って再試行してください。");
     var session = requireShiftSession(data.sessionToken, "admin");
     verifyShiftApiKey(data.apiKey);
-    var p = assertTemplateResetTarget();
-    var authorization = JSON.parse(p.getProperty("SHIFT_TEMPLATE_RESET_AUTH") || "null");
+    p = assertTemplateResetTarget();
+    authorization = JSON.parse(p.getProperty("SHIFT_TEMPLATE_RESET_AUTH") || "null");
     if (!authorization || authorization.token !== data.token ||
         authorization.operator.id !== session.employeeId || authorization.expiresAt <= Date.now() ||
         data.confirmation !== "初期化") throw new Error("確認が無効です。対象を再確認してください。");
     var apiKey = p.getProperty("NOTION_API_KEY");
-    var archived = 0;
     var remaining = 0;
     var budget = 20;
     templateResetDatabases(p).forEach(function(db) {
-      var rows = queryNotionDatabase(apiKey, p.getProperty(db.key), { page_size: Math.min(budget + 1, 100) });
+      var rows = retryTemplateResetNotion(function() {
+        return queryNotionDatabase(apiKey, p.getProperty(db.key), { page_size: Math.min(budget + 1, 100) });
+      });
       var selected = rows.slice(0, budget);
       selected.forEach(function(page) {
-        requestNotion(apiKey, "https://api.notion.com/v1/pages/" + page.id, "patch", { archived: true });
+        retryTemplateResetNotion(function() {
+          return requestNotion(apiKey, "https://api.notion.com/v1/pages/" + page.id, "patch", { archived: true });
+        });
         archived++;
       });
       budget -= selected.length;
@@ -1870,6 +1885,7 @@ function runTemplateReset(data) {
     authorization.archived = (Number(authorization.archived) || 0) + archived;
     authorization.expiresAt = Date.now() + 60 * 60 * 1000;
     p.setProperty("SHIFT_TEMPLATE_RESET_AUTH", JSON.stringify(authorization));
+    checkpointed = true;
     // 次のバッチで最終確認を行う。失敗時は同じ確認トークンで安全に再試行できる。
     if (budget === 0 || remaining > 0) {
       return createJsonDataResponse({ success: true, done: false, archived: archived });
@@ -1892,6 +1908,11 @@ function runTemplateReset(data) {
     p.deleteProperty("SHIFT_TEMPLATE_RESET_AUTH");
     return createJsonDataResponse({ success: true, done: true, archived: archived });
   } catch (error) {
+    if (p && authorization && archived > 0 && !checkpointed) {
+      authorization.archived = (Number(authorization.archived) || 0) + archived;
+      authorization.expiresAt = Date.now() + 60 * 60 * 1000;
+      p.setProperty("SHIFT_TEMPLATE_RESET_AUTH", JSON.stringify(authorization));
+    }
     return createJsonResponse(false, error.message || "初期化に失敗しました。");
   } finally { if (lock.hasLock()) lock.releaseLock(); }
 }
