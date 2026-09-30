@@ -25,6 +25,8 @@ function doPost(e) {
     if (data.action === "deleteShiftAdminNotice") return deleteShiftAdminNotice(data);
     if (data.action === "getShiftAdminNoticeVisibility") return getShiftAdminNoticeVisibility(data);
     if (data.action === "saveShiftAdminNoticeVisibility") return saveShiftAdminNoticeVisibility(data);
+    if (data.action === "getShiftWorkTimeMaster") return getShiftWorkTimeMaster(data);
+    if (data.action === "saveShiftWorkTimeMaster") return saveShiftWorkTimeMaster(data);
     if (data.action === "getShiftCycleMaster") return getShiftCycleMaster(data);
     if (data.action === "saveShiftCycleMaster") return saveShiftCycleMaster(data);
     if (data.action === "getShiftPaidLeaveBalance") return getShiftPaidLeaveBalance(data);
@@ -1874,4 +1876,49 @@ function runTemplateReset(data) {
   } catch (error) {
     return createJsonResponse(false, error.message || "初期化に失敗しました。");
   } finally { if (lock.hasLock()) lock.releaseLock(); }
+}
+
+/** Shared working-hour options for this cloned store only. */
+function defaultShiftWorkTimeMaster() {
+  return { revision: "", items: [
+    { id: "default-1", start: "09:00", end: "18:00", nextDay: false, abbreviation: "早番", visible: true },
+    { id: "default-2", start: "10:00", end: "19:00", nextDay: false, abbreviation: "遅番", visible: true },
+    { id: "default-3", start: "09:00", end: "13:00", nextDay: false, abbreviation: "午前勤務", visible: true }
+  ] };
+}
+function readShiftWorkTimeMaster() {
+  var raw = PropertiesService.getScriptProperties().getProperty("SHIFT_WORK_TIME_MASTER_" + getStoreId());
+  return raw ? JSON.parse(raw) : defaultShiftWorkTimeMaster();
+}
+function getShiftWorkTimeMaster(data) {
+  try { requireShiftSession(data.sessionToken); return createJsonDataResponse({ success: true, master: readShiftWorkTimeMaster() }); }
+  catch (error) { return createJsonResponse(false, error.message || "勤務時間設定を取得できませんでした。"); }
+}
+function saveShiftWorkTimeMaster(data) {
+  var lock = LockService.getScriptLock();
+  try {
+    requireShiftSession(data.sessionToken, "admin");
+    verifyShiftApiKey(data.shiftApiKey);
+    if (!Array.isArray(data.items) || data.items.length > 60) throw new Error("勤務時間は60件まで登録できます。");
+    var ids = {}, times = {};
+    var items = data.items.map(function(item) {
+      if (!item || !/^\d{2}:\d{2}$/.test(item.start) || !/^\d{2}:\d{2}$/.test(item.end)) throw new Error("時刻が正しくありません。");
+      var start = item.start.split(":").map(Number), end = item.end.split(":").map(Number);
+      if (start[0] > 23 || end[0] > 23 || start[1] > 59 || end[1] > 59) throw new Error("時刻が正しくありません。");
+      var duration = end[0] * 60 + end[1] + (item.nextDay === true ? 1440 : 0) - start[0] * 60 - start[1];
+      if (duration <= 0 || duration > 1440) throw new Error("開始・終了時刻と翌日設定を確認してください。");
+      var id = sanitizeText(item.id, 100).trim(), key = item.start + "～" + item.end;
+      if (!id || ids[id] || times[key]) throw new Error("勤務時間またはIDが重複しています。");
+      ids[id] = true; times[key] = true;
+      return { id: id, start: item.start, end: item.end, nextDay: item.nextDay === true, abbreviation: sanitizeText(item.abbreviation || "", 20).trim(), visible: item.visible !== false };
+    });
+    lock.waitLock(10000);
+    var before = readShiftWorkTimeMaster();
+    if (String(data.revision || "") !== String(before.revision || "")) throw new Error("他の端末で設定が更新されました。画面を開き直して変更してください。");
+    var master = { items: items, revision: Utilities.getUuid() };
+    PropertiesService.getScriptProperties().setProperty("SHIFT_WORK_TIME_MASTER_" + getStoreId(), JSON.stringify(master));
+    appendShiftAudit(data, "勤務時間設定保存", getStoreId(), before, master);
+    return createJsonDataResponse({ success: true, master: master });
+  } catch (error) { return createJsonResponse(false, error.message || "勤務時間設定を保存できませんでした。"); }
+  finally { if (lock.hasLock()) lock.releaseLock(); }
 }

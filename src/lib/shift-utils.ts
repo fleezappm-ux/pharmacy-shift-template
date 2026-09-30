@@ -126,7 +126,7 @@ export function calculateTimes(shiftInput: string): { breakTime: string; workTim
     const endMinutes = parseTime(endStr);
     
     let durationMinutes = endMinutes - startMinutes;
-    if (durationMinutes < 0) durationMinutes += 24 * 60; // 日をまたぐ場合
+    if (durationMinutes <= 0) durationMinutes += 24 * 60; // 日をまたぐ場合
 
     const breakMinutes = durationMinutes > 6 * 60 ? 60 : 0;
     const workMinutes = durationMinutes - breakMinutes;

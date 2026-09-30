@@ -84,7 +84,9 @@ import { BoardPeriod, BulletinBoard } from "./components/BulletinBoard";
 import { MyPage } from "./components/MyPage";
 import { AutoDraftSettings as AutoDraftSettingsView } from "./components/AutoDraftSettings";
 import { WorkTimeSettings } from "./components/WorkTimeSettings";
-import { readWorkTimes, saveWorkTimes } from "./lib/work-time-options";
+import { readWorkTimes, saveWorkTimes, workTimeValue, displayShift, ShiftDisplayMode } from "./lib/work-time-options";
+import { fetchWorkTimeMaster, saveWorkTimeMaster } from "./lib/work-time-sync";
+import { ShiftDisplayControl } from "./components/ShiftDisplayControl";
 import { fetchAutoDraftSettings, saveAutoDraftSettings } from "./lib/auto-draft-sync";
 
 const EMPLOYEE_MASTER_CACHE_KEY = "employee_master_cache_v1";
@@ -128,6 +130,31 @@ export default function App() {
   const openGuide = (section: EmployeeGuideSection) => { setGuideSection(section); setGuideOpen(true); };
   const [settingsPage, setSettingsPage] = useState<"menu" | "store" | "board" | "employee" | "shift" | "worktime" | "special" | "operations" | "autodraft" | "other" | "reset">("menu");
   const [workTimes, setWorkTimes] = useState(readWorkTimes);
+  const [workTimeReady, setWorkTimeReady] = useState(false);
+  const [workTimeRevision, setWorkTimeRevision] = useState("");
+  const [shiftDisplayMode, setShiftDisplayMode] = useState<ShiftDisplayMode>(() => {
+    const saved = templateStorage.getItem("shift_display_mode");
+    return saved === "both" || saved === "abbreviation" ? saved : "time";
+  });
+  const visibleWorkTimes = workTimes.filter(item => item.visible).map(workTimeValue);
+  useEffect(() => { templateStorage.setItem("shift_display_mode", shiftDisplayMode); }, [shiftDisplayMode]);
+  useEffect(() => {
+    if (!appSession?.token) { setWorkTimeReady(false); return; }
+    setWorkTimeReady(false);
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const master = await fetchWorkTimeMaster();
+        if (cancelled) return;
+        setWorkTimes(master.items); saveWorkTimes(master.items); setWorkTimeRevision(master.revision); setWorkTimeReady(true);
+      } catch (error) { if (!cancelled) { setWorkTimeReady(false); console.error("勤務時間マスタ取得", error); } }
+    };
+    void refresh();
+    const focus = () => { if (settingsPage !== "worktime") void refresh(); };
+    const timer = window.setInterval(() => { if (settingsPage !== "worktime" && document.visibilityState === "visible") void refresh(); }, 30000);
+    window.addEventListener("focus", focus);
+    return () => { cancelled = true; window.clearInterval(timer); window.removeEventListener("focus", focus); };
+  }, [appSession?.token, settingsPage]);
   const [storeMaster, setStoreMaster] = useState<StoreMaster>(() => {
     const saved = templateStorage.getItem("store_master_settings");
     if (!saved) return DEFAULT_STORE_MASTER;
@@ -203,15 +230,7 @@ export default function App() {
         console.error("Failed to parse cycle names", e);
       }
     }
-    return {
-      1: "クール1",
-      2: "クール2",
-      3: "クール3",
-      4: "クール4",
-      5: "クール5",
-      6: "クール6",
-      7: "クール7"
-    };
+    return { 1: "クール1" };
   });
   const [cycleAssignments, setCycleAssignments] = useState<Record<string, { cycleType: number; anchorDate: string }>>(() => {
     const saved = templateStorage.getItem("cycle_assignments");
@@ -1803,6 +1822,7 @@ export default function App() {
                         {dateRange.length > 0 ? `${format(dateRange[0], "yyyy年M月d日")}〜${format(dateRange[dateRange.length - 1], "M月d日")}` : "期間未設定"}
                       </div>
                       <div className="dashboard-header-actions">
+                        <ShiftDisplayControl value={shiftDisplayMode} onChange={setShiftDisplayMode} />
                         <Button variant="outline" size="sm" className="dashboard-list-toggle" onClick={() => setDashboardListView(value => !value)}><Grid3X3 className="w-3.5 h-3.5 mr-1.5" />{dashboardListView ? "通常表示" : "一覧表示"}</Button>
                         {isFromAdmin && <Button disabled={periodStatusLoading} size="sm" className={`dashboard-lock-button ${isLocked ? "is-unlock" : ""}`} onClick={toggleLock}>{isLocked ? <LockOpen className="w-3.5 h-3.5 mr-1" /> : <LockKeyhole className="w-3.5 h-3.5 mr-1" />}{periodStatusLoading ? "処理中…" : isLocked ? "確定を解除" : "シフトを確定"}</Button>}
                       </div>
@@ -1883,10 +1903,11 @@ export default function App() {
                                 {dashboardEmployees.map(emp => {
                                   const s = getShift(emp, date);
                                   const leaveRequest = leaveRequests.find(item => item.employeeName === emp.name && item.date === dateStr && (item.status === "申請中" || item.status === "承認"));
-                                  const shiftText = s?.shift === "任意入力" ? (s?.customShiftText || "任意") : (s?.shift === "休み" ? "" : (s?.shift || "-"));
+                                  const actualShiftText = s?.shift === "任意入力" ? (s?.customShiftText || "任意") : (s?.shift === "休み" ? "" : (s?.shift || "-"));
+                                  const shiftText = displayShift(actualShiftText, workTimes, shiftDisplayMode);
                                   const compactParts = shiftText.includes("～") ? shiftText.split("～") : [shiftText];
                                   return (
-                                    <TableCell key={emp.id} className={`dashboard-employee-cell py-1 px-1 border-r border-border ${leaveRequest ? "has-leave-request" : ""}`} title={leaveRequest ? `${leaveRequest.type}（${leaveRequest.status}）` : undefined}>
+                                    <TableCell key={emp.id} className={`dashboard-employee-cell py-1 px-1 border-r border-border ${leaveRequest ? "has-leave-request" : ""}`} title={`${actualShiftText}${leaveRequest ? `・${leaveRequest.type}（${leaveRequest.status}）` : ""}`}>
                                       <div className={`text-[12px] py-1.5 rounded-sm text-center font-bold leading-none ${
                                         s?.shift === "有休" 
                                           ? "bg-red-100 text-red-800 border border-red-200" 
@@ -1991,9 +2012,9 @@ export default function App() {
             ) : activeTab === "admin" && settingsPage === "employee" ? (
               <motion.div key="settings-employee" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><EmployeeMasterSettings employees={employeeMaster} roles={roles} onSave={handleSaveEmployeeMaster} /><RoleAndHomeSettings roles={roles} layout={homeLayout} onSaveRoles={handleSaveRoles} onSaveLayout={async value => setHomeLayout(await saveHomeLayout(value))} /></motion.div>
             ) : activeTab === "admin" && settingsPage === "shift" ? (
-              <motion.div key="settings-shift" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}><Card><CardHeader className="page-blue-header rounded-t-xl"><CardTitle className="admin-page-title">シフトマスタ</CardTitle><CardDescription>各マスターを選択してください</CardDescription></CardHeader><CardContent className="grid gap-3 p-6"><Button variant="outline" onClick={() => setSettingsPage("worktime")}>就業時間設定</Button><Button variant="outline" onClick={() => setSettingsPage("autodraft")}>シフト案自動作成マスタ</Button><Button variant="outline" onClick={() => setSettingsPage("operations")}>クール作成マスタ</Button><Button variant="outline" onClick={() => setSettingsPage("special")}>帯色マスタ</Button><Button variant="ghost" onClick={() => setSettingsPage("menu")}>設定へ戻る</Button></CardContent></Card></motion.div>
+              <motion.div key="settings-shift" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}><Card><CardHeader className="page-blue-header rounded-t-xl"><CardTitle className="admin-page-title">シフトマスタ</CardTitle><CardDescription>各マスターを選択してください</CardDescription></CardHeader><CardContent className="grid gap-3 p-6"><Button variant="outline" onClick={() => setSettingsPage("worktime")}>勤務時間設定</Button><Button variant="outline" onClick={() => setSettingsPage("autodraft")}>シフト案自動作成マスタ</Button><Button variant="outline" onClick={() => setSettingsPage("operations")}>クール作成マスタ</Button><Button variant="outline" onClick={() => setSettingsPage("special")}>帯色マスタ</Button><Button variant="ghost" onClick={() => setSettingsPage("menu")}>設定へ戻る</Button></CardContent></Card></motion.div>
             ) : activeTab === "admin" && settingsPage === "worktime" ? (
-              <motion.div key="settings-worktime" className="space-y-4"><Button variant="outline" onClick={() => setSettingsPage("shift")}>← シフトマスタへ戻る</Button><Card><CardHeader className="page-blue-header rounded-t-xl"><CardTitle className="admin-page-title">就業時間設定</CardTitle></CardHeader><CardContent className="p-5 sm:p-6"><WorkTimeSettings values={workTimes} onSave={values => { saveWorkTimes(values); setWorkTimes(values); toast.success("就業時間を保存しました"); }} /></CardContent></Card></motion.div>
+              <motion.div key="settings-worktime" className="space-y-4"><Button variant="outline" onClick={() => setSettingsPage("shift")}>← シフトマスタへ戻る</Button><Card><CardHeader className="page-blue-header rounded-t-xl"><CardTitle className="admin-page-title">勤務時間設定</CardTitle></CardHeader><CardContent className="p-5 sm:p-6"><WorkTimeSettings values={workTimes} ready={workTimeReady} onSave={async values => { const master = await saveWorkTimeMaster(values, workTimeRevision); saveWorkTimes(master.items); setWorkTimes(master.items); setWorkTimeRevision(master.revision); toast.success("勤務時間設定を共通保存しました"); }} /></CardContent></Card></motion.div>
             ) : activeTab === "admin" && settingsPage === "autodraft" ? (
               <motion.div key="settings-autodraft" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><Button variant="outline" size="sm" onClick={() => setSettingsPage("menu")}><ArrowLeft className="mr-1 h-4 w-4" />設定へ戻る</Button><AutoDraftSettingsView settings={autoDraftSettings} onChange={value => void updateAutoDraftSettings(value)} onStart={startAutoDraft} /></motion.div>
             ) : activeTab === "admin" && settingsPage === "special" ? (
@@ -2010,7 +2031,7 @@ export default function App() {
                             <div className="flex flex-wrap items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-sm font-black">{num}</span><strong className="min-w-0 flex-1 text-sm">{cycleNames[num]}</strong><Badge variant="outline">{length}週間</Badge><Button variant="outline" size="sm" onClick={() => setEditingCycleId(isOpen ? null : num)}>{isOpen ? "閉じる" : "編集"}</Button><Button variant="ghost" size="sm" className="text-red-600" onClick={() => deleteCycle(num)}>削除</Button></div>
                             {isOpen && <div className="mt-4 border-t pt-4">
                               <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_180px_auto]"><label><span className="mb-1 block text-xs font-bold text-slate-600">クール名</span><Input value={cycleNames[num]} onChange={event => renameCycle(num, event.target.value)} /></label><label><span className="mb-1 block text-xs font-bold text-slate-600">周期</span><select className="h-10 w-full rounded-md border bg-white px-3 text-sm" value={length} onChange={event => setCycleLengths(previous => ({ ...previous, [num]: Number(event.target.value) }))}>{[1,2,3,4].map(value => <option key={value} value={value}>{value}週間</option>)}</select></label><Button className="self-end" variant="outline" onClick={() => reapplyCycleToCurrentMonth(num)}>表示期間へ適用</Button></div>
-                              <div className="space-y-3 overflow-x-auto">{Array.from({ length }, (_, weekIndex) => { const weekKey = `week${weekIndex + 1}` as "week1" | "week2" | "week3" | "week4"; return <div key={weekKey} className="min-w-[760px]"><strong className="mb-2 block text-xs text-blue-700">第{weekIndex + 1}週</strong><div className="grid grid-cols-7 gap-2">{["日", "月", "火", "水", "木", "金", "土"].map((label, dayIdx) => <label key={label} className="text-center"><span className="mb-1 block text-[10px] font-bold text-slate-500">{label}</span><select className="h-10 w-full rounded-lg border bg-white px-2 text-xs" value={cyclePatterns[num]?.[dayIdx]?.[weekKey] || ""} onChange={event => setCyclePatterns(previous => { const pattern = [...previous[num]]; pattern[dayIdx] = { ...pattern[dayIdx], [weekKey]: event.target.value as ShiftType }; return { ...previous, [num]: pattern }; })}><option value="">なし</option>{[...new Set([...workTimes, cyclePatterns[num]?.[dayIdx]?.[weekKey], "有休", "休み"])].filter(Boolean).map(option => <option key={option} value={option}>{option}</option>)}</select></label>)}</div></div>; })}</div>
+                              <div className="space-y-3 overflow-x-auto">{Array.from({ length }, (_, weekIndex) => { const weekKey = `week${weekIndex + 1}` as "week1" | "week2" | "week3" | "week4"; return <div key={weekKey} className="min-w-[760px]"><strong className="mb-2 block text-xs text-blue-700">第{weekIndex + 1}週</strong><div className="grid grid-cols-7 gap-2">{["日", "月", "火", "水", "木", "金", "土"].map((label, dayIdx) => <label key={label} className="text-center"><span className="mb-1 block text-[10px] font-bold text-slate-500">{label}</span><select className="h-10 w-full rounded-lg border bg-white px-2 text-xs" value={cyclePatterns[num]?.[dayIdx]?.[weekKey] || ""} onChange={event => setCyclePatterns(previous => { const pattern = [...previous[num]]; pattern[dayIdx] = { ...pattern[dayIdx], [weekKey]: event.target.value as ShiftType }; return { ...previous, [num]: pattern }; })}><option value="">なし</option>{[...new Set([...visibleWorkTimes, cyclePatterns[num]?.[dayIdx]?.[weekKey], "有休", "休み"])].filter(Boolean).map(option => <option key={option} value={option}>{displayShift(option, workTimes, "both")}</option>)}</select></label>)}</div></div>; })}</div>
                             </div>}
                           </div>;
                         })}</div>
@@ -2128,6 +2149,7 @@ export default function App() {
                         </div>
                         <div className="employee-blue-controls"><div className="employee-month-step"><Button variant="outline" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, -1))}><ChevronLeft className="h-4 w-4" />前の期間</Button><strong>{format(dateRange[0], "M月d日")}〜{format(dateRange[dateRange.length - 1], "M月d日")}</strong><Button variant="outline" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, 1))}>次の期間<ChevronRight className="h-4 w-4" /></Button></div></div></CardHeader>
                       <CardContent className="p-0">
+                        <div className="personal-display-toolbar"><ShiftDisplayControl value={shiftDisplayMode} onChange={setShiftDisplayMode} /></div>
                         {isFromAdmin && (
                           <div className="mobile-employee-picker">
                             <span>編集する人</span>
@@ -2148,7 +2170,7 @@ export default function App() {
                           </div>
                         )}
                         {!isFromAdmin ? <div className="personal-overview-layout">
-                          <PersonalShiftList employee={emp} dates={dateRange} remarks={displayRemarks} />
+                          <PersonalShiftList employee={emp} dates={dateRange} remarks={displayRemarks} workTimes={workTimes} displayMode={shiftDisplayMode} />
                           <aside className="personal-summary-panel">
                             <div><span>出勤日数</span><strong>{attendanceDays}<small>日</small></strong></div>
                             <div><span>合計実働時間</span><strong>{totalWorkHours}<small>時間</small></strong></div>
@@ -2184,12 +2206,12 @@ export default function App() {
                                             disabled={isLocked}
                                           >
                                             <SelectTrigger className={`h-8 text-xs flex-1 ${s?.shift === "有休" ? "bg-red-100 border-red-300 text-red-800" : "bg-white"} ${isLocked ? "opacity-70 cursor-not-allowed" : ""}`}>
-                                              <SelectValue placeholder="選択" />
+                                              <SelectValue placeholder="選択">{s?.shift ? displayShift(s.shift, workTimes, shiftDisplayMode) : "なし"}</SelectValue>
                                             </SelectTrigger>
                                             <SelectContent className="bg-white border-border shadow-xl z-50">
                                               <SelectItem value="none" className="text-xs text-muted-foreground italic">なし</SelectItem>
-                                              {[...new Set([...workTimes, ...(s?.shift && !["有休", "休み", "任意入力"].includes(s.shift) ? [s.shift] : []), "有休", "休み", "任意入力"])].map(opt => (
-                                                <SelectItem key={opt} value={opt} className="text-xs">{opt}</SelectItem>
+                                              {[...new Set([...visibleWorkTimes, "有休", "休み", "任意入力"])].map(opt => (
+                                                <SelectItem key={opt} value={opt} className="text-xs">{displayShift(opt, workTimes, shiftDisplayMode)}</SelectItem>
                                               ))}
                                             </SelectContent>
                                           </Select>
