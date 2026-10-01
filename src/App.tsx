@@ -258,7 +258,9 @@ export default function App() {
   });
   const [editingCycleId, setEditingCycleId] = useState<number | null>(null);
   const [cycleSaving, setCycleSaving] = useState(false);
-  const [syncState, setSyncState] = useState<"loading" | "saved" | "dirty" | "saving" | "offline">("loading");
+  const [syncState, setSyncState] = useState<"loading" | "saved" | "dirty" | "saving" | "offline" | "read-error">("loading");
+  const [initialReadError, setInitialReadError] = useState("");
+  const [readRetry, setReadRetry] = useState(0);
   const [saveElapsedSeconds, setSaveElapsedSeconds] = useState(0);
   const [saveFeedback, setSaveFeedback] = useState<{
     kind: "saving" | "success" | "error";
@@ -510,10 +512,12 @@ export default function App() {
   useEffect(() => {
     if (!appSession?.token) return;
     let cancelled = false;
+    setSyncState("loading");
+    setInitialReadError("");
     (async () => {
       try {
         // Both reads are independent. Cached master keeps the UI available while they refresh.
-        const [merged, master] = await Promise.all([fetchShiftsFromServer(employees), fetchEmployeeMaster()]);
+        const [merged, master] = await Promise.all([fetchShiftsFromServer(employees, true), fetchEmployeeMaster()]);
         if (cancelled) return;
         templateStorage.setItem(EMPLOYEE_MASTER_CACHE_KEY, JSON.stringify(master));
         setEmployeeMaster(master);
@@ -533,13 +537,14 @@ export default function App() {
           }
         }
         syncReadyRef.current = true;
-        setSyncState(merged ? "saved" : "offline");
+        setSyncState(merged ? "saved" : "read-error");
         setInitialSyncComplete(true);
       } catch (error) {
         console.error("初期同期に失敗しました", error);
         if (!cancelled) {
           syncReadyRef.current = true;
-          setSyncState("offline");
+          setSyncState("read-error");
+          setInitialReadError(error instanceof Error ? error.message : "サーバーとの通信を確認してください。");
           setInitialSyncComplete(true);
         }
       }
@@ -547,7 +552,7 @@ export default function App() {
     return () => { cancelled = true; };
     // ログイン後に共有データと従業員マスターを取得し、端末内の古い役職情報を上書きします。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appSession?.token]);
+  }, [appSession?.token, readRetry]);
 
   // 編集内容を端末内へ保存し、管理者の変更は短い待機後に共有保存します。
   useEffect(() => {
@@ -980,7 +985,7 @@ export default function App() {
     const revision = editRevisionRef.current;
     const snapshot = { employees, globalRemarks, start: getDateStr(dateRange[0]), end: getDateStr(dateRange[dateRange.length - 1]), editor: appSession?.employeeName || "シフト編集者" };
     const task = saveQueueRef.current.catch(() => {}).then(async () => {
-      if (savedRevisionRef.current >= revision) return;
+      if (savedRevisionRef.current >= revision) { toast.info("保存する変更はありません"); return; }
       setSyncState("saving");
       try {
         await saveMonthToServer(snapshot.employees, snapshot.globalRemarks, snapshot.start, snapshot.end, snapshot.editor);
@@ -1764,7 +1769,7 @@ export default function App() {
           {appSession.role === "admin" && <>
           <div className="sync-indicator flex items-center gap-2 text-xs">
             <span className={`sync-dot ${syncState}`} />
-            {syncState === "loading" ? "Notionを読込中" : syncState === "saving" ? "自動保存中" : syncState === "dirty" ? "自動保存待ち" : syncState === "offline" ? "保存失敗（端末内に保存済み）" : "Notionに保存済み"}
+            {syncState === "loading" ? "Notionを読込中" : syncState === "saving" ? "自動保存中" : syncState === "dirty" ? "自動保存待ち" : syncState === "read-error" ? "共有データの読込失敗" : syncState === "offline" ? "保存失敗（端末内に保存済み）" : "Notionに保存済み"}
           </div></>}
         </div>
       </aside>
@@ -1924,8 +1929,8 @@ export default function App() {
                     </div>}
                     {isFromAdmin && <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-amber-50 px-3 py-2 text-xs">
                       <span>{isLocked ? "確定済みです。編集するには確定を解除してください。" : overviewEditing ? "勤務セルをクリック・タップして変更。名前を押すと個人編集へ。" : "全体表を編集するには「編集」を選んでください。名前を押すと個人編集へ。"}</span>
-                      <div className="flex items-center gap-2" role="status"><strong className={syncState === "offline" || syncState === "dirty" ? "text-red-700" : "text-slate-600"}>{syncState === "saving" ? "保存中…" : syncState === "dirty" ? "未保存の変更があります（自動保存待ち）" : syncState === "offline" ? "保存できていません。再度保存してください。" : syncState === "loading" ? "読込中…" : "保存済み"}</strong>
-                        {!isLocked && <Button size="sm" disabled={syncState === "saving" || syncState === "loading" || periodStatusLoading} onClick={() => { void saveCurrentMonth().catch(() => {}); }}>保存する</Button>}
+                      <div className="flex items-center gap-2" role="status"><strong className={syncState === "read-error" || syncState === "offline" || syncState === "dirty" ? "text-red-700" : "text-slate-600"}>{syncState === "read-error" ? `共有データを読み込めませんでした。${initialReadError}` : syncState === "saving" ? "保存中…" : syncState === "dirty" ? "未保存の変更があります（自動保存待ち）" : syncState === "offline" ? "保存できていません。再度保存してください。" : syncState === "loading" ? "読込中…" : "保存済み"}</strong>
+                        {syncState === "read-error" ? <Button size="sm" onClick={() => setReadRetry(value => value + 1)}>再読み込み</Button> : !isLocked && <Button size="sm" disabled={syncState === "saving" || syncState === "loading" || periodStatusLoading} onClick={() => { void saveCurrentMonth().catch(() => {}); }}>保存する</Button>}
                       </div>
                     </div>}
                     <dialog ref={overviewDialogRef} aria-labelledby="overview-edit-title" onCancel={() => setOverviewCell(null)} onClose={() => setOverviewCell(null)} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-md max-h-[85dvh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 text-slate-900 shadow-2xl backdrop:bg-black/50">
