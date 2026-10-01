@@ -99,7 +99,7 @@ function buildShiftContent(shift: ShiftType, customShiftText?: string): string {
  * サーバー（Notionのシフト管理DB）から全件取得し、Employee[] の形に組み立てます。
  * 取得できない場合（オフライン・未設定など）は null を返します（呼び出し側でlocalStorageにフォールバック）。
  */
-export async function fetchShiftsFromServer(existingEmployees: Employee[]): Promise<ShiftFetchResult | null> {
+export async function fetchShiftsFromServer(existingEmployees: Employee[], throwOnError = false): Promise<ShiftFetchResult | null> {
   try {
     // 閲覧はログイン済みの全端末で利用でき、保存系は接続キーも必須です。
     const json = await callGas("getShifts", {}, false);
@@ -171,6 +171,7 @@ export async function fetchShiftsFromServer(existingEmployees: Employee[]): Prom
     return { employees: Array.from(byName.values()), globalRemarks: Array.from(remarksByDate.values()), supportsGlobalRemarks };
   } catch (error) {
     console.error("シフトのサーバー取得に失敗しました（オフラインの可能性）:", error);
+    if (throwOnError) throw error;
     return null;
   }
 }
