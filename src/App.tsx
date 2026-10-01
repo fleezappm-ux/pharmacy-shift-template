@@ -278,6 +278,11 @@ export default function App() {
   const [managementApiKey, setManagementApiKey] = useState(() => getManagementApiKey());
   const [dashboardListView, setDashboardListView] = useState(false);
   const [showLeaveManager, setShowLeaveManager] = useState(false);
+  const [overviewEditing, setOverviewEditing] = useState(false);
+  const [overviewCell, setOverviewCell] = useState<{ employeeId: string; date: string } | null>(null);
+  const [overviewShift, setOverviewShift] = useState("none");
+  const [overviewCustom, setOverviewCustom] = useState("");
+  const overviewDialogRef = useRef<HTMLDialogElement>(null);
   const [periodStatusLoading, setPeriodStatusLoading] = useState(false);
   const [paidLeaveBalance, setPaidLeaveBalance] = useState<PaidLeaveBalance | null>(null);
   const [autoDraftSettings, setAutoDraftSettings] = useState<AutoDraftSettings>(() => {
@@ -996,6 +1001,40 @@ export default function App() {
     const timer = window.setTimeout(() => { void saveCurrentMonth().catch(() => {}); }, 1800);
     return () => window.clearTimeout(timer);
   }, [employees, globalRemarks, currentMonthKey, syncState, initialSyncComplete, isLocked, appSession?.role]);
+
+  useEffect(() => {
+    setOverviewEditing(false);
+    setOverviewCell(null);
+  }, [activeTab, currentMonthKey, isFromAdmin, isLocked]);
+
+  useEffect(() => {
+    const dialog = overviewDialogRef.current;
+    if (overviewCell && dialog && !dialog.open) dialog.showModal();
+    if (!overviewCell && dialog?.open) dialog.close();
+  }, [overviewCell]);
+
+  const openOverviewCell = (employee: Employee, date: string) => {
+    if (!overviewEditing || !isFromAdmin || appSession?.role !== "admin" || isLocked || periodStatusLoading) return;
+    const shift = employee.shifts.find(item => item.date === date);
+    setOverviewShift(shift?.shift || "none");
+    setOverviewCustom(shift?.customShiftText || "");
+    setOverviewCell({ employeeId: employee.id, date });
+  };
+
+  const applyOverviewCell = () => {
+    if (!overviewCell || !overviewEditing || !isFromAdmin || appSession?.role !== "admin" || isLocked || periodStatusLoading) return;
+    const value = overviewShift === "none" ? "" : overviewShift;
+    const custom = finalizeShiftText(overviewCustom);
+    if (value === "任意入力" && !custom) { toast.error("勤務時間を入力してください"); return; }
+    const times = calculateTimes(value === "任意入力" ? custom : value);
+    setEmployees(previous => previous.map(employee => {
+      if (employee.id !== overviewCell.employeeId) return employee;
+      const existing = employee.shifts.find(item => item.date === overviewCell.date);
+      const updated: DayShift = { ...existing, date: overviewCell.date, shift: value, customShiftText: value === "任意入力" ? custom : existing?.customShiftText, ...times, comment: existing?.comment || "" };
+      return { ...employee, shifts: existing ? employee.shifts.map(item => item.date === updated.date ? updated : item) : [...employee.shifts, updated] };
+    }));
+    setOverviewCell(null);
+  };
 
   const handleShiftChange = (employeeId: string, date: string, shift: ShiftType | "none") => {
     if (isLocked) {
@@ -1832,6 +1871,10 @@ export default function App() {
                         {dateRange.length > 0 ? `${format(dateRange[0], "yyyy年M月d日")}〜${format(dateRange[dateRange.length - 1], "M月d日")}` : "期間未設定"}
                       </div>
                       <div className="dashboard-header-actions">
+                        {isFromAdmin && appSession.role === "admin" && <div className="flex rounded-lg bg-white p-1 text-slate-800" role="group" aria-label="全体表の操作モード">
+                          <button type="button" aria-pressed={!overviewEditing} className={`rounded-md px-3 py-1.5 text-xs font-bold ${!overviewEditing ? "bg-slate-200" : ""}`} onClick={() => setOverviewEditing(false)}>閲覧</button>
+                          <button type="button" aria-pressed={overviewEditing} disabled={isLocked || periodStatusLoading} className={`rounded-md px-3 py-1.5 text-xs font-bold disabled:opacity-40 ${overviewEditing ? "bg-amber-500 text-white" : ""}`} onClick={() => setOverviewEditing(true)}>編集</button>
+                        </div>}
                         <ShiftDisplayControl value={shiftDisplayMode} onChange={setShiftDisplayMode} />
                         <Button variant="outline" size="sm" className="dashboard-list-toggle" onClick={() => setDashboardListView(value => !value)}><Grid3X3 className="w-3.5 h-3.5 mr-1.5" />{dashboardListView ? "通常表示" : "一覧表示"}</Button>
                         {isFromAdmin && <Button disabled={periodStatusLoading} size="sm" className={`dashboard-lock-button ${isLocked ? "is-unlock" : ""}`} onClick={toggleLock}>{isLocked ? <LockOpen className="w-3.5 h-3.5 mr-1" /> : <LockKeyhole className="w-3.5 h-3.5 mr-1" />}{periodStatusLoading ? "処理中…" : isLocked ? "確定を解除" : "シフトを確定"}</Button>}
@@ -1879,6 +1922,24 @@ export default function App() {
                         {dashboardEmployees.map(employee => <option key={employee.id} value={employee.id}>{employee.displayName || employee.name}</option>)}
                       </select>
                     </div>}
+                    {isFromAdmin && <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-amber-50 px-3 py-2 text-xs">
+                      <span>{isLocked ? "確定済みです。編集するには確定を解除してください。" : overviewEditing ? "勤務セルをクリック・タップして変更。名前を押すと個人編集へ。" : "全体表を編集するには「編集」を選んでください。名前を押すと個人編集へ。"}</span>
+                      <div className="flex items-center gap-2" role="status"><strong className={syncState === "offline" || syncState === "dirty" ? "text-red-700" : "text-slate-600"}>{syncState === "saving" ? "保存中…" : syncState === "dirty" ? "未保存の変更があります（自動保存待ち）" : syncState === "offline" ? "保存できていません。再度保存してください。" : syncState === "loading" ? "読込中…" : "保存済み"}</strong>
+                        {!isLocked && <Button size="sm" disabled={syncState === "saving" || syncState === "loading" || periodStatusLoading} onClick={() => { void saveCurrentMonth().catch(() => {}); }}>保存する</Button>}
+                      </div>
+                    </div>}
+                    <dialog ref={overviewDialogRef} aria-labelledby="overview-edit-title" onCancel={() => setOverviewCell(null)} onClose={() => setOverviewCell(null)} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-md max-h-[85dvh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 text-slate-900 shadow-2xl backdrop:bg-black/50">
+                      {overviewCell && <form onSubmit={event => { event.preventDefault(); applyOverviewCell(); }} className="space-y-4">
+                        <h2 id="overview-edit-title" className="text-lg font-bold">{employees.find(item => item.id === overviewCell.employeeId)?.displayName || employees.find(item => item.id === overviewCell.employeeId)?.name}・{overviewCell.date.slice(5).replace("-", "/")}の勤務</h2>
+                        <label className="block text-sm font-bold">勤務<select autoFocus className="mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3" value={overviewShift} onChange={event => setOverviewShift(event.target.value)}>
+                          <option value="none">なし</option>
+                          {[...new Set([...visibleWorkTimes, "有休", "休み", "任意入力", ...(overviewShift !== "none" ? [overviewShift] : [])])].map(value => <option key={value} value={value}>{displayShift(value, workTimes, "both")}</option>)}
+                        </select></label>
+                        {overviewShift === "任意入力" && <label className="block text-sm font-bold">勤務時間<Input className="mt-2" placeholder="例：9:00～17:00" value={overviewCustom} onChange={event => setOverviewCustom(event.target.value)} /></label>}
+                        <p className="text-xs text-slate-500">変更後は自動保存され、個人シフトにも反映されます。</p>
+                        <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setOverviewCell(null)}>キャンセル</Button><Button type="submit" disabled={isLocked || periodStatusLoading}>変更する</Button></div>
+                      </form>}
+                    </dialog>
                     {isFromAdmin && showLeaveManager && <LeaveRequestManager requests={leaveRequests} loading={leaveRequestLoading} onStatusChange={handleLeaveRequestStatus} onDelete={handleLeaveRequestDelete} />}
                     <div className="dashboard-table-wrap overflow-x-auto">
                       <Table className="dashboard-table text-[13px]">
@@ -1918,7 +1979,7 @@ export default function App() {
                                   const compactParts = shiftText.includes("～") ? shiftText.split("～") : [shiftText];
                                   return (
                                     <TableCell key={emp.id} className={`dashboard-employee-cell py-1 px-1 border-r border-border ${leaveRequest ? "has-leave-request" : ""}`} title={`${actualShiftText}${leaveRequest ? `・${leaveRequest.type}（${leaveRequest.status}）` : ""}`}>
-                                      <div className={`text-[12px] py-1.5 rounded-sm text-center font-bold leading-none ${
+                                      <button type="button" disabled={!isFromAdmin || !overviewEditing || isLocked || periodStatusLoading || appSession.role !== "admin"} onClick={() => openOverviewCell(emp, dateStr)} aria-label={`${emp.displayName || emp.name} ${format(date, "M月d日")} ${actualShiftText || (s?.shift === "休み" ? "休み" : "なし")}の勤務を変更`} className={`w-full min-h-9 text-[12px] py-1.5 rounded-sm disabled:cursor-default enabled:cursor-pointer enabled:ring-1 enabled:ring-amber-500 enabled:bg-amber-50 enabled:hover:bg-amber-100 enabled:focus-visible:outline-2 enabled:focus-visible:outline-amber-600 text-center font-bold leading-none ${
                                         s?.shift === "有休" 
                                           ? "bg-red-100 text-red-800 border border-red-200" 
                                           : s?.shift === "休み"
@@ -1932,7 +1993,7 @@ export default function App() {
                                         <span className="dashboard-shift-full">{shiftText}</span>
                                         <span className="dashboard-shift-compact">{compactParts[0]}{compactParts[1] && <><br />{compactParts[1]}</>}</span>
                                         {leaveRequest && <small className="leave-request-marker">{leaveRequest.type}</small>}
-                                      </div>
+                                      </button>
                                     </TableCell>
                                   );
                                 })}
