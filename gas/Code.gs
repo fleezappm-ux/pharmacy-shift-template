@@ -696,6 +696,8 @@ function getShiftLoginEmployees() {
 
 function normalizeShiftEmployeeMaster(items) {
   var roles = readShiftRoleMaster();
+  // 【重要メモ】従業員は最大50人まで。さらに従業員マスターは1つのScript Property（上限9KB）に保存しており、
+  // 約45人前後で容量上限に近づく恐れがある。大規模店舗へ広げる際は分割保存か別保存先へ移行すること。
   return (Array.isArray(items) ? items : []).slice(0, 50).map(function(item, index) {
     var selected = roles.filter(function(role) { return role.id === item.roleId || role.name === item.role; })[0];
     return {
@@ -1497,6 +1499,14 @@ function saveShiftMonth(data) {
   try {
     verifyShiftApiKey(data.shiftApiKey);
     if (!lock.tryLock(30000)) throw new Error("別の保存処理を実行中です。少し待ってから再度お試しください。");
+
+    // 確定済みの期間はサーバー側でも保存を拒否します（画面の制限をすり抜けた場合の保険）。
+    var lockPeriodStart = sanitizeDateValue(data.periodStart);
+    if (lockPeriodStart) {
+      var lockStatuses = {};
+      try { lockStatuses = JSON.parse(PropertiesService.getScriptProperties().getProperty("SHIFT_PERIOD_STATUSES_JSON") || "{}"); } catch (_) { lockStatuses = {}; }
+      if (lockStatuses[lockPeriodStart] && lockStatuses[lockPeriodStart].locked) throw new Error("この期間は確定済みのため保存できません。先に「確定を解除」してください。");
+    }
 
     var settings = getShiftManagementSettings();
     var updatedBy = sanitizeText(data.updatedBy, 100).trim();
