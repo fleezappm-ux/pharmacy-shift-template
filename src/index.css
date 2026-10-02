@@ -549,3 +549,22 @@ body { margin:0; background:#f5f7fa; }
   .creation-lock-button{padding:0 8px!important;font-size:11px!important;gap:3px!important}
   .creation-lock-button svg{width:14px;height:14px}
 }
+
+/* Keep creation actions in a separate right column. */
+.creation-card .dashboard-blue-brand{grid-column:1/-1;grid-row:1}
+.creation-card .dashboard-header-actions{display:contents}
+.creation-card .dashboard-header-actions>[role="group"]{grid-column:1;grid-row:2;justify-self:start;align-self:start}
+.creation-right-controls{grid-column:2;grid-row:2/4;display:flex;flex-direction:column;align-items:flex-end;gap:10px;min-width:0}
+.creation-right-controls .creation-lock-button{position:static!important;margin:0!important}
+.creation-card .creation-person-status{grid-column:1;grid-row:3;margin:0;align-self:start}
+.creation-card .creation-person-status select{width:100%;max-width:300px}
+.creation-card .dashboard-list-toggle{grid-column:2;grid-row:4;justify-self:end}
+.creation-card .dashboard-leave-summary{justify-content:flex-start;margin:12px 0 0;width:fit-content;max-width:100%;text-align:left}
+.home-brand-header .home-brand-cluster{z-index:10}
+.home-brand-header::after{pointer-events:none}
+@media(max-width:900px){
+ .creation-card .dashboard-blue-top{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 10px}
+ .creation-right-controls .shift-display-control{flex-direction:column;align-items:flex-end;gap:4px}
+ .creation-right-controls .shift-display-control select{max-width:100%;width:128px}
+ .creation-card .dashboard-leave-summary{font-size:11px;padding:6px 8px}
+}
