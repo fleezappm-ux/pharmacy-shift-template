@@ -51,7 +51,7 @@ export function MyPage({ employee, requests, locked, initialBalance, onSaveBalan
   </div>;
 
   return <div className="space-y-4 pb-6">
-    <section className="rounded-2xl border bg-white p-5"><div className="mypage-profile-line"><div className="flex items-center gap-3"><UserRound className="h-9 w-9 text-blue-600" /><div><h1 className="text-xl font-black">{employee.displayName || employee.name}</h1><p className="text-sm text-slate-500">{employee.role || "事務員"}</p></div></div>{balance.enabled && <span className="mypage-balance-badge">有休残 {balance.remainingDays}日</span>}</div></section>
+    <section className="rounded-2xl border bg-white p-5"><div className="mypage-profile-line"><div className="flex items-center gap-3"><UserRound className="h-9 w-9 text-blue-600" /><div><h1 className="text-xl font-black">{employee.displayName || employee.name}</h1><p className="text-sm text-slate-500">{employee.role || "役職未設定"}</p></div></div>{balance.enabled && <span className="mypage-balance-badge">有休残 {balance.remainingDays}日</span>}</div></section>
     <button type="button" className="w-full rounded-2xl border bg-white p-5 text-left" onClick={() => setShowLeaveSettings(true)}><div className="flex items-center justify-between"><div><strong>有休詳細・設定</strong><p className="mt-1 text-xs text-slate-500">残数・更新日・付与日数を設定</p></div><ChevronRight className="h-5 w-5 text-slate-400" /></div></button>
     <section className="rounded-2xl border bg-white p-5">
       <h2 className="flex items-center gap-2 font-black"><CalendarCheck2 className="h-5 w-5 text-blue-600" />有給・休み希望詳細</h2>

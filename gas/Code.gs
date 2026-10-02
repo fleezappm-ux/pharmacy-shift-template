@@ -392,24 +392,26 @@ function shiftBoardVisibilityLabelToValue(label) {
 
 
 /** 休み希望の掲示板公開設定を店舗設定DBから取得します。DB未設定時は安全側でimmediateを返します。 */
+/** 休み希望の公開設定を読み取って値（immediate / after_approval / private）を返す共通処理。 */
+function readShiftBoardVisibilityValue() {
+  var p = PropertiesService.getScriptProperties();
+  var apiKey = p.getProperty("NOTION_API_KEY");
+  var storeDbId = p.getProperty("NOTION_STORE_DATABASE_ID");
+  var fallback = p.getProperty("SHIFT_BOARD_VISIBILITY_FALLBACK_" + getStoreId()) || "immediate";
+  if (!apiKey || !storeDbId) return fallback;
+  var rows = queryNotionDatabase(apiKey, storeDbId, {
+    filter: { property: "店舗ID", rich_text: { equals: getStoreId() } },
+    page_size: 1
+  });
+  if (!rows.length) return fallback;
+  var obj = statusPageToObject(rows[0]);
+  var label = obj["休み希望公開設定"] || "";
+  return label ? shiftBoardVisibilityLabelToValue(label) : fallback;
+}
+
 function getShiftStoreBoardVisibility(data) {
   try {
-    var p = PropertiesService.getScriptProperties();
-    var apiKey = p.getProperty("NOTION_API_KEY");
-    var storeDbId = p.getProperty("NOTION_STORE_DATABASE_ID");
-    var fallback = p.getProperty("SHIFT_BOARD_VISIBILITY_FALLBACK_" + getStoreId()) || "immediate";
-    if (!apiKey || !storeDbId) {
-      return createJsonDataResponse({ success: true, visibility: fallback });
-    }
-    var rows = queryNotionDatabase(apiKey, storeDbId, {
-      filter: { property: "店舗ID", rich_text: { equals: getStoreId() } },
-      page_size: 1
-    });
-    if (!rows.length) return createJsonDataResponse({ success: true, visibility: fallback });
-    var obj = statusPageToObject(rows[0]);
-    var label = obj["休み希望公開設定"] || "";
-    var visibility = label ? shiftBoardVisibilityLabelToValue(label) : fallback;
-    return createJsonDataResponse({ success: true, visibility: visibility });
+    return createJsonDataResponse({ success: true, visibility: readShiftBoardVisibilityValue() });
   } catch (error) {
     console.error("getShiftStoreBoardVisibility failed: " + error);
     return createJsonDataResponse({ success: true, visibility: "immediate" });
@@ -1169,9 +1171,15 @@ function getShiftLeaveRequests(data) {
     var viewer = requireShiftSession(data.sessionToken);
     if (viewer.role !== "admin") {
       var correctionVisibility = PropertiesService.getScriptProperties().getProperty("SHIFT_CORRECTION_VISIBILITY_" + getStoreId()) || "all";
+      var boardVisibility = "immediate";
+      try { boardVisibility = readShiftBoardVisibilityValue(); } catch (visibilityError) { console.error(visibilityError); }
       requests = requests.filter(function(item) {
         var own = viewer.employeeId && item.employeeId === viewer.employeeId;
-        return own || item.type !== "訂正依頼" || correctionVisibility === "all";
+        if (own) return true;
+        if (item.type === "訂正依頼") return correctionVisibility === "all";
+        if (boardVisibility === "private") return false;
+        if (boardVisibility === "after_approval") return item.status === "承認";
+        return true;
       }).map(function(item) {
         if (viewer.employeeId && item.employeeId === viewer.employeeId) return item;
         var visible = Object.assign({}, item);
@@ -1753,33 +1761,6 @@ function initializeShiftOperator() {
   Logger.log("初期操作員を登録しました: " + name + " (" + id + ")");
 }
 
-
-/** 複製環境に混入した本番従業員を無効化する一度限りの復旧処理。 */
-function deactivateImportedTemplateEmployees() {
-  var p = PropertiesService.getScriptProperties();
-  if (p.getProperty("NOTION_SHIFT_DATABASE_ID") !== "665ef4863f6040e9b542586083764148" ||
-      p.getProperty("NOTION_SHIFT_REQUEST_DATABASE_ID") !== "a4d434ce8dbc4e9d860167971c631738" ||
-      p.getProperty("NOTION_STORE_DATABASE_ID") !== "23de2613332d4ef3b809d21006cec516") {
-    throw new Error("複製用Notion DBの設定が一致しません。何も変更していません。");
-  }
-  var raw = p.getProperty("SHIFT_EMPLOYEE_MASTER_JSON");
-  if (!raw) throw new Error("従業員マスターが空です。何も変更していません。");
-  var master = normalizeShiftEmployeeMaster(JSON.parse(raw));
-  var importedNames = ["降旗", "藤川", "金井", "本道", "児玉"];
-  var active = master.filter(function(item) { return item.active; });
-  var keep = active.filter(function(item) { return item.name === "tesuto"; });
-  if (keep.length !== 1 || active.some(function(item) {
-    return item.id !== keep[0].id && importedNames.indexOf(item.name) < 0;
-  })) {
-    throw new Error("想定外の従業員がいます。何も変更していません。");
-  }
-  var backupKey = "SHIFT_EMPLOYEE_MASTER_BACKUP_20260927";
-  if (p.getProperty(backupKey)) throw new Error("バックアップが既にあります。再実行せず確認してください。");
-  p.setProperty(backupKey, raw);
-  master.forEach(function(item) { if (item.id !== keep[0].id) item.active = false; });
-  p.setProperty("SHIFT_EMPLOYEE_MASTER_JSON", JSON.stringify(master));
-  Logger.log("複製用従業員マスターを復旧しました。操作員1名を残し、" + (active.length - 1) + "名を無効化しました。");
-}
 
 /** GAS管理者が許可した3DB以外に向いたGASでは初期化を一切受け付けない。 */
 function assertTemplateResetTarget() {

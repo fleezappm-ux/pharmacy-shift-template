@@ -812,7 +812,7 @@ export default function App() {
       setHomeBoardRequests(prev => prev.map(item => item.id === saved.id ? saved : item));
       if (status === "承認" && request.status !== "承認" && request.date) {
         const shift: ShiftType | null = request.type === "有給希望" ? "有休" : request.type === "休み希望" ? "休み" : null;
-        if (shift) handleShiftChange(employees.find(item => item.name === request.employeeName)?.id || "", request.date, shift);
+        if (shift) handleShiftChange((request.employeeId ? employees.find(item => item.id === request.employeeId) : employees.find(item => (item.displayName || item.name) === request.employeeName || item.name === request.employeeName))?.id || "", request.date, shift);
       }
       toast.success(status === "申請中" ? "申請中に戻しました" : status === "承認" ? "承認しました" : "却下しました");
     } catch (error) {
@@ -2006,7 +2006,7 @@ export default function App() {
                                 <TableCell className="dashboard-day-col py-2 text-muted-foreground border-r border-border">{format(date, "E", { locale: ja })}</TableCell>
                                 {dashboardEmployees.map(emp => {
                                   const s = getShift(emp, date);
-                                  const leaveRequest = leaveRequests.find(item => item.employeeName === emp.name && item.date === dateStr && (item.status === "申請中" || item.status === "承認"));
+                                  const leaveRequest = leaveRequests.find(item => (item.employeeId ? item.employeeId === emp.id : item.employeeName === (emp.displayName || emp.name) || item.employeeName === emp.name) && item.date === dateStr && (item.status === "申請中" || item.status === "承認"));
                                   const actualShiftText = s?.shift === "任意入力" ? (s?.customShiftText || "任意") : (s?.shift === "休み" ? "" : (s?.shift || "-"));
                                   const shiftText = displayShift(actualShiftText, workTimes, shiftDisplayMode);
                                   const compactParts = shiftText.includes("～") ? shiftText.split("～") : [shiftText];
