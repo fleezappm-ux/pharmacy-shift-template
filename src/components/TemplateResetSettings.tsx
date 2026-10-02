@@ -27,7 +27,7 @@ async function resetRequest(action: string, payload: Record<string, unknown>) {
   const session = getShiftSession();
   if (session?.role !== "admin") throw new Error("管理者としてログインしてください。");
   const apiKey = getManagementApiKey();
-  if (!apiKey) throw new Error("店舗マスターでGAS接続キーを設定してください。");
+  if (!apiKey) throw new Error("その他設定でGAS接続キーを設定してください。");
   const response = await fetch(getGasUrl(), {
     method: "POST",
     headers: { "Content-Type": "text/plain" },
