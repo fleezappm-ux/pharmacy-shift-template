@@ -510,3 +510,42 @@ body { margin:0; background:#f5f7fa; }
 
 /* Center the remarks heading in the shared overview/shift creation table. */
 .dashboard-table th.dashboard-remarks-col{text-align:center!important;vertical-align:middle}
+
+/* Shared creation selector and automatic save status; compact mobile header. */
+.creation-person-status{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}
+.creation-person-status select{width:min(55%,300px);height:40px;min-width:0;padding:0 12px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;color:#172033;font-size:14px;font-weight:800}
+.creation-save-status{display:inline-flex;align-items:center;justify-content:flex-end;gap:7px;white-space:nowrap;font-size:12px;font-weight:800;color:#fff}
+.creation-save-status i{width:9px;height:9px;border-radius:50%;background:#4ade80;flex-shrink:0}
+.creation-save-status.status-dirty i{background:#fde047}.creation-save-status.status-saving i,.creation-save-status.status-loading i{background:#93c5fd;animation:pulse 1s infinite}
+.creation-save-status.status-offline i,.creation-save-status.status-read-error i{background:#f87171}
+.creation-period-bar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 16px;background:#eff6ff;border-bottom:1px solid #bfdbfe;color:#17345b}
+.creation-period-bar>div{text-align:center}.creation-period-bar small,.creation-period-bar strong{display:block}.creation-period-bar small{font-size:11px}.creation-period-bar strong{font-size:20px;white-space:nowrap}
+.creation-period-bar button{height:40px!important;border:1px solid #cbd5e1!important;background:#fff!important;color:#17345b!important}
+.creation-sync-error{padding:12px 16px;background:#fff1f2;color:#991b1b;border-bottom:1px solid #fecaca;font-size:12px;overflow-wrap:anywhere}
+.creation-sync-error p{margin:5px 0}.creation-sync-error>div{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.personal-creation-picker{margin:0;padding:10px 14px;background:#eff6ff;flex-wrap:wrap}.personal-creation-picker .creation-save-status{color:#17345b}
+.creation-lock-button{height:40px!important;padding:0 12px!important;white-space:nowrap;font-size:12px!important;justify-self:end;grid-column:2;grid-row:1;background:#0f3f86!important;color:#fff!important}
+.creation-card .dashboard-blue-top{grid-template-columns:minmax(0,1fr) auto}
+.creation-card .dashboard-header-actions{grid-column:1/-1;grid-row:2;max-width:none;justify-content:space-between}
+.creation-card .dashboard-blue-period{display:none}
+.creation-card .dashboard-header-actions [role="group"]{height:40px;align-items:center}
+.creation-card .dashboard-header-actions .shift-display-control select,.creation-card .dashboard-list-toggle{height:40px!important}
+@media(max-width:900px){
+  .creation-card .dashboard-blue-header{padding:14px 12px!important}
+  .creation-card .dashboard-blue-top{gap:12px 8px}
+  .creation-card .dashboard-blue-brand img{width:38px;height:38px}
+  .creation-card .dashboard-blue-brand [data-slot="card-title"]{font-size:20px!important}
+  .creation-card .dashboard-blue-brand span{font-size:10px}
+  .creation-card .dashboard-header-actions{gap:8px;flex-wrap:wrap}
+  .creation-card .dashboard-list-toggle{display:none}
+  .creation-card .shift-display-control{gap:5px;font-size:11px}
+  .creation-card .shift-display-control select{max-width:128px;font-size:12px}
+  .creation-person-status{gap:8px;margin-top:12px}
+  .creation-save-status{font-size:11px}
+  .creation-period-bar{gap:8px;padding:10px 12px;grid-template-columns:40px minmax(0,1fr) 40px}
+  .creation-period-bar strong{font-size:17px}
+  .creation-period-bar button{width:40px;padding:0!important}
+  .creation-period-bar button span{display:none}
+  .creation-lock-button{padding:0 8px!important;font-size:11px!important;gap:3px!important}
+  .creation-lock-button svg{width:14px;height:14px}
+}

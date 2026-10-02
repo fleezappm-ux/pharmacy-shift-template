@@ -261,6 +261,8 @@ export default function App() {
   const [syncState, setSyncState] = useState<"loading" | "saved" | "dirty" | "saving" | "offline" | "read-error">("loading");
   const [initialReadError, setInitialReadError] = useState("");
   const [readRetry, setReadRetry] = useState(0);
+  const [syncFailure, setSyncFailure] = useState<{ message: string; at: string; count: number } | null>(null);
+  const reLoginDraftRef = useRef<{ employees: Employee[]; remarks: GlobalRemark[]; operatorId: string; start: string; end: string } | null>(null);
   const [saveElapsedSeconds, setSaveElapsedSeconds] = useState(0);
   const [saveFeedback, setSaveFeedback] = useState<{
     kind: "saving" | "success" | "error";
@@ -521,10 +523,16 @@ export default function App() {
         if (cancelled) return;
         templateStorage.setItem(EMPLOYEE_MASTER_CACHE_KEY, JSON.stringify(master));
         setEmployeeMaster(master);
-        const sourceEmployees = merged?.employees || employees;
+        const pending = reLoginDraftRef.current;
+        const resume = pending && appSession.role === "admin" && pending.operatorId === appSession.employeeId;
+        const sourceEmployees = resume ? (merged?.employees || employees).map(employee => {
+          const local = pending.employees.find(item => item.id === employee.id);
+          return local ? { ...employee, shifts: [...employee.shifts.filter(item => item.date < pending.start || item.date > pending.end), ...local.shifts.filter(item => item.date >= pending.start && item.date <= pending.end)] } : employee;
+        }) : merged?.employees || employees;
         skipDirtyRef.current = true;
         setEmployees(mergeEmployeesWithMaster(sourceEmployees, master));
-        if (merged) {
+        if (resume) { skipRemarkDirtyRef.current = true; setGlobalRemarks(pending.remarks); }
+        if (merged && !resume) {
           // 旧備考は複製版では表示しない。
           if (merged.supportsGlobalRemarks) {
             skipRemarkDirtyRef.current = true;
@@ -537,14 +545,18 @@ export default function App() {
           }
         }
         syncReadyRef.current = true;
-        setSyncState(merged ? "saved" : "read-error");
+        if (resume) { editRevisionRef.current = savedRevisionRef.current + 1; reLoginDraftRef.current = null; }
+        setSyncFailure(null);
+        setSyncState(resume ? "dirty" : merged ? "saved" : "read-error");
         setInitialSyncComplete(true);
       } catch (error) {
         console.error("初期同期に失敗しました", error);
         if (!cancelled) {
           syncReadyRef.current = true;
           setSyncState("read-error");
-          setInitialReadError(error instanceof Error ? error.message : "サーバーとの通信を確認してください。");
+          const message = error instanceof Error ? error.message : "サーバーとの通信を確認してください。";
+          setInitialReadError(message);
+          setSyncFailure(previous => ({ message, at: new Date().toISOString(), count: (previous?.count || 0) + 1 }));
           setInitialSyncComplete(true);
         }
       }
@@ -990,9 +1002,12 @@ export default function App() {
       try {
         await saveMonthToServer(snapshot.employees, snapshot.globalRemarks, snapshot.start, snapshot.end, snapshot.editor);
         savedRevisionRef.current = revision;
+        setSyncFailure(null);
         setSyncState(editRevisionRef.current === revision ? "saved" : "dirty");
       } catch (error) {
         setSyncState("offline");
+        const message = error instanceof Error ? error.message : "共有保存に失敗しました。";
+        setSyncFailure(previous => ({ message, at: new Date().toISOString(), count: (previous?.count || 0) + 1 }));
         toast.error(error instanceof Error ? error.message : "自動保存に失敗しました。編集内容は端末に残っています");
         throw error;
       }
@@ -1002,10 +1017,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (appSession?.role !== "admin" || !initialSyncComplete || isLocked || syncState !== "dirty") return;
+    if (appSession?.role !== "admin" || !initialSyncComplete || periodStatusLoading || isLocked || syncState !== "dirty") return;
     const timer = window.setTimeout(() => { void saveCurrentMonth().catch(() => {}); }, 1800);
     return () => window.clearTimeout(timer);
-  }, [employees, globalRemarks, currentMonthKey, syncState, initialSyncComplete, isLocked, appSession?.role]);
+  }, [employees, globalRemarks, currentMonthKey, syncState, initialSyncComplete, periodStatusLoading, isLocked, appSession?.role]);
 
   useEffect(() => {
     setOverviewEditing(false);
@@ -1630,6 +1645,36 @@ export default function App() {
     return employee.shifts.find(s => s.date.startsWith(dateStr));
   };
 
+  const needsReLogin = /ログイン.*(有効期限|必要|切れ)|再.*ログイン/.test(syncFailure?.message || initialReadError);
+  const reLoginForSync = () => {
+    if (editRevisionRef.current > savedRevisionRef.current && dateRange.length) {
+      reLoginDraftRef.current = { employees, remarks: globalRemarks, operatorId: appSession?.employeeId || "", start: getDateStr(dateRange[0]), end: getDateStr(dateRange[dateRange.length - 1]) };
+    }
+    syncReadyRef.current = false;
+    logoutShiftSession(); setAppSession(null); setOverviewCell(null);
+    toast.info("同じ操作員で再ログインしてください。未保存の編集は保持します。");
+  };
+  const copySyncError = async () => {
+    const message = (syncFailure?.message || initialReadError).replace(/https?:\/\/\S+/g, "[接続先]").replace(/(token|key|password|パスワード|接続キー)\s*[:=]\s*[^\s、]+/gi, "$1=[非表示]");
+    const detail = `シフトツールのエラー\n発生日時：${syncFailure ? new Date(syncFailure.at).toLocaleString("ja-JP") : "不明"}\n対象期間：${dateRange.length ? `${getDateStr(dateRange[0])}〜${getDateStr(dateRange[dateRange.length - 1])}` : "不明"}\n内容：${message}`;
+    try { await navigator.clipboard.writeText(detail); toast.success("エラー詳細をコピーしました。管理者・SEへお伝えください。"); }
+    catch { window.prompt("この内容をコピーして管理者・SEへお伝えください。", detail); }
+  };
+  const renderSyncStatus = () => <span className={`creation-save-status status-${syncState}`} role="status"><i aria-hidden="true" />{syncState === "loading" ? "読込中…" : syncState === "saving" ? "保存中…" : syncState === "dirty" ? "自動保存待ち" : syncState === "offline" ? "保存失敗" : syncState === "read-error" ? needsReLogin ? "再ログインが必要" : "読込失敗" : "保存済み"}</span>;
+  const renderSyncFailure = () => (syncState === "offline" || syncState === "read-error") && <div className="creation-sync-error" role="alert">
+    <strong>{needsReLogin ? "再ログインしてください。未保存の編集内容は保持します。" : syncState === "read-error" ? "共有データを読み込めませんでした。" : "保存できませんでした。編集内容は端末に残っています。"}</strong>
+    <p>{syncFailure?.message || initialReadError}</p>
+    <div>{needsReLogin ? <Button size="sm" onClick={reLoginForSync}>再ログイン</Button> : syncState === "read-error" ? <Button size="sm" onClick={() => setReadRetry(value => value + 1)}>再読み込み</Button> : <Button size="sm" disabled={isLocked || periodStatusLoading} onClick={() => { void saveCurrentMonth().catch(() => {}); }}>再保存</Button>}
+    <Button size="sm" variant="outline" onClick={() => { void copySyncError(); }}>エラー詳細をコピー</Button></div>
+    {(syncFailure?.count || 0) > 1 && <p>解決しない場合は、エラー詳細を管理者・SEへ連絡してください。</p>}
+  </div>;
+  const moveCreationPeriod = async (direction: number) => {
+    if (appSession?.role === "admin" && editRevisionRef.current > savedRevisionRef.current) {
+      try { await saveCurrentMonth(); } catch { return; }
+    }
+    setCurrentMonth(previous => addMonths(previous, direction));
+  };
+  const renderCreationPeriod = () => <div className="creation-period-bar"><Button variant="outline" size="sm" disabled={syncState === "saving"} onClick={() => { void moveCreationPeriod(-1); }} aria-label="前の期間"><ChevronLeft className="h-4 w-4" /><span>前の期間</span></Button><div><small>{dateRange.length ? format(dateRange[0], "yyyy年") : ""}</small><strong>{dateRange.length ? `${format(dateRange[0], "M月d日")}〜${format(dateRange[dateRange.length - 1], "M月d日")}` : "期間未設定"}</strong></div><Button variant="outline" size="sm" disabled={syncState === "saving"} onClick={() => { void moveCreationPeriod(1); }} aria-label="次の期間"><span>次の期間</span><ChevronRight className="h-4 w-4" /></Button></div>;
   if (!appSession) return <><ShiftLogin employees={loginEmployees} onLogin={session => { setAppSession(session); if (templateStorage.getItem("shift_guide_hidden_v1") !== "1") openGuide("home"); toast.success(session.role === "admin" ? "編集者としてログインしました" : "ログインしました"); }} /><Toaster position="top-center" /></>;
   if (!initialSyncComplete) return <main className="flex min-h-screen items-center justify-center bg-slate-50"><div className="rounded-2xl bg-white px-8 py-7 text-center shadow-xl"><div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" /><strong className="text-slate-800">従業員マスターを同期しています</strong><p className="mt-2 text-xs text-slate-500">役職情報を確認してから表示します</p></div></main>;
 
@@ -1865,13 +1910,14 @@ export default function App() {
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2 }}
               >
-                <Card className={`dashboard-card border-border shadow-none md:h-full md:min-h-0 md:flex md:flex-col ${dashboardListView ? "dashboard-list-view" : ""}`}>
+                <Card className={`dashboard-card border-border shadow-none ${isFromAdmin ? "creation-card" : ""} md:h-full md:min-h-0 md:flex md:flex-col ${dashboardListView ? "dashboard-list-view" : ""}`}>
                   <CardHeader className={`dashboard-card-header dashboard-blue-header page-blue-header border-b border-border ${isLocked ? "is-final" : "is-draft"}`}>
                     <div className="dashboard-blue-top">
                       <div className="dashboard-blue-brand">
                         <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" />
                         <div><CardTitle className={appSession.role === "admin" ? "admin-shift-title" : ""}>{isFromAdmin ? "シフト作成" : appSession.role === "admin" ? "全体シフト管理者" : "全体シフト"}</CardTitle><span><UserRound className="h-3.5 w-3.5" />操作員：{appSession.employeeName || "未選択"}</span></div>
                       </div>
+                        {isFromAdmin && <Button disabled={periodStatusLoading} size="sm" className={`dashboard-lock-button creation-lock-button ${isLocked ? "is-unlock" : ""}`} onClick={toggleLock}>{isLocked ? <LockOpen className="w-3.5 h-3.5 mr-1" /> : <LockKeyhole className="w-3.5 h-3.5 mr-1" />}{periodStatusLoading ? "処理中…" : isLocked ? "確定を解除" : "シフトを確定"}</Button>}
                       <div className="dashboard-blue-period">
                         {dateRange.length > 0 ? `${format(dateRange[0], "yyyy年M月d日")}〜${format(dateRange[dateRange.length - 1], "M月d日")}` : "期間未設定"}
                       </div>
@@ -1882,36 +1928,21 @@ export default function App() {
                         </div>}
                         <ShiftDisplayControl value={shiftDisplayMode} onChange={setShiftDisplayMode} />
                         <Button variant="outline" size="sm" className="dashboard-list-toggle" onClick={() => setDashboardListView(value => !value)}><Grid3X3 className="w-3.5 h-3.5 mr-1.5" />{dashboardListView ? "通常表示" : "一覧表示"}</Button>
-                        {isFromAdmin && <Button disabled={periodStatusLoading} size="sm" className={`dashboard-lock-button ${isLocked ? "is-unlock" : ""}`} onClick={toggleLock}>{isLocked ? <LockOpen className="w-3.5 h-3.5 mr-1" /> : <LockKeyhole className="w-3.5 h-3.5 mr-1" />}{periodStatusLoading ? "処理中…" : isLocked ? "確定を解除" : "シフトを確定"}</Button>}
+
                       </div>
                       
                     </div>
-                    <div className="dashboard-blue-controls">
+                    {isFromAdmin && <div className="creation-person-status"><select aria-label="全体編集・個人編集の選択" value="dashboard" onChange={event => setActiveTab(event.target.value)}><option value="dashboard">全体編集</option>{dashboardEmployees.map(employee => <option key={employee.id} value={employee.id}>{employee.displayName || employee.name}</option>)}</select>{renderSyncStatus()}</div>}
+                    {!isFromAdmin && <div className="dashboard-blue-controls">
                       
                       <div className="dashboard-period-step"><Button variant="outline" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, -1))}><ChevronLeft className="h-4 w-4" />前の期間</Button><div className="dashboard-period-title"><div className="dashboard-title-status"><strong>{dateRange.length ? `${format(dateRange[0], "M/d")}〜${format(dateRange[dateRange.length - 1], "M/d")}` : "期間未設定"}</strong><span>{isLocked ? "公開中" : "編集中"}</span></div></div><Button variant="outline" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, 1))}>次の期間<ChevronRight className="h-4 w-4" /></Button></div>
                       
-                    </div>
+                    </div>}
                     {isFromAdmin && <button type="button" className={`dashboard-leave-summary ${leaveRequests.some(item => item.status === "申請中" && item.type !== "希望なし" && item.type !== "訂正依頼") ? "has-pending" : ""}`} aria-expanded={showLeaveManager} onClick={() => setShowLeaveManager(value => !value)}>{(() => { const count = leaveRequests.filter(item => item.status === "申請中" && item.type !== "希望なし" && item.type !== "訂正依頼").length; return count ? `対応待ちの申請希望あり（${count}件）` : "対応待ちの希望はありません"; })()} <span aria-hidden="true">{showLeaveManager ? "▲" : "▼"}</span></button>}
                   </CardHeader>
                   <CardContent className="p-0 md:flex-1 md:min-h-0 md:flex md:flex-col">
-                    {isFromAdmin && (
-                      <div className="dashboard-mobile-edit-hub">
-                        <div>
-                          <strong>全体編集</strong>
-                          <span>編集する人を選択</span>
-                        </div>
-                        <div className="dashboard-mobile-edit-people">
-                          {dashboardEmployees.map(employee => (
-                            <button
-                              key={employee.id}
-                              onClick={() => { setActiveTab(employee.id); setIsFromAdmin(true); }}
-                            >
-                              {employee.displayName || employee.name}<ChevronRight className="w-4 h-4" />
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    {isFromAdmin && renderCreationPeriod()}
+                    {isFromAdmin && renderSyncFailure()}
                     {!isFromAdmin && <div className="dashboard-mobile-person-jump">
                       <label htmlFor="dashboard-person-jump">個人シフトを見る</label>
                       <select
@@ -1926,12 +1957,6 @@ export default function App() {
                         <option value="">名前を選択</option>
                         {dashboardEmployees.map(employee => <option key={employee.id} value={employee.id}>{employee.displayName || employee.name}</option>)}
                       </select>
-                    </div>}
-                    {isFromAdmin && <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-amber-50 px-3 py-2 text-xs">
-                      <span>{isLocked ? "確定済みです。編集するには確定を解除してください。" : overviewEditing ? "勤務セルをクリック・タップして変更。名前を押すと個人編集へ。" : "全体表を編集するには「編集」を選んでください。名前を押すと個人編集へ。"}</span>
-                      <div className="flex items-center gap-2" role="status"><strong className={syncState === "read-error" || syncState === "offline" || syncState === "dirty" ? "text-red-700" : "text-slate-600"}>{syncState === "read-error" ? `共有データを読み込めませんでした。${initialReadError}` : syncState === "saving" ? "保存中…" : syncState === "dirty" ? "未保存の変更があります（自動保存待ち）" : syncState === "offline" ? "保存できていません。再度保存してください。" : syncState === "loading" ? "読込中…" : "保存済み"}</strong>
-                        {syncState === "read-error" ? <Button size="sm" onClick={() => setReadRetry(value => value + 1)}>再読み込み</Button> : !isLocked && <Button size="sm" disabled={syncState === "saving" || syncState === "loading" || periodStatusLoading} onClick={() => { void saveCurrentMonth().catch(() => {}); }}>保存する</Button>}
-                      </div>
                     </div>}
                     <dialog ref={overviewDialogRef} aria-labelledby="overview-edit-title" onCancel={() => setOverviewCell(null)} onClose={() => setOverviewCell(null)} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-md max-h-[85dvh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 text-slate-900 shadow-2xl backdrop:bg-black/50">
                       {overviewCell && <form onSubmit={event => { event.preventDefault(); applyOverviewCell(); }} className="space-y-4">
@@ -2226,25 +2251,7 @@ export default function App() {
                         <div className="employee-blue-controls"><div className="employee-month-step"><Button variant="outline" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, -1))}><ChevronLeft className="h-4 w-4" />前の期間</Button><strong>{format(dateRange[0], "M月d日")}〜{format(dateRange[dateRange.length - 1], "M月d日")}</strong><Button variant="outline" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, 1))}>次の期間<ChevronRight className="h-4 w-4" /></Button></div></div></CardHeader>
                       <CardContent className="p-0">
                         <div className="personal-display-toolbar"><ShiftDisplayControl value={shiftDisplayMode} onChange={setShiftDisplayMode} /></div>
-                        {isFromAdmin && (
-                          <div className="mobile-employee-picker">
-                            <span>編集する人</span>
-                            <select value={emp.id} onChange={(event) => setActiveTab(event.target.value)}>
-                              {dashboardEmployees.map(employee => <option key={employee.id} value={employee.id}>{employee.displayName || employee.name}</option>)}
-                            </select>
-                            <Button
-                              disabled={periodStatusLoading}
-                              variant={isLocked ? "outline" : "default"}
-                              className="h-9 font-bold"
-                              onClick={toggleLock}
-                            >
-                              {isLocked ? "確定を解除" : "この月を確定"}
-                            </Button>
-                            <Button variant="outline" className="h-9 font-bold" onClick={() => { setActiveTab("dashboard"); setIsFromAdmin(true); }}>
-                              <Grid3X3 className="w-4 h-4 mr-2" />全体編集へ戻る
-                            </Button>
-                          </div>
-                        )}
+                        {isFromAdmin && <><div className="creation-person-status personal-creation-picker"><select aria-label="全体編集・個人編集の選択" value={emp.id} onChange={event => setActiveTab(event.target.value)}><option value="dashboard">全体編集</option>{dashboardEmployees.map(employee => <option key={employee.id} value={employee.id}>{employee.displayName || employee.name}</option>)}</select>{renderSyncStatus()}<Button disabled={periodStatusLoading} size="sm" onClick={toggleLock}>{isLocked ? "確定を解除" : "シフトを確定"}</Button></div>{renderSyncFailure()}</>}
                         {!isFromAdmin ? <div className="personal-overview-layout">
                           <PersonalShiftList employee={emp} dates={dateRange} remarks={displayRemarks} workTimes={workTimes} displayMode={shiftDisplayMode} />
                           <aside className="personal-summary-panel">
