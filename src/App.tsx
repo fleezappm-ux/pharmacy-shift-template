@@ -1749,11 +1749,10 @@ export default function App() {
                 シフト作成
               </Button>
               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button 
+                <DropdownMenuTrigger render={<Button 
                     variant="outline" 
                     className="w-full justify-start h-12 px-4 text-sm font-semibold bg-white hover:bg-slate-50 border-slate-200 transition-all group relative overflow-hidden" 
-                  >
+                  />}>
                     <div className="absolute inset-y-0 left-0 w-1 bg-green-500 transform -translate-x-full group-hover:translate-x-0 transition-transform" />
                     <Download className="w-4 h-4 mr-3 text-green-600" />
                     <span className="flex flex-col items-start leading-tight">
@@ -1762,7 +1761,6 @@ export default function App() {
                         {outputPeriods.map(period => `${format(period[0], "MM/dd")}〜${format(period[period.length - 1], "MM/dd")}`).join(" / ")}
                       </span>
                     </span>
-                  </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="bg-white border-border shadow-2xl z-50 w-56 p-1">
                   {outputPeriods.map(period => {
@@ -2303,15 +2301,13 @@ export default function App() {
                                           </Select>
                                           {isFromAdmin && !isLocked && (
                                             <DropdownMenu>
-                                              <DropdownMenuTrigger asChild>
-                                                <Button 
+                                              <DropdownMenuTrigger render={<Button 
                                                   variant="ghost" 
                                                   size="icon" 
                                                   className="h-7 w-7 text-muted-foreground hover:text-primary"
                                                   title="コピー・クール適用"
-                                                >
+                                                />}>
                                                   <Download className="w-3 h-3 rotate-180" />
-                                                </Button>
                                               </DropdownMenuTrigger>
                                               <DropdownMenuContent align="end" className="bg-white border-border shadow-xl z-50 min-w-[140px]">
                                                 {Object.keys(cycleNames).map(Number).sort((a, b) => a - b).map(num => (
