@@ -329,13 +329,15 @@ export default function App() {
   useEffect(() => {
     if (!appSession?.token) return;
     let cancelled = false;
+    // Keep the edited period when resuming a draft after session expiry.
+    const resumeMonth = reLoginDraftRef.current ? currentMonth : null;
     fetchCalendarPeriodSettings()
       .then(settings => {
         if (cancelled || !settings) return;
         setCalendarPeriodSettings(settings);
         setCalendarPeriodDraft(settings);
         templateStorage.setItem("calendar_period_settings", JSON.stringify(settings));
-        setCurrentMonth(getCurrentShiftMonth(new Date(), settings));
+        setCurrentMonth(resumeMonth || getCurrentShiftMonth(new Date(), settings));
       })
       .catch(error => console.error("カレンダー期間設定の取得に失敗しました", error));
     return () => { cancelled = true; };
