@@ -1721,7 +1721,7 @@ export default function App() {
     catch { window.prompt("この内容をコピーして管理者へお伝えください。", detail); }
   };
   const renderSyncStatus = () => <span className={`creation-save-status status-${syncState}`} role="status"><i aria-hidden="true" />{syncState === "loading" ? "読込中…" : syncState === "saving" ? "保存中…" : syncState === "dirty" ? "まもなく自動保存します…" : syncState === "offline" ? "保存できていません" : syncState === "read-error" ? needsReLogin ? "再ログインが必要" : "読込失敗" : "✓ 自動保存ずみ"}</span>;
-  const renderAutoSaveNote = () => <p className="mx-3 my-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">この画面は、入力すると自動で保存されます（保存ボタンはありません）。右の表示が「✓ 自動保存ずみ」になれば保存できています。</p>;
+  const renderAutoSaveNote = () => <p className="mx-3 my-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">入力した内容は「案」として自動で保存されます（保存ボタンはありません）。ただし、「シフトを確定」を押すまでは確定シフトになりません。従業員には「案」として見えます。</p>;
   const renderSyncFailure = () => (syncState === "offline" || syncState === "read-error") && <div className="creation-sync-error" role="alert">
     <strong>{needsReLogin ? "再ログインしてください。未保存の編集内容は保持します。" : syncState === "read-error" ? "共有データを読み込めませんでした。" : "保存できませんでした。編集内容は端末に残っています。"}</strong>
     <p>{syncFailure?.message || initialReadError}</p>
