@@ -511,7 +511,7 @@ body { margin:0; background:#f5f7fa; }
 /* Shared creation selector and automatic save status; compact mobile header. */
 .creation-person-status{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}
 .creation-person-status select{width:min(55%,300px);height:40px;min-width:0;padding:0 12px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;color:#172033;font-size:14px;font-weight:800}
-.creation-save-status{display:inline-flex;align-items:center;justify-content:flex-end;gap:7px;white-space:nowrap;font-size:12px;font-weight:800;color:#fff}
+.creation-save-status{display:inline-flex;align-items:center;justify-content:flex-end;gap:7px;white-space:nowrap;font-size:14px;font-weight:800;color:#fff}
 .creation-save-status i{width:9px;height:9px;border-radius:50%;background:#4ade80;flex-shrink:0}
 .creation-save-status.status-dirty i{background:#fde047}.creation-save-status.status-saving i,.creation-save-status.status-loading i{background:#93c5fd;animation:pulse 1s infinite}
 .creation-save-status.status-offline i,.creation-save-status.status-read-error i{background:#f87171}
@@ -538,7 +538,7 @@ body { margin:0; background:#f5f7fa; }
   .creation-card .shift-display-control{gap:5px;font-size:11px}
   .creation-card .shift-display-control select{max-width:128px;font-size:12px}
   .creation-person-status{gap:8px;margin-top:12px}
-  .creation-save-status{font-size:11px}
+  .creation-save-status{font-size:13px}
   .creation-period-bar{gap:8px;padding:10px 12px;grid-template-columns:40px minmax(0,1fr) 40px}
   .creation-period-bar strong{font-size:17px}
   .creation-period-bar button{width:40px;padding:0!important}
@@ -593,7 +593,7 @@ body { margin:0; background:#f5f7fa; }
 .creation-head .shift-display-control select{height:40px;max-width:150px}
 .creation-head .dashboard-list-toggle{height:40px!important;padding:0 14px!important;border-color:#fff!important;background:#fff!important;color:#1762bb!important;font-size:13px!important;font-weight:900!important}
 .page-blue-header .creation-head .dashboard-list-toggle svg{color:#1762bb!important;stroke:#1762bb!important}.page-blue-header .creation-head .creation-lock-button:not(.is-unlock) svg{color:#fff!important}.page-blue-header .creation-head .creation-lock-button.is-unlock svg{color:#b91c1c!important}.page-blue-header .creation-head-title span svg{color:#fff!important}
-.creation-head .creation-save-status{font-size:12px}
+.creation-head .creation-save-status{font-size:14px}
 .creation-leave-strip{display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;border:0;border-bottom:1px solid #e2e8f0;background:#f8fafc;color:#475569;font-size:13px;font-weight:800;text-align:left;cursor:pointer}
 .creation-leave-strip.has-pending{background:#fef2f2;color:#b91c1c}
 .creation-leave-strip span{margin-left:auto;font-size:11px}
