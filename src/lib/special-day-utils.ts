@@ -38,6 +38,7 @@ export function matchesSpecialDayRule(date: Date, rule: SpecialDayRule): boolean
   const key = format(date, "yyyy-MM-dd");
   if (rule.id === "band-v3:holiday") return getJapaneseHolidayDates(date, date).includes(key);
   if (rule.mode === "annual") return rule.dates.includes(key);
+  if (rule.mode === "monthly") return (rule.monthDates || []).includes(date.getDate());
   if (rule.mode === "yearly") return (rule.monthDays || []).includes(format(date, "MM-dd"));
   const week = Math.ceil(date.getDate() / 7);
   return date.getDay() === rule.weekday && rule.weeks.includes(week);
@@ -46,7 +47,7 @@ export function matchesSpecialDayRule(date: Date, rule: SpecialDayRule): boolean
 /** Date exceptions win over holidays, which win over repeating closures. */
 function priority(rule: SpecialDayRule): number {
   if (rule.id === "band-v3:holiday") return 2;
-  if (rule.mode === "annual" || rule.mode === "yearly") return 3;
+  if (rule.mode === "annual" || rule.mode === "yearly" || rule.mode === "monthly") return 3;
   if (rule.mode === "recurring" && rule.weeks.length < 5) return 1;
   return 0;
 }
