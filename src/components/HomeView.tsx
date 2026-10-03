@@ -74,9 +74,6 @@ export function HomeView({
     return roleId && (layout.columns[index] || []).includes(roleId);
   }));
   const unassignedStaff = orderedEmployees.filter(employee => !employee.roleId && !employee.role);
-  // 出勤者がいない列（全員休みなど）は空白の列にならないよう表示しない
-  const isWorking = (employee: Employee) => { const label = shiftLabel(employee, selectedDate); return label !== "未入力" && label !== "休み" && label !== "有休"; };
-  const visibleGroups = groups.map(group => group.filter(isWorking)).filter(group => group.length > 0);
   const renderRoster = (group: Employee[]) => group.map(employee => {
     const shift = employee.shifts.find(item => item.date === selectedDate);
     const label = shiftLabel(employee, selectedDate);
@@ -137,8 +134,8 @@ export function HomeView({
           <span className="home-roster-header-spacer" aria-hidden="true" />
         </div>
         {selectedRemark?.type && selectedRemark.type !== "なし" && <div className="home-remark">{selectedRemark.type}{selectedRemark.text ? `：${selectedRemark.text}` : ""}</div>}
-        {layout.visible && <div className={`grid gap-3 ${visibleGroups.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
-          {visibleGroups.map((group, index) => <div key={index} className={index > 0 ? "border-l pl-3" : ""}>{renderRoster(group)}</div>)}
+        {layout.visible && <div className={`grid gap-3 ${groups.every(group => group.length > 0) ? "grid-cols-2" : "grid-cols-1"}`}>
+          {groups.filter(group => group.length).map((group, index) => <div key={index} className={index > 0 ? "border-l pl-3" : ""}>{renderRoster(group)}</div>)}
         </div>}
         {unassignedStaff.length > 0 && <div className="home-role-warning">役職未設定：{unassignedStaff.map(employee => employee.displayName || employee.name).join("、")}（設定画面で役職を登録してください）</div>}
         <Button variant="outline" className="w-full mt-3 h-10 font-bold" onClick={onShowDashboard}>月の全体シフトを見る <ArrowRight className="w-4 h-4 ml-2" /></Button>
