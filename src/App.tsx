@@ -1915,7 +1915,7 @@ export default function App() {
                     <div className="dashboard-blue-top">
                       <div className="dashboard-blue-brand">
                         <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" />
-                        <div><CardTitle className={appSession.role === "admin" ? "admin-shift-title" : ""}>{isFromAdmin ? "シフト作成" : appSession.role === "admin" ? "全体シフト管理者" : "全体シフト"}</CardTitle><span><UserRound className="h-3.5 w-3.5" />操作員：{appSession.employeeName || "未選択"}</span></div>
+                        <div><CardTitle className={appSession.role === "admin" ? "admin-shift-title" : ""}>{isFromAdmin ? "シフト作成" : isLocked ? "全体シフト（確定）" : "全体シフト（案）"}</CardTitle><span><UserRound className="h-3.5 w-3.5" />操作員：{appSession.employeeName || "未選択"}</span></div>
                       </div>
 
                       <div className="dashboard-blue-period">
@@ -1926,8 +1926,8 @@ export default function App() {
                           <button type="button" aria-pressed={!overviewEditing} className={`rounded-md px-3 py-1.5 text-xs font-bold ${!overviewEditing ? "bg-slate-200" : ""}`} onClick={() => setOverviewEditing(false)}>閲覧</button>
                           <button type="button" aria-pressed={overviewEditing} disabled={isLocked || periodStatusLoading} className={`rounded-md px-3 py-1.5 text-xs font-bold disabled:opacity-40 ${overviewEditing ? "bg-amber-500 text-white" : ""}`} onClick={() => setOverviewEditing(true)}>編集</button>
                         </div>}
-                        {isFromAdmin ? <div className="creation-right-controls"><ShiftDisplayControl value={shiftDisplayMode} onChange={setShiftDisplayMode} />{isFromAdmin && <Button disabled={periodStatusLoading} size="sm" className={`dashboard-lock-button creation-lock-button ${isLocked ? "is-unlock" : ""}`} onClick={toggleLock}>{isLocked ? <LockOpen className="w-3.5 h-3.5 mr-1" /> : <LockKeyhole className="w-3.5 h-3.5 mr-1" />}{periodStatusLoading ? "処理中…" : isLocked ? "確定を解除" : "シフトを確定"}</Button>}{renderSyncStatus()}</div> : <ShiftDisplayControl value={shiftDisplayMode} onChange={setShiftDisplayMode} />}
-                        <Button variant="outline" size="sm" className="dashboard-list-toggle" onClick={() => setDashboardListView(value => !value)}><Grid3X3 className="w-3.5 h-3.5 mr-1.5" />{dashboardListView ? "通常表示" : "一覧表示"}</Button>
+                        {isFromAdmin ? <div className="creation-right-controls"><ShiftDisplayControl value={shiftDisplayMode} onChange={setShiftDisplayMode} />{isFromAdmin && <Button disabled={periodStatusLoading} size="sm" className={`dashboard-lock-button creation-lock-button ${isLocked ? "is-unlock" : ""}`} onClick={toggleLock}>{isLocked ? <LockOpen className="w-3.5 h-3.5 mr-1" /> : <LockKeyhole className="w-3.5 h-3.5 mr-1" />}{periodStatusLoading ? "処理中…" : isLocked ? "確定を解除" : "シフトを確定"}</Button>}{renderSyncStatus()}</div> : null}
+                        {isFromAdmin && <Button variant="outline" size="sm" className="dashboard-list-toggle" onClick={() => setDashboardListView(value => !value)}><Grid3X3 className="w-3.5 h-3.5 mr-1.5" />{dashboardListView ? "通常表示" : "一覧表示"}</Button>}
 
                       </div>
                       
@@ -1936,7 +1936,7 @@ export default function App() {
 
                     {!isFromAdmin && <div className="dashboard-blue-controls">
                       
-                      <div className="dashboard-period-step"><Button variant="outline" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, -1))}><ChevronLeft className="h-4 w-4" />前の期間</Button><div className="dashboard-period-title"><div className="dashboard-title-status"><strong>{dateRange.length ? `${format(dateRange[0], "M/d")}〜${format(dateRange[dateRange.length - 1], "M/d")}` : "期間未設定"}</strong><span>{isLocked ? "公開中" : "編集中"}</span></div></div><Button variant="outline" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, 1))}>次の期間<ChevronRight className="h-4 w-4" /></Button></div>
+                      <div className="dashboard-period-step"><Button variant="outline" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, -1))}><ChevronLeft className="h-4 w-4" />前の期間</Button><div className="dashboard-period-title"><div className="dashboard-title-status"><strong>{dateRange.length ? `${format(dateRange[0], "M/d")}〜${format(dateRange[dateRange.length - 1], "M/d")}` : "期間未設定"}</strong></div></div><Button variant="outline" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, 1))}>次の期間<ChevronRight className="h-4 w-4" /></Button></div>
                       
                     </div>}
                     {isFromAdmin && <button type="button" className={`dashboard-leave-summary ${leaveRequests.some(item => item.status === "申請中" && item.type !== "希望なし" && item.type !== "訂正依頼") ? "has-pending" : ""}`} aria-expanded={showLeaveManager} onClick={() => setShowLeaveManager(value => !value)}>{(() => { const count = leaveRequests.filter(item => item.status === "申請中" && item.type !== "希望なし" && item.type !== "訂正依頼").length; return count ? `対応待ちの申請希望あり（${count}件）` : "対応待ちの希望はありません"; })()} <span aria-hidden="true">{showLeaveManager ? "▲" : "▼"}</span></button>}
@@ -1944,6 +1944,7 @@ export default function App() {
                   <CardContent className="p-0 md:flex-1 md:min-h-0 md:flex md:flex-col">
                     {isFromAdmin && renderCreationPeriod()}
                     {isFromAdmin && renderSyncFailure()}
+                    {!isFromAdmin && <div className="dashboard-overview-toolbar"><ShiftDisplayControl value={shiftDisplayMode} onChange={setShiftDisplayMode} /><Button variant="outline" size="sm" className="dashboard-list-toggle" onClick={() => setDashboardListView(value => !value)}><Grid3X3 className="w-3.5 h-3.5 mr-1.5" />{dashboardListView ? "通常表示" : "一覧表示"}</Button></div>}
                     {!isFromAdmin && <div className="dashboard-mobile-person-jump">
                       <label htmlFor="dashboard-person-jump">個人シフトを見る</label>
                       <select
@@ -2059,7 +2060,7 @@ export default function App() {
                                     <span className="text-slate-900 font-bold text-[12px]">{stats.hours.toFixed(1)}h</span>
                                     <div className="flex items-center justify-center gap-1">
                                       <span className="text-slate-600 text-[11px] font-medium">{stats.attendance}日</span>
-                                      <span className="text-red-700 text-[11px] font-medium">{stats.paid}日(有)</span>
+                                      <span className={`${stats.paid > 0 ? "text-red-700" : "text-slate-400"} text-[11px] font-medium`}>{stats.paid}日(有)</span>
                                     </div>
                                   </div>
                                 </TableCell>
@@ -2406,12 +2407,7 @@ export default function App() {
                                           .filter(s => s.shift && s.shift !== "休み" && s.shift !== "有休")
                                           .length
                                       }日</span>
-                                      <span className="text-red-700 text-[10px]">{
-                                        emp.shifts
-                                          .filter(s => dateRange.some(d => s.date.startsWith(getDateStr(d))))
-                                          .filter(s => s.shift === "有休")
-                                          .length
-                                      }日(有)</span>
+                                      {(() => { const paid = emp.shifts                                           .filter(s => dateRange.some(d => s.date.startsWith(getDateStr(d))))                                           .filter(s => s.shift === "有休")                                           .length; return <span className={`${paid > 0 ? "text-red-700" : "text-slate-400"} text-[10px]`}>{paid}日(有)</span>; })()}
                                     </div>
                                   </div>
                                 </TableCell>
