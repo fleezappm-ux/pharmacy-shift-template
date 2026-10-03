@@ -76,3 +76,19 @@ export async function fetchShiftLoginEmployees(): Promise<ShiftLoginEmployee[]> 
   const json = await call("getShiftLoginEmployees");
   return Array.isArray(json.employees) ? json.employees : [];
 }
+
+// 管理者用の接続キーが正しいか、サーバーに確かめます（管理者ログイン中のみ）。
+export async function checkManagementApiKey(key: string): Promise<{ ok: boolean; message: string }> {
+  const session = getShiftSession();
+  if (!session) return { ok: false, message: "ログインし直してください" };
+  if (!key.trim()) return { ok: false, message: "接続キーを入力してください" };
+  try {
+    await call("checkShiftApiKey", { sessionToken: session.token, shiftApiKey: key.trim() });
+    return { ok: true, message: "接続できました。この端末で管理者の操作ができます" };
+  } catch (error) {
+    const text = error instanceof Error ? error.message : "";
+    if (/認証に失敗/.test(text)) return { ok: false, message: "接続キーが違います。もう一度確認してください" };
+    if (/未対応|アクション|不明|unknown/i.test(text)) return { ok: false, message: "サーバー（GAS）が古いままです。新しい版に更新してください" };
+    return { ok: false, message: text || "確認できませんでした。通信状況を確認してください" };
+  }
+}
