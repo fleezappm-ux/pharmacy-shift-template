@@ -1912,37 +1912,49 @@ export default function App() {
               >
                 <Card className={`dashboard-card border-border shadow-none ${isFromAdmin ? "creation-card" : ""} md:h-full md:min-h-0 md:flex md:flex-col ${dashboardListView ? "dashboard-list-view" : ""}`}>
                   <CardHeader className={`dashboard-card-header dashboard-blue-header page-blue-header border-b border-border ${isLocked ? "is-final" : "is-draft"}`}>
-                    <div className="dashboard-blue-top">
+                    {isFromAdmin && <div className="creation-head">
+                      <div className="creation-head-row">
+                        <div className="creation-head-title">
+                          <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" />
+                          <div><CardTitle>シフト作成</CardTitle><span><UserRound className="h-3.5 w-3.5" />操作員：{appSession.employeeName || "未選択"}</span></div>
+                        </div>
+                        <div className="creation-head-main">
+                          {renderSyncStatus()}
+                          <Button disabled={periodStatusLoading} size="sm" className={`dashboard-lock-button creation-lock-button ${isLocked ? "is-unlock" : ""}`} onClick={toggleLock}>{isLocked ? <LockOpen className="w-3.5 h-3.5 mr-1" /> : <LockKeyhole className="w-3.5 h-3.5 mr-1" />}{periodStatusLoading ? "処理中…" : isLocked ? "確定を解除" : "シフトを確定"}</Button>
+                        </div>
+                      </div>
+                      <div className="creation-head-row creation-head-tools">
+                        <div className="creation-head-left">
+                          {appSession.role === "admin" && <div className="creation-mode-toggle" role="group" aria-label="全体表の操作モード">
+                            <button type="button" aria-pressed={!overviewEditing} className={!overviewEditing ? "is-on" : ""} onClick={() => setOverviewEditing(false)}>閲覧</button>
+                            <button type="button" aria-pressed={overviewEditing} disabled={isLocked || periodStatusLoading} className={overviewEditing ? "is-on is-edit" : ""} onClick={() => setOverviewEditing(true)}>編集</button>
+                          </div>}
+                          <select aria-label="全体編集・個人編集の選択" value="dashboard" onChange={event => setActiveTab(event.target.value)}><option value="dashboard">全体編集</option>{dashboardEmployees.map(employee => <option key={employee.id} value={employee.id}>{employee.displayName || employee.name}</option>)}</select>
+                        </div>
+                        <div className="creation-head-right">
+                          <ShiftDisplayControl value={shiftDisplayMode} onChange={setShiftDisplayMode} />
+                          <Button variant="outline" size="sm" className="dashboard-list-toggle" onClick={() => setDashboardListView(value => !value)}><Grid3X3 className="w-3.5 h-3.5 mr-1.5" />{dashboardListView ? "通常表示" : "一覧表示"}</Button>
+                        </div>
+                      </div>
+                    </div>}
+                    {!isFromAdmin && <div className="dashboard-blue-top">
                       <div className="dashboard-blue-brand">
                         <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" />
-                        <div><CardTitle className={appSession.role === "admin" ? "admin-shift-title" : ""}>{isFromAdmin ? "シフト作成" : isLocked ? "全体シフト（確定）" : "全体シフト（案）"}</CardTitle><span><UserRound className="h-3.5 w-3.5" />操作員：{appSession.employeeName || "未選択"}</span></div>
+                        <div><CardTitle className={appSession.role === "admin" ? "admin-shift-title" : ""}>{isLocked ? "全体シフト（確定）" : "全体シフト（案）"}</CardTitle><span><UserRound className="h-3.5 w-3.5" />操作員：{appSession.employeeName || "未選択"}</span></div>
                       </div>
-
                       <div className="dashboard-blue-period">
                         {dateRange.length > 0 ? `${format(dateRange[0], "yyyy年M月d日")}〜${format(dateRange[dateRange.length - 1], "M月d日")}` : "期間未設定"}
                       </div>
-                      <div className="dashboard-header-actions">
-                        {isFromAdmin && appSession.role === "admin" && <div className="flex rounded-lg bg-white p-1 text-slate-800" role="group" aria-label="全体表の操作モード">
-                          <button type="button" aria-pressed={!overviewEditing} className={`rounded-md px-3 py-1.5 text-xs font-bold ${!overviewEditing ? "bg-slate-200" : ""}`} onClick={() => setOverviewEditing(false)}>閲覧</button>
-                          <button type="button" aria-pressed={overviewEditing} disabled={isLocked || periodStatusLoading} className={`rounded-md px-3 py-1.5 text-xs font-bold disabled:opacity-40 ${overviewEditing ? "bg-amber-500 text-white" : ""}`} onClick={() => setOverviewEditing(true)}>編集</button>
-                        </div>}
-                        {isFromAdmin ? <div className="creation-right-controls"><ShiftDisplayControl value={shiftDisplayMode} onChange={setShiftDisplayMode} />{isFromAdmin && <Button disabled={periodStatusLoading} size="sm" className={`dashboard-lock-button creation-lock-button ${isLocked ? "is-unlock" : ""}`} onClick={toggleLock}>{isLocked ? <LockOpen className="w-3.5 h-3.5 mr-1" /> : <LockKeyhole className="w-3.5 h-3.5 mr-1" />}{periodStatusLoading ? "処理中…" : isLocked ? "確定を解除" : "シフトを確定"}</Button>}{renderSyncStatus()}</div> : null}
-                        {isFromAdmin && <Button variant="outline" size="sm" className="dashboard-list-toggle" onClick={() => setDashboardListView(value => !value)}><Grid3X3 className="w-3.5 h-3.5 mr-1.5" />{dashboardListView ? "通常表示" : "一覧表示"}</Button>}
-
-                      </div>
-                      
-                    {isFromAdmin && <div className="creation-person-status"><select aria-label="全体編集・個人編集の選択" value="dashboard" onChange={event => setActiveTab(event.target.value)}><option value="dashboard">全体編集</option>{dashboardEmployees.map(employee => <option key={employee.id} value={employee.id}>{employee.displayName || employee.name}</option>)}</select></div>}
-                    </div>
-
+                    </div>}
                     {!isFromAdmin && <div className="dashboard-blue-controls">
                       
                       <div className="dashboard-period-step"><Button variant="outline" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, -1))}><ChevronLeft className="h-4 w-4" />前の期間</Button><div className="dashboard-period-title"><div className="dashboard-title-status"><strong>{dateRange.length ? `${format(dateRange[0], "M/d")}〜${format(dateRange[dateRange.length - 1], "M/d")}` : "期間未設定"}</strong></div></div><Button variant="outline" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, 1))}>次の期間<ChevronRight className="h-4 w-4" /></Button></div>
                       
                     </div>}
-                    {isFromAdmin && <button type="button" className={`dashboard-leave-summary ${leaveRequests.some(item => item.status === "申請中" && item.type !== "希望なし" && item.type !== "訂正依頼") ? "has-pending" : ""}`} aria-expanded={showLeaveManager} onClick={() => setShowLeaveManager(value => !value)}>{(() => { const count = leaveRequests.filter(item => item.status === "申請中" && item.type !== "希望なし" && item.type !== "訂正依頼").length; return count ? `対応待ちの申請希望あり（${count}件）` : "対応待ちの希望はありません"; })()} <span aria-hidden="true">{showLeaveManager ? "▲" : "▼"}</span></button>}
                   </CardHeader>
                   <CardContent className="p-0 md:flex-1 md:min-h-0 md:flex md:flex-col">
                     {isFromAdmin && renderCreationPeriod()}
+                    {isFromAdmin && <button type="button" className={`creation-leave-strip ${leaveRequests.some(item => item.status === "申請中" && item.type !== "希望なし" && item.type !== "訂正依頼") ? "has-pending" : ""}`} aria-expanded={showLeaveManager} onClick={() => setShowLeaveManager(value => !value)}>{(() => { const count = leaveRequests.filter(item => item.status === "申請中" && item.type !== "希望なし" && item.type !== "訂正依頼").length; return count ? `対応待ちの申請希望あり（${count}件）` : "対応待ちの希望はありません"; })()} <span aria-hidden="true">{showLeaveManager ? "▲" : "▼"}</span></button>}
                     {isFromAdmin && renderSyncFailure()}
                     {!isFromAdmin && <div className="dashboard-overview-toolbar"><ShiftDisplayControl value={shiftDisplayMode} onChange={setShiftDisplayMode} /><Button variant="outline" size="sm" className="dashboard-list-toggle" onClick={() => setDashboardListView(value => !value)}><Grid3X3 className="w-3.5 h-3.5 mr-1.5" />{dashboardListView ? "通常表示" : "一覧表示"}</Button></div>}
                     {!isFromAdmin && <div className="dashboard-mobile-person-jump">
