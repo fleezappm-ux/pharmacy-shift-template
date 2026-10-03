@@ -40,7 +40,7 @@ export function ShiftLogin({ employees, onLogin }: { employees: EmployeeMasterIt
         <option value="">名前を選択してください</option>
         {operatorOptions.filter(item => item.active).map(item => <option key={item.id} value={item.id}>{item.displayName || item.name}</option>)}
       </select>
-      {operatorOptions.filter(item => item.active).length === 0 && <p className="mt-2 text-xs font-bold text-red-600">従業員マスターが未設定です。管理者へ確認してください。</p>}
+      {operatorOptions.filter(item => item.active).length === 0 && <p className="mt-2 text-xs font-bold text-red-600">従業員マスタが未設定です。管理者へ確認してください。</p>}
       <Button className="mt-6 h-12 w-full rounded-xl font-bold" disabled={loading} onClick={() => void submit()}><LogIn className="mr-2 h-4 w-4" />{loading ? "確認中…" : "ログイン"}</Button>
       <p className="mt-4 text-center text-[11px] text-slate-400">ID・パスワードを忘れた場合は管理者へ確認してください。</p>
     </section>

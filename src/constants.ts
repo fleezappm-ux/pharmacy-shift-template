@@ -118,7 +118,7 @@ export const SPREADSHEET_FORMULAS = {
   workTime: '=IF(OR(C2="有休", C2="休み", C2=""), "0:00", (VALUE(LEFT(RIGHT(C2, 5), 2)) + VALUE(RIGHT(C2, 2))/60 - (VALUE(LEFT(C2, FIND("～", C2)-1)) + VALUE(MID(C2, FIND(":", C2)+1, 2))/60)) - VALUE(LEFT(D2, 1)) - VALUE(MID(D2, 3, 2))/60)'
 };
 
-// 編集モード（従業員マスター編集・個別シート編集・アプリ詳細設定）に入るための共通パスワード。
+// 編集モード（従業員マスタ編集・個別シート編集・アプリ詳細設定）に入るための共通パスワード。
 // 変更したい場合はこの値を書き換えてください。
 
 export interface CycleWeekPattern {

@@ -45,7 +45,7 @@ interface HomeViewProps {
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 export function sortEmployeesForDisplay(employees: Employee[]): Employee[] {
-  // 店舗固有の氏名ではなく、共有従業員マスターの並び順だけを正本にします。
+  // 店舗固有の氏名ではなく、共有従業員マスタの並び順だけを正本にします。
   return [...employees].sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
 }
 
