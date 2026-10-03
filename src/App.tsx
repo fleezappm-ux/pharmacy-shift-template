@@ -2105,6 +2105,7 @@ export default function App() {
                     <CardDescription className="text-xs">変更したい項目を選んでください</CardDescription>
                   </CardHeader>
                   <CardContent className="grid gap-4 p-6 sm:grid-cols-2">
+                    {employeeMaster.length === 0 && <button type="button" onClick={() => setSettingsPage("employee")} className="sm:col-span-2 flex items-center gap-3 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 text-left font-bold text-amber-900"><Users className="h-5 w-5 shrink-0" /><span>まず従業員マスタで従業員を登録してください<small className="mt-0.5 block text-xs font-medium text-amber-800">登録するとホーム・全体シフト・シフト作成が使えるようになります。ここを押すと従業員マスタが開きます。</small></span><ChevronRight className="ml-auto h-4 w-4 shrink-0" /></button>}
                     {[
                       { key: "store", icon: Building2, title: "店舗マスタ", description: "店舗名・集計期間・定休日" },
                       { key: "board", icon: MessageSquareText, title: "お知らせ掲示板設定", description: "お知らせ・希望の公開範囲" },
