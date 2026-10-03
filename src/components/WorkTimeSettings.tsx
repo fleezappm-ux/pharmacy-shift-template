@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ABBREVIATIONS, WorkTimeOption, validateWorkTimes, workTimeValue } from "../lib/work-time-options";
 
-interface Props { values: WorkTimeOption[]; ready: boolean; onSave: (values: WorkTimeOption[]) => Promise<void>; onPendingChange?: (pending: boolean) => void; }
+interface Props { values: WorkTimeOption[]; ready: boolean; loading?: boolean; onSave: (values: WorkTimeOption[]) => Promise<void>; onPendingChange?: (pending: boolean) => void; }
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
-export function WorkTimeSettings({ values, ready, onSave, onPendingChange }: Props) {
+export function WorkTimeSettings({ values, ready, loading = false, onSave, onPendingChange }: Props) {
   const [draft, setDraft] = useState(values);
   const [editing, setEditing] = useState<WorkTimeOption | null>(null);
   const [freeInput, setFreeInput] = useState(false);
@@ -58,7 +58,8 @@ export function WorkTimeSettings({ values, ready, onSave, onPendingChange }: Pro
   const custom = editing && editing.abbreviation && !ABBREVIATIONS.includes(editing.abbreviation);
   return <section data-work-time-settings className="space-y-4">
     <p className="text-sm text-slate-600">追加・変更・削除は操作のたびにPCとスマホの共通設定へ保存します。</p>
-    {!ready && <p role="alert" className="text-sm font-bold text-red-700">共通設定に接続できません。再読み込みしてください。接続するまで変更できません。</p>}
+    {!ready && loading && <p role="status" className="text-sm font-bold text-slate-600">共通設定を読み込み中…</p>}
+    {!ready && !loading && <p role="alert" className="text-sm font-bold text-red-700">共通設定に接続できません。画面を再読み込みしてください。つながるまで変更できません。</p>}
     <div role="status" aria-live="polite" className={`rounded-lg p-3 text-sm font-bold ${status === "error" ? "bg-red-50 text-red-700" : saving ? "bg-amber-50 text-amber-900" : status === "saved" ? "bg-green-50 text-green-800" : "bg-slate-50 text-slate-600"}`}>
       {status === "error" ? <>保存できていません。{error} {!editing && <Button variant="outline" size="sm" className="ml-2" disabled={!ready} onClick={() => void persist(draft)}>再試行</Button>}</> : saving ? "共通設定に保存中…画面を閉じないでください" : status === "saved" ? "保存しました。PC・スマホに反映されます。" : "操作すると自動で共通保存されます。"}
     </div>

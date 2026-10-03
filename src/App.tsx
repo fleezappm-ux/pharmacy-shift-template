@@ -136,6 +136,7 @@ export default function App() {
   const [settingsPage, setSettingsPage] = useState<"menu" | "store" | "board" | "employee" | "shift" | "worktime" | "special" | "operations" | "autodraft" | "other" | "reset">(() => templateStorage.getItem(RESET_PENDING_KEY) ? "reset" : "menu");
   const [workTimes, setWorkTimes] = useState(readWorkTimes);
   const [workTimeReady, setWorkTimeReady] = useState(false);
+  const [workTimeLoading, setWorkTimeLoading] = useState(true);
   const [workTimeRevision, setWorkTimeRevision] = useState("");
   const [shiftDisplayMode, setShiftDisplayMode] = useState<ShiftDisplayMode>(() => {
     const saved = templateStorage.getItem("shift_display_mode");
@@ -152,14 +153,14 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!appSession?.token) { setWorkTimeReady(false); return; }
-    setWorkTimeReady(false);
+    setWorkTimeReady(false); setWorkTimeLoading(true);
     let cancelled = false;
     const refresh = async () => {
       try {
         const master = await fetchWorkTimeMaster();
         if (cancelled) return;
-        setWorkTimes(master.items); saveWorkTimes(master.items); setWorkTimeRevision(master.revision); setWorkTimeReady(true);
-      } catch (error) { if (!cancelled) { setWorkTimeReady(false); console.error("勤務時間マスタ取得", error); } }
+        setWorkTimes(master.items); saveWorkTimes(master.items); setWorkTimeRevision(master.revision); setWorkTimeReady(true); setWorkTimeLoading(false);
+      } catch (error) { if (!cancelled) { setWorkTimeReady(false); setWorkTimeLoading(false); console.error("勤務時間マスタ取得", error); } }
     };
     void refresh();
     const focus = () => { if (settingsPage !== "worktime") void refresh(); };
@@ -2155,7 +2156,7 @@ export default function App() {
                 ].map(item => <button key={item.key} type="button" onClick={() => setSettingsPage(item.key as typeof settingsPage)} className="group flex min-h-24 items-center gap-4 rounded-2xl border-2 border-slate-100 bg-white p-5 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><item.icon className="h-6 w-6" /></span><span><strong className="flex items-center gap-2 text-base text-slate-900">{item.title}<ChevronRight className="h-4 w-4 transition group-hover:translate-x-1" /></strong><small className="mt-1 block leading-relaxed text-slate-500">{item.description}</small></span></button>)}</div>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "worktime" ? (
-              <motion.div key="settings-worktime" className="space-y-4"><SettingsHead title="勤務時間設定" description="シフトで使う勤務時間パターン" backLabel="シフトマスタへ戻る" onBack={() => setSettingsPage("shift")} /><Card><CardContent className="p-5 sm:p-6"><WorkTimeSettings values={workTimes} ready={workTimeReady} onPendingChange={setWorkTimePending} onSave={async values => { const master = await saveWorkTimeMaster(values, workTimeRevision); saveWorkTimes(master.items); setWorkTimes(master.items); setWorkTimeRevision(master.revision); toast.success("勤務時間設定を共通保存しました"); }} /></CardContent></Card></motion.div>
+              <motion.div key="settings-worktime" className="space-y-4"><SettingsHead title="勤務時間設定" description="シフトで使う勤務時間パターン" backLabel="シフトマスタへ戻る" onBack={() => setSettingsPage("shift")} /><Card><CardContent className="p-5 sm:p-6"><WorkTimeSettings values={workTimes} ready={workTimeReady} loading={workTimeLoading} onPendingChange={setWorkTimePending} onSave={async values => { const master = await saveWorkTimeMaster(values, workTimeRevision); saveWorkTimes(master.items); setWorkTimes(master.items); setWorkTimeRevision(master.revision); toast.success("勤務時間設定を共通保存しました"); }} /></CardContent></Card></motion.div>
             ) : activeTab === "admin" && settingsPage === "autodraft" ? (
               <motion.div key="settings-autodraft" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><SettingsHead title="シフト案自動作成マスタ" description="シフト案を自動で作る条件" backLabel="シフトマスタへ戻る" onBack={() => setSettingsPage("shift")} /><AutoDraftSettingsView settings={autoDraftSettings} onChange={value => void updateAutoDraftSettings(value)} onStart={startAutoDraft} /></motion.div>
             ) : activeTab === "admin" && settingsPage === "special" ? (
