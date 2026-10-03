@@ -65,13 +65,19 @@ export interface ShiftFetchResult {
 async function callGas(action: string, extra: Record<string, unknown> = {}, requireApiKey = true): Promise<any> {
   const shiftApiKey = templateStorage.getItem(SHIFT_API_KEY_STORAGE) || "";
   if (requireApiKey && !shiftApiKey) throw new Error("管理者用の接続キーが未設定です。設定の「その他設定」で登録してください。");
-  const response = await fetch(getGasUrl(), {
+  const send = () => fetch(getGasUrl(), {
     method: "POST",
     headers: { "Content-Type": "text/plain" }, // GAS doPostはContent-Typeに関わらずpostData.contentsを見るため、プリフライトを避けるtext/plainにしています
     body: JSON.stringify({ action, shiftApiKey, sessionToken: getShiftSession()?.token || "", ...extra })
   });
+  // Googleのサーバーが一時的に404/5xxを返すことがあるため、届いていない場合だけ自動でやり直します。
+  let response = await send();
+  for (let attempt = 1; attempt <= 3 && (response.status === 404 || response.status === 429 || response.status >= 500); attempt += 1) {
+    await new Promise(resolve => window.setTimeout(resolve, attempt * 1200));
+    response = await send();
+  }
   if (!response.ok) {
-    throw new Error("サーバーとの通信に失敗しました（status " + response.status + "）");
+    throw new Error("サーバーとの通信に失敗しました（status " + response.status + "）。少し待ってから「再保存」を押してください。");
   }
   const json = await response.json();
   if (!json.success) {
