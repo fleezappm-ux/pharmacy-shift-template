@@ -42,9 +42,13 @@ export function BulletinBoard({ periods, isEditor, visibility = "immediate", cor
     const period = visiblePeriods[0];
     const visible = period?.requests.filter(canShow).filter(item => !(item.type === "訂正依頼" && item.status === "申請中")) || [];
     return <section className="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
-      <div className="home-bulletin-heading flex flex-wrap items-center justify-between gap-2 bg-amber-50 px-5 py-4">
+      <div className="home-bulletin-heading bg-amber-50 px-5 py-4">
         <h2 className="flex items-center gap-2 text-lg font-black text-slate-900"><MessageSquareText className="h-5 w-5 text-amber-600" />お知らせ掲示板</h2>
-        <span className="home-bulletin-period text-xs font-bold text-amber-800">{period?.label || "期間未設定"}</span>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-slate-500">対象期間</span>
+          <strong className="home-bulletin-period text-base font-black text-amber-900 sm:text-lg">{period?.label || "期間未設定"}</strong>
+          {period && <span className={`rounded-full px-2.5 py-1 text-xs font-black ${period.locked ? "bg-blue-100 text-blue-700" : "bg-amber-200 text-amber-800"}`}>{period.locked ? "確定" : "希望受付中"}</span>}
+        </div>
       </div>
       <div className="space-y-2 p-4">
         {noticeCards}
