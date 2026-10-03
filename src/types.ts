@@ -27,11 +27,13 @@ export interface SpecialDayRule {
   color: SpecialDayColor;
   behavior: SpecialDayBehavior;
   enabled: boolean;
-  mode: "recurring" | "annual" | "yearly";
+  mode: "recurring" | "annual" | "yearly" | "monthly";
   weekday: number;
   weeks: number[];
   dates: string[];
   monthDays?: string[];
+  /** 毎月○日（1〜31）。mode が "monthly" のときに使う。 */
+  monthDates?: number[];
   order?: number;
   showName?: boolean;
   restMode?: "none" | "all" | "selected";

@@ -22,10 +22,10 @@ export function validateWorkTimes(items: WorkTimeOption[]): string {
     if (!isWorkTime(workTimeValue(item))) return "開始・終了時刻を入力してください。";
     const minutes = (value: string) => { const [h, m] = value.split(":").map(Number); return h * 60 + m; };
     const duration = minutes(item.end) + (item.nextDay ? 1440 : 0) - minutes(item.start);
-    if (duration <= 0 || duration > 1440) return "終了時刻を確認してください。日をまたぐ勤務は「翌日」を選択してください。";
+    if (duration <= 0 || duration > 1440) return "出勤と退勤の時刻を確認してください（同じ時刻にはできません）。";
     const key = normalized(workTimeValue(item));
     if (seen.has(key)) return "同じ勤務時間は1件にまとめてください。";
-    if (item.abbreviation.trim().length > 20) return "略語は20文字以内で入力してください。";
+    if (item.abbreviation.trim().length > 20) return "短い名前は20文字以内で入力してください。";
     seen.add(key);
   }
   return "";

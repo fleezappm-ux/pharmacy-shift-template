@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmployeeMasterItem, ShiftRole } from "../lib/employee-master-sync";
+import { SaveStatus } from "./SaveStatus";
+import { useUnsavedGuard } from "../lib/unsaved";
 
 export function EmployeeMasterSettings({ employees, roles, onSave, operatorId, loadError = "" }: { employees: EmployeeMasterItem[]; roles: ShiftRole[]; onSave: (items: EmployeeMasterItem[]) => Promise<EmployeeMasterItem[] | void>; operatorId?: string; loadError?: string }) {
   const [drafts, setDrafts] = useState(employees);
@@ -12,6 +14,7 @@ export function EmployeeMasterSettings({ employees, roles, onSave, operatorId, l
   const syncedRef = useRef(employees);
   const [newerFromServer, setNewerFromServer] = useState<EmployeeMasterItem[] | null>(null);
   const dirty = signature(drafts) !== signature(syncedRef.current);
+  useUnsavedGuard("employee-master", dirty);
   // 保存前の入力を、裏の更新で消さない。入力中に最新が届いたら、知らせるだけにします。
   useEffect(() => {
     if (signature(employees) === signature(syncedRef.current)) return;
@@ -64,6 +67,7 @@ export function EmployeeMasterSettings({ employees, roles, onSave, operatorId, l
   const activeDrafts = drafts.filter(item => item.active);
   return <section className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
     <div className="flex items-center justify-between gap-3"><div><h4 className="font-black text-slate-900">従業員登録</h4><p className="mt-1 text-xs text-slate-500">この順番が全体シフト・個人選択・Excelへ反映されます。</p></div><Button variant="outline" onClick={add}><Plus className="mr-1 h-4 w-4" />従業員追加</Button></div>
+    <p className="rounded-lg bg-blue-50 p-3 text-xs leading-5 text-blue-900">「役職を選択」の選択肢（薬剤師・事務など）は、このページの<button type="button" className="mx-1 font-bold underline" onClick={() => document.getElementById("role-editor")?.scrollIntoView({ behavior: "smooth", block: "start" })}>下の「役職プルダウン編集」</button>で、自由に追加・変更できます。</p>
     <div className="space-y-2">{activeDrafts.map((item, index) => <div key={item.id} data-employee-row={item.id} className="grid items-center gap-2 rounded-xl border bg-white p-3 sm:grid-cols-[42px_minmax(180px,1fr)_150px_auto]">
       <div className="flex h-10 items-center justify-center rounded-lg bg-slate-100 text-sm font-black text-slate-600">{index + 1}</div>
       <Input value={item.name} aria-label="名前" placeholder="名前" onChange={event => { const name = event.target.value; update(item.id, { name, displayName: name }); }} />
@@ -72,7 +76,7 @@ export function EmployeeMasterSettings({ employees, roles, onSave, operatorId, l
     </div>)}</div>
     {loadError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-xs font-bold text-red-700">{loadError}</p>}
     {newerFromServer && <div role="alert" className="rounded-lg bg-amber-50 p-3 text-xs font-bold text-amber-900">他の端末で従業員が更新されました。このまま保存すると失敗します。<Button size="sm" variant="outline" className="ml-2" onClick={() => { syncedRef.current = newerFromServer; setDrafts(newerFromServer); setNewerFromServer(null); }}>最新を読み込む（入力中の変更は消えます）</Button></div>}
-    <p role="status" className={`rounded-lg px-3 py-2 text-xs font-bold ${dirty ? "bg-amber-50 text-amber-900" : "bg-slate-100 text-slate-600"}`}>{dirty ? "● 保存していない変更があります。下の「従業員マスタを保存」を押してください" : "✓ 保存ずみ（変更はありません）"}</p>
-    <Button className="h-11 w-full font-bold" disabled={saving || !!loadError || !dirty} onClick={() => void submit()}><Save className="mr-2 h-4 w-4" />{saving ? "保存中…" : "従業員マスタを保存"}</Button>
+    <SaveStatus dirty={dirty} saving={saving} />
+    <Button className="sticky bottom-20 z-10 h-11 w-full font-bold shadow-lg sm:bottom-2" disabled={saving || !!loadError || !dirty} onClick={() => void submit()}><Save className="mr-2 h-4 w-4" />{saving ? "保存中…" : "従業員マスタを保存"}</Button>
   </section>;
 }
