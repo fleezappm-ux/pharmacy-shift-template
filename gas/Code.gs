@@ -716,7 +716,7 @@ function normalizeShiftEmployeeMaster(items) {
 function readShiftRoleMaster() {
   var raw = PropertiesService.getScriptProperties().getProperty("SHIFT_ROLE_MASTER_JSON");
   try { if (raw) return JSON.parse(raw); } catch (_) {}
-  return [{ id: "pharmacist", name: "薬剤師" }, { id: "clerk", name: "事務員" }, { id: "seller", name: "登録販売者" }];
+  return [{ id: "manager", name: "店長" }, { id: "clerk", name: "事務" }, { id: "staff", name: "スタッフ" }];
 }
 
 function getShiftRoleMaster(data) {
@@ -755,7 +755,7 @@ function getShiftHomeLayout(data) {
   try {
     requireShiftSession(data.sessionToken);
     var raw = PropertiesService.getScriptProperties().getProperty("SHIFT_HOME_LAYOUT_JSON");
-    return createJsonDataResponse({ success: true, layout: raw ? JSON.parse(raw) : { visible: true, columns: [["pharmacist"], ["clerk", "seller"]] } });
+    return createJsonDataResponse({ success: true, layout: raw ? JSON.parse(raw) : { visible: true, columns: [["manager", "clerk"], ["staff"]] } });
   } catch (error) { return createJsonResponse(false, error.message || "ホーム表示設定を取得できませんでした。"); }
 }
 

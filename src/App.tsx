@@ -973,8 +973,8 @@ export default function App() {
   const [setupSeen, setSetupSeen] = useState<string[]>(() => { try { const v = JSON.parse(templateStorage.getItem("setup_checklist_seen") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } });
   const markSetupSeen = (key: string) => setSetupSeen(current => { if (current.includes(key)) return current; const next = [...current, key]; templateStorage.setItem("setup_checklist_seen", JSON.stringify(next)); return next; });
   const setupSteps = [
-    { title: "店舗名と集計期間を決める", hint: "店舗マスタで、店舗名とシフトの月の区切りを設定します", done: storeMaster.storeName.trim() !== "" || employeeMaster.length > 0, onClick: () => setSettingsPage("store") },
-    { title: "従業員を登録する", hint: "従業員マスタで名前と役職を登録します（最大50人）", done: employeeMaster.length > 0, onClick: () => setSettingsPage("employee") },
+    { title: "従業員を登録する", hint: "最初は操作員1名だけです。名前を自分の名前に直して、ほかの従業員を追加します（最大50人）", done: employeeMaster.length >= 2 || setupSeen.includes("employee"), onClick: () => { markSetupSeen("employee"); setSettingsPage("employee"); } },
+    { title: "店舗名と集計期間を決める", hint: "店舗マスタで、店舗名とシフトの月の区切りを設定します", done: storeMaster.storeName.trim() !== "" || setupSeen.includes("store"), onClick: () => { markSetupSeen("store"); setSettingsPage("store"); } },
     { title: "勤務時間を確認する", hint: "初期の早番・遅番などを、自分の店舗に合わせて直します（このままでもOK）", done: setupSeen.includes("worktime"), onClick: () => { markSetupSeen("worktime"); setSettingsPage("worktime"); } },
     { title: "シフトを作ってみる", hint: "「シフト作成」で、1日だけ勤務を入れてみましょう", done: employees.some(employee => employee.shifts.some(shift => shift.shift || shift.customShiftText)), onClick: () => requestEditAccess(() => { setActiveTab("dashboard"); setIsFromAdmin(true); }) },
     { title: "使い方・説明書を読む", hint: "困ったときはここを開きます", done: setupSeen.includes("guide"), onClick: () => { markSetupSeen("guide"); setGuideOpen(true); } },

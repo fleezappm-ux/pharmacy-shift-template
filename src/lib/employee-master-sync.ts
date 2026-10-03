@@ -17,8 +17,8 @@ export interface EmployeeMasterItem {
 
 export interface ShiftRole { id: string; name: string }
 export interface HomeLayout { visible: boolean; columns: string[][] }
-export const DEFAULT_ROLES: ShiftRole[] = [{ id: "pharmacist", name: "薬剤師" }, { id: "clerk", name: "事務員" }, { id: "seller", name: "登録販売者" }];
-export const DEFAULT_HOME_LAYOUT: HomeLayout = { visible: true, columns: [["pharmacist"], ["clerk", "seller"]] };
+export const DEFAULT_ROLES: ShiftRole[] = [{ id: "manager", name: "店長" }, { id: "clerk", name: "事務" }, { id: "staff", name: "スタッフ" }];
+export const DEFAULT_HOME_LAYOUT: HomeLayout = { visible: true, columns: [["manager", "clerk"], ["staff"]] };
 
 async function call(action: string, payload: Record<string, unknown> = {}) {
   const sessionToken = getShiftSession()?.token || "";
