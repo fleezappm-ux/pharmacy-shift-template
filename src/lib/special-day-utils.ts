@@ -4,8 +4,8 @@ import { GlobalRemark, SpecialDayRule } from "../types";
 
 const weekdayRuleId = (day: number) => `band-v3:closed-${day}`;
 export const DEFAULT_SPECIAL_DAY_RULES: SpecialDayRule[] = [
-  { id: weekdayRuleId(0), name: "定休日", color: "red", behavior: "information", enabled: true, mode: "recurring", weekday: 0, weeks: [1, 2, 3, 4, 5], dates: [], order: 0 },
-  { id: "band-v3:holiday", name: "定休日", color: "red", behavior: "information", enabled: true, mode: "annual", weekday: 0, weeks: [], dates: [], order: 1 }
+  { id: weekdayRuleId(0), name: "日曜", color: "red", behavior: "information", enabled: true, mode: "recurring", weekday: 0, weeks: [1, 2, 3, 4, 5], dates: [], order: 0 },
+  { id: "band-v3:holiday", name: "祝日", color: "red", behavior: "information", enabled: true, mode: "annual", weekday: 0, weeks: [], dates: [], order: 1 }
 ];
 
 /** Older duplicate-specific presets are intentionally discarded. New rules use the v3 prefix. */

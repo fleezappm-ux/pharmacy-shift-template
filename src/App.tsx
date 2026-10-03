@@ -14,19 +14,14 @@ import {
   FileCode,
   ChevronRight,
   ChevronLeft,
-  Info,
   Grid3X3,
   ArrowLeft,
-  ArrowRight,
   Home,
-  CloudUpload,
   PencilLine,
   LockKeyhole,
   LockOpen,
-  RotateCcw,
   Settings,
   Building2,
-  ListChecks,
   CalendarDays,
   BookOpen,
   Wand2,
@@ -34,7 +29,7 @@ import {
   Palette,
   Clock,
   SlidersHorizontal
-  ,MessageSquareText, UserRound, CalendarClock, Smartphone
+  ,MessageSquareText, UserRound
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -42,7 +37,7 @@ import { saveAs } from "file-saver";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs } from "@/components/ui/tabs";
 import { 
   Table, 
   TableBody, 
@@ -75,9 +70,9 @@ import { PersonalShiftList } from "./components/PersonalShiftList";
 import { cancelLeaveRequest, deleteLeaveRequest, fetchLeaveRequests, fetchPaidLeaveBalance, savePaidLeaveBalance, submitLeaveRequest, updateLeaveRequestStatus, updateLeaveRequestWorkTime } from "./lib/leave-request-sync";
 import { SpecialDaySettings } from "./components/SpecialDaySettings";
 import { fetchSpecialDayRules, saveSpecialDayRules } from "./lib/special-day-sync";
-import { buildDisplayRemarks, colorForRemark, DEFAULT_SPECIAL_DAY_RULES, findSpecialDayRule, withDefaultSpecialDayRules, businessDaysFromRules, shouldRestOnDate } from "./lib/special-day-utils";
+import { buildDisplayRemarks, colorForRemark, DEFAULT_SPECIAL_DAY_RULES, withDefaultSpecialDayRules, shouldRestOnDate } from "./lib/special-day-utils";
 import { CalendarPeriodSettings, fetchCalendarPeriodSettings, saveCalendarPeriodSettings } from "./lib/calendar-period-sync";
-import { BoardVisibility, fetchBoardVisibility, saveBoardVisibility, fetchCorrectionVisibility, saveCorrectionVisibility } from "./lib/store-board-sync";
+import { BoardVisibility, fetchStoreSettings, saveStoreSettings, fetchBoardVisibility, saveBoardVisibility, fetchCorrectionVisibility, saveCorrectionVisibility } from "./lib/store-board-sync";
 import { getManagementApiKey, getShiftSession, logoutShiftSession, saveManagementApiKey, ShiftSession } from "./lib/auth-sync";
 import { DEFAULT_STORE_MASTER, StoreMaster, StoreMasterSettings } from "./components/StoreMasterSettings";
 import { ShiftLogin } from "./components/ShiftLogin";
@@ -107,8 +102,7 @@ function readCachedEmployeeMaster(): EmployeeMasterItem[] | null {
 }
 
 const DEFAULT_EMPLOYEES: string[] = [];
-const PLACEHOLDER_EMPLOYEE_PATTERN = /^従業員[Ａ-ＺA-Zａ-ｚa-z０-９0-9]+$/;
-const BASE_GLOBAL_REMARK_TYPES = ["コメント"] as const;
+const PLACEHOLDER_EMPLOYEE_PATTERN = /^従業員[A-EＡ-Ｅ]$/;
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -176,7 +170,7 @@ export default function App() {
   const [storeMaster, setStoreMaster] = useState<StoreMaster>(() => {
     const saved = templateStorage.getItem("store_master_settings");
     if (!saved) return DEFAULT_STORE_MASTER;
-    try { const stored = JSON.parse(saved); return { ...DEFAULT_STORE_MASTER, ...stored, storeName: stored.storeName === "薬局名を設定" ? "" : stored.storeName || "" }; } catch { return DEFAULT_STORE_MASTER; }
+    try { const stored = JSON.parse(saved); return { ...DEFAULT_STORE_MASTER, ...stored, storeName: stored.storeName === "薬局名を設定" || stored.storeName === "店舗名を設定" ? "" : stored.storeName || "" }; } catch { return DEFAULT_STORE_MASTER; }
   });
   const [calendarPeriodSettings, setCalendarPeriodSettings] = useState<CalendarPeriodSettings>(() => {
     const saved = templateStorage.getItem("calendar_period_settings");
@@ -216,10 +210,8 @@ export default function App() {
   const [adminNoticeVisibility, setAdminNoticeVisibility] = useState<AdminNoticeVisibility>("all");
   const [homeLayout, setHomeLayout] = useState<HomeLayout>(DEFAULT_HOME_LAYOUT);
   const [globalRemarks, setGlobalRemarks] = useState<GlobalRemark[]>([]);
-  const [currentMonth, setCurrentMonth] = useState(() => {
-    const saved = templateStorage.getItem("current_month");
-    return saved ? new Date(saved) : getCurrentShiftMonth(new Date(), calendarPeriodSettings);
-  });
+  // 起動時は、保存された古い月ではなく、必ず「今の期間」から始めます。
+  const [currentMonth, setCurrentMonth] = useState(() => getCurrentShiftMonth(new Date(), calendarPeriodSettings));
   // 起動時は、前回閉じた画面に関係なく必ずホームから開始します。
   const [activeTab, setActiveTab] = useState(() => getShiftSession()?.role === "admin" && templateStorage.getItem(RESET_PENDING_KEY) ? "admin" : "home");
   const [lockedMonths, setLockedMonths] = useState<string[]>(() => {
@@ -234,7 +226,6 @@ export default function App() {
     return [];
   });
   const [isFromAdmin, setIsFromAdmin] = useState(false);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [cycleNames, setCycleNames] = useState<Record<number, string>>(() => {
     const saved = templateStorage.getItem("cycle_names");
     if (saved) {
@@ -352,6 +343,22 @@ export default function App() {
         setCurrentMonth(resumeMonth || getCurrentShiftMonth(new Date(), settings));
       })
       .catch(error => console.error("カレンダー期間設定の取得に失敗しました", error));
+    return () => { cancelled = true; };
+  }, [appSession?.token]);
+
+  useEffect(() => {
+    if (!appSession?.token) return;
+    let cancelled = false;
+    fetchStoreSettings()
+      .then(settings => {
+        if (cancelled) return;
+        setStoreMaster(current => {
+          const next = { ...current, storeName: settings.storeName, showStoreNameOnHome: settings.showStoreNameOnHome };
+          templateStorage.setItem("store_master_settings", JSON.stringify(next));
+          return next;
+        });
+      })
+      .catch(error => console.error("店舗名の取得に失敗しました", error));
     return () => { cancelled = true; };
   }, [appSession?.token]);
 
@@ -479,11 +486,6 @@ export default function App() {
     setHomeWeekOffset(offset);
     setHomeSelectedDate(null);
     setCurrentMonth(getCurrentShiftMonth(displayedMonday, calendarPeriodSettings));
-  };
-
-  const goToCurrentShiftPeriod = () => {
-    setCurrentMonth(getCurrentShiftMonth(new Date(), calendarPeriodSettings));
-    toast.success("今日を含むシフト期間へ戻りました");
   };
 
   const installLabel = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ? "ホーム画面に追加" : "デスクトップに追加";
@@ -683,41 +685,6 @@ export default function App() {
     return resolveCycleShift(cyclePatterns, cycleType, date.getDay(), weekIndex);
   };
 
-  const createNextMonthShifts = () => {
-    // 店舗で設定した締め期間の翌月分を作成
-    const nextMonthDate = addMonths(currentMonth, 1);
-    const nextYear = nextMonthDate.getFullYear();
-    const nextMonthNum = nextMonthDate.getMonth() + 1;
-    const nextDateRange = generateConfiguredDateRange(nextYear, nextMonthNum, calendarPeriodSettings.startDay, calendarPeriodSettings.endDay);
-    
-    setEmployees(prev => prev.map(emp => {
-      const newShifts = [...emp.shifts];
-      const assignment = cycleAssignments[emp.id];
-      if (!assignment) return emp;
-      nextDateRange.forEach(date => {
-        const dateStr = getDateStr(date);
-        const shift = getCycleShift(date, assignment.cycleType, assignment.anchorDate);
-        if (shift) {
-          const { breakTime, workTime } = calculateTimes(shift);
-          const existingIdx = newShifts.findIndex(s => s.date === dateStr);
-          if (existingIdx >= 0) {
-            newShifts[existingIdx] = { ...newShifts[existingIdx], shift, breakTime, workTime, customShiftText: undefined, comment: "" };
-          } else {
-            newShifts.push({ date: dateStr, shift, breakTime, workTime, comment: "" });
-          }
-        }
-      });
-      
-      return { ...emp, shifts: newShifts };
-    }));
-
-    // 表示月を切り替え
-    setCurrentMonth(nextMonthDate);
-    const unassigned = employees.filter(emp => !cycleAssignments[emp.id]).length;
-    if (unassigned) toast.warning(`勤務パターン未設定の${unassigned}名は作成していません`);
-    else toast.success(`${nextMonthNum}月分を勤務パターンから作成しました`);
-  };
-
   const dateRange = generateConfiguredDateRange(currentMonth.getFullYear(), currentMonth.getMonth() + 1, calendarPeriodSettings.startDay, calendarPeriodSettings.endDay);
 
   useEffect(() => {
@@ -793,13 +760,6 @@ export default function App() {
     } finally { setLeaveRequestLoading(false); }
   };
 
-  const refreshLeaveRequests = async () => {
-    if (!dateRange.length) return;
-    setLeaveRequestLoading(true);
-    try { setLeaveRequests(await fetchLeaveRequests(getDateStr(dateRange[0]), getDateStr(dateRange[dateRange.length - 1]))); }
-    finally { setLeaveRequestLoading(false); }
-  };
-
   const handleLeaveRequestCancel = async (id: string) => {
     setLeaveRequestLoading(true);
     try {
@@ -818,11 +778,16 @@ export default function App() {
       setLeaveRequests(prev => prev.map(item => item.id === saved.id ? saved : item));
       setBoardPeriods(prev => prev.map(period => ({ ...period, requests: period.requests.map(item => item.id === saved.id ? saved : item) })));
       setHomeBoardRequests(prev => prev.map(item => item.id === saved.id ? saved : item));
+      let note = "";
       if (status === "承認" && request.status !== "承認" && request.date) {
         const shift: ShiftType | null = request.type === "有給希望" ? "有休" : request.type === "休み希望" ? "休み" : null;
-        if (shift) handleShiftChange((request.employeeId ? employees.find(item => item.id === request.employeeId) : employees.find(item => (item.displayName || item.name) === request.employeeName || item.name === request.employeeName))?.id || "", request.date, shift);
+        if (shift) {
+          const target = request.employeeId ? employees.find(item => item.id === request.employeeId) : employees.find(item => (item.displayName || item.name) === request.employeeName || item.name === request.employeeName);
+          if (target && dateRange.some(date => getDateStr(date) === request.date)) { handleShiftChange(target.id, request.date, shift); note = "（シフト表にも反映しました）"; }
+          else note = "（シフト表には反映されていません。シフト作成で手動入力してください）";
+        }
       }
-      toast.success(status === "申請中" ? "申請中に戻しました" : status === "承認" ? "承認しました" : "却下しました");
+      toast.success(status === "申請中" ? "申請中に戻しました" : status === "承認" ? `承認しました${note}` : "却下しました");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "状態を更新できませんでした");
       throw error;
@@ -891,7 +856,7 @@ export default function App() {
 
   useEffect(() => {
     if (!appSession?.employeeId) return;
-    fetchPaidLeaveBalance(appSession.employeeId).then(setPaidLeaveBalance).catch(error => console.error("有給情報の取得に失敗しました", error));
+    fetchPaidLeaveBalance(appSession.employeeId).then(setPaidLeaveBalance).catch(error => console.error("有休情報の取得に失敗しました", error));
   }, [appSession?.employeeId]);
 
   useEffect(() => { templateStorage.setItem("shift_auto_draft_settings", JSON.stringify(autoDraftSettings)); }, [autoDraftSettings]);
@@ -934,11 +899,17 @@ export default function App() {
       return { ...employee, shifts };
     });
     setEmployees(generatedEmployees);
+    let skipped = 0;
     for (const range of targetRanges) {
-      await saveMonthToServer(generatedEmployees, globalRemarks, getDateStr(range[0]), getDateStr(range[range.length - 1]), appSession?.employeeName || "シフト編集者");
+      try {
+        await saveMonthToServer(generatedEmployees, globalRemarks, getDateStr(range[0]), getDateStr(range[range.length - 1]), appSession?.employeeName || "シフト編集者");
+      } catch (error) {
+        // 確定済みの期間は保存できないため、その期間だけ飛ばして続けます。
+        if (error instanceof Error && /確定|ロック/.test(error.message)) skipped += 1; else throw error;
+      }
     }
     await updateAutoDraftSettings({ ...autoDraftSettings, started: true, lastRunAt: new Date().toISOString() });
-    toast.success("シフト案の自動作成を開始しました");
+    toast.success(skipped ? `シフト案を作成しました（確定済みの${skipped}期間は変更していません）` : "シフト案の自動作成を開始しました");
     } catch (error) { toast.error(error instanceof Error ? error.message : "シフト案を自動作成できませんでした"); }
   };
 
@@ -1081,6 +1052,10 @@ export default function App() {
   const handleShiftChange = (employeeId: string, date: string, shift: ShiftType | "none") => {
     if (isLocked) {
       toast.error("この月は確定済みのため編集できません");
+      return;
+    }
+    if (periodStatusLoading) {
+      toast.error("確定状態を確認中です。少し待ってからもう一度お試しください");
       return;
     }
     const finalShift = shift === "none" ? "" : shift;
@@ -1282,7 +1257,7 @@ export default function App() {
       toast.info(`現在${cycleNames[cycleType]}が割り当てられている従業員はいません`);
       return;
     }
-    if (!window.confirm(`${cycleNames[cycleType]}を${targets.length}名の今月分へ再適用します。手入力した勤務時間も上書きされます。よろしいですか？`)) return;
+    if (!window.confirm(`${cycleNames[cycleType]}を${targets.length}名の表示中の期間へ再適用します。手入力した勤務時間も上書きされます。よろしいですか？`)) return;
 
     setEmployees(prev => prev.map(emp => {
       const assignment = cycleAssignments[emp.id];
@@ -1303,7 +1278,7 @@ export default function App() {
       });
       return { ...emp, shifts: newShifts };
     }));
-    toast.success(`${cycleNames[cycleType]}を今月分へ再適用しました`);
+    toast.success(`${cycleNames[cycleType]}を表示中の期間へ再適用しました`);
   };
 
   const renameCycle = (num: number, name: string) => {
@@ -1340,26 +1315,11 @@ export default function App() {
     finally { setCycleSaving(false); }
   };
 
-  const clearMonthShifts = () => {
-    if (isLocked) {
-      toast.error("この月は確定済みのためクリアできません");
-      return;
-    }
-    
-    setEmployees(prev => prev.map(emp => {
-      const newShifts = emp.shifts.filter(s => !dateRange.some(d => s.date === getDateStr(d)));
-      return { ...emp, shifts: newShifts };
-    }));
-    setShowClearConfirm(false);
-    toast.success(`${format(currentMonth, "yyyy年MM月")}のシフトをすべてクリアしました`);
-  };
-
   const downloadCSV = (outputDateRange: Date[] = dateRange) => {
     if (!outputDateRange.length) return;
     const exportEmployees = sortEmployeesForDisplay(employees);
     const headers = ["日付", "曜日", ...exportEmployees.map(e => `${e.name}(シフト)`)];
     const rows = outputDateRange.map(date => {
-      const dateStr = getDateStr(date);
       const row = [
         format(date, "MM/dd"),
         format(date, "E", { locale: ja }),
@@ -1372,7 +1332,11 @@ export default function App() {
       return row;
     });
 
-    const csvContent = [headers, ...rows].map(r => r.join(",")).join("\n");
+    const csvCell = (value: string) => {
+      const text = /^[=+\-@]/.test(value) ? `'${value}` : value;
+      return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+    const csvContent = [headers, ...rows].map(r => r.map(csvCell).join(",")).join("\r\n");
     const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -1386,6 +1350,10 @@ export default function App() {
   };
 
   const downloadExcel = async (outputDateRange: Date[] = dateRange) => {
+    try { await buildExcel(outputDateRange); } catch (error) { toast.error(error instanceof Error ? `Excelを作成できませんでした：${error.message}` : "Excelを作成できませんでした"); }
+  };
+
+  const buildExcel = async (outputDateRange: Date[]) => {
     if (!outputDateRange.length) return;
     const ExcelJS = await import("exceljs");
     const exportEmployees = sortEmployeesForDisplay(employees);
@@ -1397,6 +1365,7 @@ export default function App() {
       right: { style: 'thin' }
     } as const;
 
+    const usedSheetNames = new Set<string>();
     // 1. 全体シフトシートの作成
     const overallSheet = workbook.addWorksheet("全体シフト");
     
@@ -1521,7 +1490,11 @@ export default function App() {
 
     // 2. 各個人のシートを作成
     exportEmployees.forEach(emp => {
-      const empSheet = workbook.addWorksheet(emp.displayName || emp.name);
+      const baseSheetName = ((emp.displayName || emp.name || "従業員").replace(/[\\/?*[\]:]/g, "_").slice(0, 28)) || "従業員";
+      let sheetName = baseSheetName;
+      for (let n = 2; usedSheetNames.has(sheetName.toLowerCase()) || sheetName === "全体シフト"; n++) sheetName = `${baseSheetName.slice(0, 26)}_${n}`;
+      usedSheetNames.add(sheetName.toLowerCase());
+      const empSheet = workbook.addWorksheet(sheetName);
       empSheet.pageSetup = { 
         paperSize: 9, 
         orientation: 'portrait', 
@@ -1608,7 +1581,7 @@ export default function App() {
 
       empSheet.addRow([]);
       const totalRow = empSheet.addRow([
-        "月間合計",
+        "期間合計",
         "",
         `${stats.breakHours.toFixed(1)}h`,
         `${stats.workHours.toFixed(1)}h`,
@@ -1647,8 +1620,8 @@ export default function App() {
       toast.success(`保存先フォルダに ${fileName} を書き出しました`);
     } else {
       saveAs(new Blob([buffer]), fileName);
+      toast.success("Excelファイルをダウンロードしました");
     }
-    toast.success("Excelファイルをダウンロードしました");
   };
 
   const getGlobalRemark = (date: Date) => {
@@ -1679,8 +1652,8 @@ export default function App() {
   const copySyncError = async () => {
     const message = (syncFailure?.message || initialReadError).replace(/https?:\/\/\S+/g, "[接続先]").replace(/(token|key|password|パスワード|接続キー)\s*[:=]\s*[^\s、]+/gi, "$1=[非表示]");
     const detail = `シフトツールのエラー\n発生日時：${syncFailure ? new Date(syncFailure.at).toLocaleString("ja-JP") : "不明"}\n対象期間：${dateRange.length ? `${getDateStr(dateRange[0])}〜${getDateStr(dateRange[dateRange.length - 1])}` : "不明"}\n内容：${message}`;
-    try { await navigator.clipboard.writeText(detail); toast.success("エラー詳細をコピーしました。管理者・SEへお伝えください。"); }
-    catch { window.prompt("この内容をコピーして管理者・SEへお伝えください。", detail); }
+    try { await navigator.clipboard.writeText(detail); toast.success("エラー詳細をコピーしました。管理者へお伝えください。"); }
+    catch { window.prompt("この内容をコピーして管理者へお伝えください。", detail); }
   };
   const renderSyncStatus = () => <span className={`creation-save-status status-${syncState}`} role="status"><i aria-hidden="true" />{syncState === "loading" ? "読込中…" : syncState === "saving" ? "保存中…" : syncState === "dirty" ? "自動保存待ち" : syncState === "offline" ? "保存失敗" : syncState === "read-error" ? needsReLogin ? "再ログインが必要" : "読込失敗" : "保存済み"}</span>;
   const renderSyncFailure = () => (syncState === "offline" || syncState === "read-error") && <div className="creation-sync-error" role="alert">
@@ -1688,7 +1661,7 @@ export default function App() {
     <p>{syncFailure?.message || initialReadError}</p>
     <div>{needsReLogin ? <Button size="sm" onClick={reLoginForSync}>再ログイン</Button> : syncState === "read-error" ? <Button size="sm" onClick={() => setReadRetry(value => value + 1)}>再読み込み</Button> : <Button size="sm" disabled={isLocked || periodStatusLoading} onClick={() => { void saveCurrentMonth().catch(() => {}); }}>再保存</Button>}
     <Button size="sm" variant="outline" onClick={() => { void copySyncError(); }}>エラー詳細をコピー</Button></div>
-    {(syncFailure?.count || 0) > 1 && <p>解決しない場合は、エラー詳細を管理者・SEへ連絡してください。</p>}
+    {(syncFailure?.count || 0) > 1 && <p>解決しない場合は、エラー詳細を管理者へ連絡してください。</p>}
   </div>;
   const moveCreationPeriod = async (direction: number) => {
     if (appSession?.role === "admin" && editRevisionRef.current > savedRevisionRef.current) {
@@ -1698,7 +1671,7 @@ export default function App() {
   };
   const renderCreationPeriod = () => <div className="creation-period-bar"><Button variant="outline" size="sm" disabled={syncState === "saving"} onClick={() => { void moveCreationPeriod(-1); }} aria-label="前の期間"><ChevronLeft className="h-4 w-4" /><span>前の期間</span></Button><div><small>{dateRange.length ? format(dateRange[0], "yyyy年") : ""}</small><strong>{dateRange.length ? `${format(dateRange[0], "M月d日")}〜${format(dateRange[dateRange.length - 1], "M月d日")}` : "期間未設定"}</strong></div><Button variant="outline" size="sm" disabled={syncState === "saving"} onClick={() => { void moveCreationPeriod(1); }} aria-label="次の期間"><span>次の期間</span><ChevronRight className="h-4 w-4" /></Button></div>;
   if (!appSession) return <><ShiftLogin employees={loginEmployees} onLogin={session => { setAppSession(session); if (templateStorage.getItem("shift_guide_hidden_v1") !== "1") openGuide("home"); toast.success(session.role === "admin" ? "編集者としてログインしました" : "ログインしました"); }} /><Toaster position="top-center" /></>;
-  if (!initialSyncComplete) return <main className="flex min-h-screen items-center justify-center bg-slate-50"><div className="rounded-2xl bg-white px-8 py-7 text-center shadow-xl"><div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" /><strong className="text-slate-800">従業員マスタを同期しています</strong><p className="mt-2 text-xs text-slate-500">役職情報を確認してから表示します</p></div></main>;
+  if (!initialSyncComplete) return <main className="flex min-h-dvh items-center justify-center bg-slate-50"><div className="rounded-2xl bg-white px-8 py-7 text-center shadow-xl"><div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" /><strong className="text-slate-800">従業員マスタを同期しています</strong><p className="mt-2 text-xs text-slate-500">役職情報を確認してから表示します</p></div></main>;
 
   return (
     <Tabs value={activeTab} onValueChange={value => {
@@ -1709,7 +1682,7 @@ export default function App() {
       if (!window.confirm("勤務時間の追加・変更がまだ完了していません。画面を離れますか？")) {
         event.preventDefault(); event.stopPropagation();
       }
-    }} className="shift-shell flex h-screen w-full overflow-hidden bg-background text-foreground font-sans">
+    }} className="shift-shell flex h-dvh w-full overflow-hidden bg-background text-foreground font-sans">
       {/* Sidebar */}
       <aside className="shift-sidebar hidden md:flex w-64 bg-card border-r border-border p-6 flex-col shrink-0 overflow-y-auto">
         <div className="text-xl font-bold text-primary mb-8 flex items-center justify-between gap-2">
@@ -1834,7 +1807,7 @@ export default function App() {
           {appSession.role === "admin" && <>
           <div className="sync-indicator flex items-center gap-2 text-xs">
             <span className={`sync-dot ${syncState}`} />
-            {syncState === "loading" ? "Notionを読込中" : syncState === "saving" ? "自動保存中" : syncState === "dirty" ? "自動保存待ち" : syncState === "read-error" ? "共有データの読込失敗" : syncState === "offline" ? "保存失敗（端末内に保存済み）" : "Notionに保存済み"}
+            {syncState === "loading" ? "読込中" : syncState === "saving" ? "自動保存中" : syncState === "dirty" ? "自動保存待ち" : syncState === "read-error" ? "共有データの読込失敗" : syncState === "offline" ? "保存失敗（端末内に保存済み）" : "保存済み"}
           </div></>}
         </div>
       </aside>
@@ -1923,9 +1896,14 @@ export default function App() {
             ) : activeTab === "requests" ? (
               <LeaveRequestView employees={dashboardEmployees} dates={dateRange} remarks={displayRemarks} requests={leaveRequests} locked={isLocked} loading={leaveRequestLoading || periodStatusLoading} operatorId={appSession.employeeId || ""} isAdmin={appSession.role === "admin"} onCheckPeriodStatus={fetchShiftPeriodStatus} onSubmit={handleLeaveRequestSubmit} onCancel={handleLeaveRequestCancel} onSaveWorkTime={async (id, start, end) => { const saved = await updateLeaveRequestWorkTime(id, start, end); setLeaveRequests(prev => prev.map(item => item.id === id ? saved : item)); }} onPeriodChange={async direction => { if (appSession.role === "admin" && (syncState === "dirty" || syncState === "saving")) { try { await saveCurrentMonth(); } catch { return; } } setCurrentMonth(prev => addMonths(prev, direction)); }} />
             ) : activeTab === "board" ? (
-              <BulletinBoard onBack={goBack} notices={adminNotices} employees={employeeMaster} defaultNoticeVisibility={adminNoticeVisibility} onCreateNotice={async (text, visibility, ids) => { try { const notice = await createAdminNotice(text, visibility, ids); setAdminNotices(items => [notice, ...items]); toast.success("お知らせを公開しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "公開できませんでした"); throw error; } }} onDeleteNotice={async id => { if (!window.confirm("このお知らせを削除しますか？")) return; try { await removeAdminNotice(id); setAdminNotices(items => items.filter(item => item.id !== id)); } catch (error) { toast.error(error instanceof Error ? error.message : "削除できませんでした"); } }} periods={boardPeriods} isEditor={appSession.role === "admin"} visibility={storeMaster.leaveRequestBoardVisibility || "immediate"} correctionVisibility={correctionVisibility} operatorName={appSession.employeeName} onShiftPeriod={direction => setBoardAnchor(prev => addMonths(prev, direction))} onResolve={async item => { const saved = await updateLeaveRequestStatus(item.id, "対応済み"); setBoardPeriods(prev => prev.map(period => ({ ...period, requests: period.requests.map(request => request.id === saved.id ? saved : request) }))); setHomeBoardRequests(prev => prev.map(request => request.id === saved.id ? saved : request)); setHomePendingCorrections(prev => prev.filter(request => request.id !== saved.id)); }} />
+              <BulletinBoard onBack={goBack} notices={adminNotices} employees={employeeMaster} defaultNoticeVisibility={adminNoticeVisibility} onCreateNotice={async (text, visibility, ids) => { try { const notice = await createAdminNotice(text, visibility, ids); setAdminNotices(items => [notice, ...items]); toast.success("お知らせを公開しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "公開できませんでした"); throw error; } }} onDeleteNotice={async id => { if (!window.confirm("このお知らせを削除しますか？")) return; try { await removeAdminNotice(id); setAdminNotices(items => items.filter(item => item.id !== id)); } catch (error) { toast.error(error instanceof Error ? error.message : "削除できませんでした"); } }} periods={boardPeriods} isEditor={appSession.role === "admin"} visibility={storeMaster.leaveRequestBoardVisibility || "immediate"} correctionVisibility={correctionVisibility} operatorName={appSession.employeeName} operatorId={appSession.employeeId} onShiftPeriod={direction => setBoardAnchor(prev => addMonths(prev, direction))} onResolve={async item => { const saved = await updateLeaveRequestStatus(item.id, "対応済み"); setBoardPeriods(prev => prev.map(period => ({ ...period, requests: period.requests.map(request => request.id === saved.id ? saved : request) }))); setHomeBoardRequests(prev => prev.map(request => request.id === saved.id ? saved : request)); setHomePendingCorrections(prev => prev.filter(request => request.id !== saved.id)); }} />
             ) : activeTab === "mypage" ? (
               <MyPage employee={operatorEmployee} requests={leaveRequests} locked={isLocked} initialBalance={paidLeaveBalance} onSaveBalance={async balance => { const saved = await savePaidLeaveBalance(balance); setPaidLeaveBalance(saved); }} onCancel={handleLeaveRequestCancel} onSaveWorkTime={async (id, start, end) => { const saved = await updateLeaveRequestWorkTime(id, start, end); setLeaveRequests(prev => prev.map(item => item.id === id ? saved : item)); }} onEdit={() => setActiveTab("requests")} />
+            ) : activeTab === "dashboard" && dashboardEmployees.length === 0 ? (
+              <div key="dashboard-empty" className="rounded-2xl border bg-white p-8 text-center text-sm leading-7 text-slate-700">
+                <p className="font-bold text-slate-900">まだ従業員が登録されていません</p>
+                <p className="mt-2">{appSession.role === "admin" ? "「設定」→「従業員マスタ」で従業員を登録すると、ここにシフトが表示されます。" : "管理者が従業員を登録すると、ここにシフトが表示されます。"}</p>
+              </div>
             ) : activeTab === "dashboard" ? (
               <motion.div
                 key="dashboard"
@@ -2072,7 +2050,7 @@ export default function App() {
                           })}
                           {/* Summary Row */}
                           <TableRow className="dashboard-summary-row bg-muted/50 font-bold h-12">
-                            <TableCell colSpan={2} className="text-right border-r border-border pr-4">月間合計</TableCell>
+                            <TableCell colSpan={2} className="text-right border-r border-border pr-4">期間合計</TableCell>
                             {dashboardEmployees.map(emp => {
                               const stats = emp.shifts
                                 .filter(s => dateRange.some(d => s.date.startsWith(getDateStr(d))))
@@ -2133,7 +2111,7 @@ export default function App() {
                       { key: "employee", icon: Users, title: "従業員マスタ", description: "従業員・役職・ホーム表示" },
                       { key: "shift", icon: SlidersHorizontal, title: "シフトマスタ", description: "勤務時間・クール・帯色など" },
                       { key: "other", icon: Settings, title: "その他設定", description: "接続キー・表示・出力" },
-                      { key: "reset", icon: Trash2, title: "複製版のデータ初期化", description: "業務データをまとめて初期化" },
+                      { key: "reset", icon: Trash2, title: "データ初期化", description: "業務データをまとめて初期化" },
                     ].map(item => <button key={item.key} type="button" onClick={() => setSettingsPage(item.key as typeof settingsPage)} className="group flex min-h-24 items-center gap-4 rounded-2xl border-2 border-slate-100 bg-white p-5 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50">
                       <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><item.icon className="h-6 w-6" /></span>
                       <span><strong className="flex items-center gap-2 text-base text-slate-900">{item.title}<ChevronRight className="h-4 w-4 transition group-hover:translate-x-1" /></strong><small className="mt-1 block leading-relaxed text-slate-500">{item.description}</small></span>
@@ -2146,7 +2124,7 @@ export default function App() {
               <TemplateResetSettings onBack={() => setSettingsPage("menu")} onProgress={setResetProgress} />
             ) : activeTab === "admin" && settingsPage === "store" ? (
               <motion.div key="settings-store" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-                <SettingsHead title="店舗マスタ" description="店舗全体の基本ルール" backLabel="設定へ戻る" onBack={() => setSettingsPage("menu")} /><Card><CardContent className="p-6 space-y-5"><StoreMasterSettings master={storeMaster} onMasterChange={setStoreMaster} period={calendarPeriodSettings} periodDraft={calendarPeriodDraft} saving={calendarPeriodSaving} onPeriodDraftChange={setCalendarPeriodDraft} onSavePeriod={handleSaveCalendarPeriod} onOpenBandSettings={() => setSettingsPage("special")} /></CardContent></Card>
+                <SettingsHead title="店舗マスタ" description="店舗全体の基本ルール" backLabel="設定へ戻る" onBack={() => setSettingsPage("menu")} /><Card><CardContent className="p-6 space-y-5"><StoreMasterSettings master={storeMaster} onMasterChange={setStoreMaster} period={calendarPeriodSettings} periodDraft={calendarPeriodDraft} saving={calendarPeriodSaving} onPeriodDraftChange={setCalendarPeriodDraft} onSavePeriod={handleSaveCalendarPeriod} onSaveStore={async settings => { const saved = await saveStoreSettings(settings); setStoreMaster(current => { const next = { ...current, ...saved }; templateStorage.setItem("store_master_settings", JSON.stringify(next)); return next; }); }} onOpenBandSettings={() => setSettingsPage("special")} /></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "board" ? (
               <motion.div key="settings-board" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
@@ -2154,7 +2132,7 @@ export default function App() {
                 <CardContent className="p-6 space-y-4"><label className="block text-sm font-bold">休み希望の公開設定<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={storeMaster.leaveRequestBoardVisibility || "immediate"} onChange={e => setStoreMaster(v => ({...v, leaveRequestBoardVisibility:e.target.value as StoreMaster["leaveRequestBoardVisibility"]}))}><option value="immediate">提出と同時に全員へ公開</option><option value="after_approval">管理者確認後に全員へ公開</option><option value="private">本人と編集者だけに表示</option></select></label><Button className="w-full h-11 font-bold" onClick={() => void handleSaveBoardVisibility(storeMaster.leaveRequestBoardVisibility)}>休み希望の公開設定を保存</Button><div className="border-t pt-4"><label className="block text-sm font-bold">管理者からのお知らせ設定<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={adminNoticeVisibility} onChange={event => setAdminNoticeVisibility(event.target.value as AdminNoticeVisibility)}><option value="all">全員</option><option value="selected">指定従業員</option></select></label><Button className="mt-3 w-full h-11" onClick={async () => { try { setAdminNoticeVisibility(await saveAdminNoticeVisibility(adminNoticeVisibility)); toast.success("お知らせ公開設定を保存しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "保存できませんでした"); } }}>管理者からのお知らせ設定を保存</Button></div><div className="border-t pt-4"><label className="block text-sm font-bold">確定シフト訂正依頼の公開範囲<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={correctionVisibility} onChange={e => setCorrectionVisibility(e.target.value as "all" | "private")}><option value="all">全員に表示</option><option value="private">本人と管理者のみ表示</option></select></label><Button className="mt-3 w-full h-11" onClick={async () => { try { setCorrectionVisibility(await saveCorrectionVisibility(correctionVisibility)); toast.success("訂正依頼の公開設定を保存しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "保存できませんでした"); } }}>訂正依頼の公開設定を保存</Button></div></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "employee" ? (
-              <motion.div key="settings-employee" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><SettingsHead title="従業員マスタ" description="従業員の登録、役職、ホームの表示" backLabel="設定へ戻る" onBack={() => setSettingsPage("menu")} /><EmployeeMasterSettings employees={employeeMaster} roles={roles} onSave={handleSaveEmployeeMaster} /><RoleAndHomeSettings roles={roles} layout={homeLayout} onSaveRoles={handleSaveRoles} onSaveLayout={async value => setHomeLayout(await saveHomeLayout(value))} /></motion.div>
+              <motion.div key="settings-employee" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><SettingsHead title="従業員マスタ" description="従業員の登録、役職、ホームの表示" backLabel="設定へ戻る" onBack={() => setSettingsPage("menu")} /><EmployeeMasterSettings employees={employeeMaster} roles={roles} onSave={handleSaveEmployeeMaster} operatorId={appSession?.employeeId} /><RoleAndHomeSettings roles={roles} layout={homeLayout} onSaveRoles={handleSaveRoles} onSaveLayout={async value => setHomeLayout(await saveHomeLayout(value))} /></motion.div>
             ) : activeTab === "admin" && settingsPage === "shift" ? (
               <motion.div key="settings-shift" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><SettingsHead title="シフトマスタ" description="シフト作成のもとになる設定" backLabel="設定へ戻る" onBack={() => setSettingsPage("menu")} /><div className="grid gap-3 sm:grid-cols-2">{[
                   { key: "worktime", icon: Clock, title: "勤務時間設定", description: "早番・遅番などの時間と略称" },
@@ -2192,12 +2170,12 @@ export default function App() {
             ) : activeTab === "admin" && settingsPage === "other" ? (
               <motion.div key="settings-other" className="space-y-4"><SettingsHead title="その他設定" description="接続・表示・ファイル出力" backLabel="設定へ戻る" onBack={() => setSettingsPage("menu")} /><Card><CardContent className="space-y-5 p-6">                      <div className="rounded-2xl border-2 border-blue-100 bg-blue-50/50 p-5 space-y-4">
                         <div>
-                          <h4 className="text-base font-black text-blue-950">管理者用GAS接続キー</h4>
-                          <p className="mt-1 text-xs text-slate-600">Notion保存、確定状態の共有、管理者操作に使用します。この端末だけに保存されます。</p>
+                          <h4 className="text-base font-black text-blue-950">管理者用の接続キー</h4>
+                          <p className="mt-1 text-xs text-slate-600">シフトの保存、確定状態の共有、管理者操作に使用します。この端末だけに保存されます。</p>
                         </div>
                         <p className="rounded-lg bg-slate-100 px-3 py-2 text-[11px] font-semibold text-slate-600">従業員ID・パスワードはGAS側で設定済みです。安全のため、この画面には値を表示しません。</p>
                         <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-                          <Input type="password" value={managementApiKey} onChange={event => setManagementApiKey(event.target.value)} placeholder="管理者用GAS接続キー" className="h-11 bg-white" />
+                          <Input type="password" value={managementApiKey} onChange={event => setManagementApiKey(event.target.value)} placeholder="管理者用の接続キー" className="h-11 bg-white" />
                           <Button className="h-11 font-bold" onClick={() => { saveManagementApiKey(managementApiKey); toast.success("この端末に接続キーを保存しました"); }}>この端末に保存</Button>
                         </div>
                         <p className="text-[11px] text-slate-500">従業員は共通の従業員ID・パスワードでログイン後、自分の名前を選んで希望を提出します。</p>
@@ -2205,7 +2183,7 @@ export default function App() {
                       <div className="pt-6 border-t border-slate-100">
                         <div className="flex items-center justify-between gap-4">
                           <div>
-                            <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">月間人員配置ヒートマップ</h4>
+                            <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">期間の人員配置ヒートマップ</h4>
                             <p className="text-[10px] text-muted-foreground mt-1">ホーム画面に日ごとの出勤人数を色分け表示します（初期設定はOFF）</p>
                           </div>
                           <Button
@@ -2306,7 +2284,7 @@ export default function App() {
                           <aside className="personal-summary-panel">
                             <div><span>出勤日数</span><strong>{attendanceDays}<small>日</small></strong></div>
                             <div><span>合計実働時間</span><strong>{totalWorkHours}<small>時間</small></strong></div>
-                            <div><span>有給取得数</span><strong>{paidLeaveDays}<small>日</small></strong></div>
+                            <div><span>有休取得数</span><strong>{paidLeaveDays}<small>日</small></strong></div>
                           </aside>
                         </div> : <div className="employee-shift-table-wrap overflow-x-auto">
                           <Table className="employee-shift-table text-[13px]">
@@ -2377,7 +2355,7 @@ export default function App() {
                                         {s?.shift === "任意入力" && (
                                           <Input 
                                             className="h-7 text-[10px] bg-white border-primary/30"
-                                            placeholder="例: 9時～17時"
+                                            placeholder="例：9:00～17:00"
                                             value={s?.customShiftText || ""}
                                             onChange={(e) => handleCustomShiftTextChange(emp.id, dateStr, e.target.value)}
                                             onBlur={() => finalizeCustomShiftText(emp.id, dateStr)}
@@ -2422,7 +2400,7 @@ export default function App() {
                               })}
                               {/* Summary Row */}
                               <TableRow className="bg-muted/50 font-bold h-12">
-                                <TableCell colSpan={3} className="text-right border-r border-border pr-4">月間合計</TableCell>
+                                <TableCell colSpan={3} className="text-right border-r border-border pr-4">期間合計</TableCell>
                                 <TableCell className="py-1 text-muted-foreground text-xs border-r border-border">
                                   {
                                     emp.shifts

@@ -1,11 +1,9 @@
-import { templateStorage } from "../lib/template-storage";
 import { useEffect, useState } from "react";
 import { Save } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CalendarPeriodSettings } from "../lib/calendar-period-sync";
-import { SpecialDayColor } from "../types";
 
 export interface StoreMaster {
   storeName: string;
@@ -25,6 +23,7 @@ interface Props {
   saving: boolean;
   onPeriodDraftChange: (settings: CalendarPeriodSettings) => void;
   onSavePeriod: () => Promise<boolean>;
+  onSaveStore: (settings: { storeName: string; showStoreNameOnHome: boolean }) => Promise<void>;
   onOpenBandSettings: () => void;
 }
 
@@ -33,22 +32,26 @@ const heading = "text-sm font-bold text-slate-900";
 const description = "mt-1 text-xs leading-5 text-slate-500";
 const field = "h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 
-export function StoreMasterSettings({ master, onMasterChange, period, periodDraft, saving, onPeriodDraftChange, onSavePeriod, onOpenBandSettings }: Props) {
+export function StoreMasterSettings({ master, onMasterChange, period, periodDraft, saving, onPeriodDraftChange, onSavePeriod, onSaveStore, onOpenBandSettings }: Props) {
   const [draft, setDraft] = useState(master);
   useEffect(() => setDraft(master), [master.storeName, master.showStoreNameOnHome]);
   const save = async () => {
-    onMasterChange(draft);
-    templateStorage.setItem("store_master_settings", JSON.stringify(draft));
-    if (period.startDay !== periodDraft.startDay || period.endDay !== periodDraft.endDay) {
-      if (!await onSavePeriod()) { toast.error("店名などは保存しましたが、集計期間は保存できませんでした"); return; }
+    try {
+      await onSaveStore({ storeName: draft.storeName.trim(), showStoreNameOnHome: draft.showStoreNameOnHome });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "店舗名を保存できませんでした");
+      return;
     }
-    toast.success("店舗マスタを保存しました");
+    if (period.startDay !== periodDraft.startDay || period.endDay !== periodDraft.endDay) {
+      if (!await onSavePeriod()) { toast.error("店舗名は保存しましたが、集計期間は保存できませんでした"); return; }
+    }
+    toast.success("店舗マスタを保存しました（全員の画面に反映されます）");
   };
 
   return <section className="space-y-4 font-sans text-slate-900">
     <div className={panel}>
       <label className={heading}>店舗名</label><p className={description}>店舗名を入れてください。</p>
-      <Input className="mt-3 h-11 rounded-xl text-sm" placeholder="店舗名を入れてください" value={draft.storeName === "薬局名を設定" ? "" : draft.storeName} onChange={event => setDraft(current => ({ ...current, storeName: event.target.value }))} />
+      <Input className="mt-3 h-11 rounded-xl text-sm" placeholder="店舗名を入れてください" value={draft.storeName === "店舗名を設定" || draft.storeName === "薬局名を設定" ? "" : draft.storeName} onChange={event => setDraft(current => ({ ...current, storeName: event.target.value }))} />
       <label className="mt-4 flex items-center gap-3 text-sm font-bold"><input type="checkbox" className="h-5 w-5" checked={draft.showStoreNameOnHome} onChange={event => setDraft(current => ({ ...current, showStoreNameOnHome: event.target.checked }))} />店舗名＋シフトをホームに表示</label>
       <p className={description}>OFFならホームの見出しは「シフト」です。店舗名が空欄の場合も「シフト」になります。</p>
     </div>

@@ -1,6 +1,6 @@
-// GitHub Pages projects under fleezappm-ux.github.io share one browser origin.
-// Keep this template's cache, session and connection key separate from the live pharmacy site.
-const namespace = "pharmacy-shift-template:v1:";
+// GitHub Pages projects under one github.io account share one browser origin.
+// Include the site's base path so every copy of this tool keeps its own cache, session and connection key.
+const namespace = `shift-tool:v1:${import.meta.env?.BASE_URL ?? "/"}:`;
 
 export const templateStorage = {
   getItem(key: string): string | null {

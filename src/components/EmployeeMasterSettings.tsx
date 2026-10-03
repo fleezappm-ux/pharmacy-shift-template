@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmployeeMasterItem, ShiftRole } from "../lib/employee-master-sync";
 
-export function EmployeeMasterSettings({ employees, roles, onSave }: { employees: EmployeeMasterItem[]; roles: ShiftRole[]; onSave: (items: EmployeeMasterItem[]) => Promise<void> }) {
+export function EmployeeMasterSettings({ employees, roles, onSave, operatorId }: { employees: EmployeeMasterItem[]; roles: ShiftRole[]; onSave: (items: EmployeeMasterItem[]) => Promise<void>; operatorId?: string }) {
   const [drafts, setDrafts] = useState(employees);
   const [saving, setSaving] = useState(false);
   useEffect(() => setDrafts(employees), [employees]);
@@ -14,7 +14,9 @@ export function EmployeeMasterSettings({ employees, roles, onSave }: { employees
   const add = () => setDrafts(items => [...items, { id: crypto.randomUUID(), name: "", displayName: "", displayOrder: items.length + 1, active: true, aliases: [], roleId: roles[0]?.id || "", role: roles[0]?.name || "" }]);
   const remove = (id: string) => {
     const target = drafts.find(item => item.id === id);
-    if (!target || !window.confirm(`「${target.displayName || target.name || "新しい従業員"}」を一覧から削除しますか？\n過去のNotionデータは削除されません。`)) return;
+    if (drafts.filter(item => item.active).length <= 1) { toast.error("最後の1人は削除できません。先に別の従業員を登録してください。"); return; }
+    if (target && target.id === operatorId) { toast.error("いまログインしている操作員は削除できません。別の操作員でログインし直してから削除してください。"); return; }
+    if (!target || !window.confirm(`「${target.displayName || target.name || "新しい従業員"}」を一覧から削除しますか？\n過去のシフトのデータは残ります。`)) return;
     update(id, { active: false });
   };
   const submit = async () => {
@@ -32,7 +34,7 @@ export function EmployeeMasterSettings({ employees, roles, onSave }: { employees
       <div className="flex h-10 items-center justify-center rounded-lg bg-slate-100 text-sm font-black text-slate-600">{index + 1}</div>
       <Input value={item.name} aria-label="名前" placeholder="名前" onChange={event => { const old = item.name; const name = event.target.value; update(item.id, { name, displayName: name, aliases: old && old !== name ? [...new Set([...(item.aliases || []), old])] : item.aliases }); }} />
       <select className="h-10 rounded-md border bg-white px-3 text-sm" value={item.roleId || roles.find(role => role.name === item.role)?.id || ""} onChange={event => { const role = roles.find(candidate => candidate.id === event.target.value); update(item.id, { roleId: role?.id || "", role: role?.name || "" }); }}><option value="">役職を選択</option>{roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}</select>
-      <div className="flex gap-1"><Button variant="outline" size="icon" disabled={index === 0} onClick={() => move(drafts.indexOf(item), -1)}><ArrowUp className="h-4 w-4" /></Button><Button variant="outline" size="icon" disabled={index === activeDrafts.length - 1} onClick={() => move(drafts.indexOf(item), 1)}><ArrowDown className="h-4 w-4" /></Button><Button variant="ghost" size="icon" className="text-red-600" onClick={() => remove(item.id)}><Trash2 className="h-4 w-4" /></Button></div>
+      <div className="flex gap-1"><Button variant="outline" size="icon" aria-label="上へ移動" disabled={index === 0} onClick={() => move(drafts.indexOf(item), -1)}><ArrowUp className="h-4 w-4" /></Button><Button variant="outline" size="icon" aria-label="下へ移動" disabled={index === activeDrafts.length - 1} onClick={() => move(drafts.indexOf(item), 1)}><ArrowDown className="h-4 w-4" /></Button><Button variant="ghost" size="icon" className="text-red-600" aria-label="削除" onClick={() => remove(item.id)}><Trash2 className="h-4 w-4" /></Button></div>
     </div>)}</div>
     <Button className="h-11 w-full font-bold" disabled={saving} onClick={() => void submit()}><Save className="mr-2 h-4 w-4" />{saving ? "保存中…" : "従業員マスタを保存"}</Button>
   </section>;

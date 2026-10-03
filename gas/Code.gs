@@ -796,7 +796,7 @@ function readShiftEmployeeMaster() {
 
 function getShiftLoginEmployees() {
   try {
-    var employees = normalizeShiftEmployeeMaster(readShiftEmployeeMaster()).filter(function(item) { var label = item.displayName || item.name || ""; return item.active && !/^従業員[Ａ-ＺA-Zａ-ｚa-z０-９0-9]+$/.test(label); }).map(function(item) { return { id: item.id, name: item.name, displayName: item.displayName, active: item.active }; });
+    var employees = normalizeShiftEmployeeMaster(readShiftEmployeeMaster()).filter(function(item) { var label = item.displayName || item.name || ""; return item.active && !/^従業員[A-EＡ-Ｅ]$/.test(label); }).map(function(item) { return { id: item.id, name: item.name, displayName: item.displayName, active: item.active }; });
     return createJsonDataResponse({ success: true, employees: employees });
   } catch (error) { return createJsonResponse(false, "操作員一覧を取得できませんでした。"); }
 }

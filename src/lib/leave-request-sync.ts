@@ -7,7 +7,7 @@ const SHIFT_API_KEY_STORAGE = "shift_api_key";
 
 async function request(action: string, payload: Record<string, unknown>, requireKey = false) {
   const shiftApiKey = templateStorage.getItem(SHIFT_API_KEY_STORAGE) || "";
-  if (requireKey && !shiftApiKey) throw new Error("管理者用GAS接続キーが未設定です");
+  if (requireKey && !shiftApiKey) throw new Error("管理者用の接続キーが未設定です");
   const response = await fetch(getGasUrl(), {
     method: "POST",
     headers: { "Content-Type": "text/plain" },

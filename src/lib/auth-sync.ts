@@ -55,20 +55,6 @@ export const getEmployeeToken = () => getShiftSession()?.token || "";
 export const getManagementApiKey = () => templateStorage.getItem(API_KEY_KEY) || "";
 export const saveManagementApiKey = (value: string) => templateStorage.setItem(API_KEY_KEY, value.trim());
 
-export async function loginEmployee(loginId: string, password: string, employeeId: string, employeeName: string): Promise<ShiftSession> {
-  const json = await call("loginShiftEmployee", { loginId, password, employeeId, employeeName });
-  const session = json.session as ShiftSession;
-  templateStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  return session;
-}
-
-export async function loginEditor(loginId: string, password: string, employeeId: string, employeeName: string): Promise<ShiftSession> {
-  const json = await call("loginShiftAdmin", { loginId, password, employeeId, employeeName });
-  const session = json.session as ShiftSession;
-  templateStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  return session;
-}
-
 export async function loginShift(loginId: string, password: string, employeeId: string, employeeName: string): Promise<ShiftSession> {
   // 一般用・編集者用をフロントから2本同時送信すると、GAS側でセッション保存が競合します。
   // 認証種別の判定はGAS側の loginShift に一本化し、1回の通信でログインします。
@@ -78,7 +64,12 @@ export async function loginShift(loginId: string, password: string, employeeId: 
   return session;
 }
 
-export function logoutShiftSession() { templateStorage.removeItem(SESSION_KEY); }
+export function logoutShiftSession() {
+  // サーバー側のログインも無効にします（通信できなくても端末側は必ずログアウトします）。
+  const token = readSession(SESSION_KEY)?.token;
+  templateStorage.removeItem(SESSION_KEY);
+  if (token) void call("logoutShift", { sessionToken: token }).catch(() => undefined);
+}
 export const logoutEmployee = logoutShiftSession;
 
 export async function fetchShiftLoginEmployees(): Promise<ShiftLoginEmployee[]> {
