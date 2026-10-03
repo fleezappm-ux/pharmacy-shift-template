@@ -10,7 +10,7 @@ import { useUnsavedGuard } from "../lib/unsaved";
 export function EmployeeMasterSettings({ employees, roles, onSave, operatorId, loadError = "" }: { employees: EmployeeMasterItem[]; roles: ShiftRole[]; onSave: (items: EmployeeMasterItem[]) => Promise<EmployeeMasterItem[] | void>; operatorId?: string; loadError?: string }) {
   const [drafts, setDrafts] = useState(employees);
   const [saving, setSaving] = useState(false);
-  const signature = (items: EmployeeMasterItem[]) => JSON.stringify(items.map((item, index) => [item.id, item.name.trim(), item.roleId || item.role || "", item.active, index]));
+  const signature = (items: EmployeeMasterItem[]) => JSON.stringify(items.map((item, index) => [item.id, item.name.trim(), item.roleId || item.role || "", item.active, index, (item.aliases || []).length]));
   const syncedRef = useRef(employees);
   const [newerFromServer, setNewerFromServer] = useState<EmployeeMasterItem[] | null>(null);
   const dirty = signature(drafts) !== signature(syncedRef.current);
@@ -74,6 +74,7 @@ export function EmployeeMasterSettings({ employees, roles, onSave, operatorId, l
       <select className="h-10 rounded-md border bg-white px-3 text-sm" value={item.roleId || roles.find(role => role.name === item.role)?.id || ""} onChange={event => { const role = roles.find(candidate => candidate.id === event.target.value); update(item.id, { roleId: role?.id || "", role: role?.name || "" }); }}><option value="">役職を選択</option>{roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}</select>
       <div className="flex gap-1"><Button variant="outline" size="icon" aria-label="上へ移動" disabled={index === 0} onClick={() => move(drafts.indexOf(item), -1)}><ArrowUp className="h-4 w-4" /></Button><Button variant="outline" size="icon" aria-label="下へ移動" disabled={index === activeDrafts.length - 1} onClick={() => move(drafts.indexOf(item), 1)}><ArrowDown className="h-4 w-4" /></Button><Button variant="ghost" size="icon" className="text-red-600" aria-label="削除" onClick={() => remove(item.id)}><Trash2 className="h-4 w-4" /></Button></div>
     </div>)}</div>
+    {activeDrafts.some(item => (item.aliases || []).length > 0) && <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-600">古い名前の記録（別名）が残っている人がいます。名前を変える前の呼び名を覚えておくためのもので、入力途中の文字などのゴミが混ざることがあります。<Button type="button" size="sm" variant="outline" className="ml-2" onClick={() => { setDrafts(items => items.map(item => ({ ...item, aliases: [] }))); toast.success("別名を空にしました。下の「保存」を押すと確定します"); }}>別名をすべて削除する</Button></div>}
     {loadError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-xs font-bold text-red-700">{loadError}</p>}
     {newerFromServer && <div role="alert" className="rounded-lg bg-amber-50 p-3 text-xs font-bold text-amber-900">他の端末で従業員が更新されました。このまま保存すると失敗します。<Button size="sm" variant="outline" className="ml-2" onClick={() => { syncedRef.current = newerFromServer; setDrafts(newerFromServer); setNewerFromServer(null); }}>最新を読み込む（入力中の変更は消えます）</Button></div>}
     <SaveStatus dirty={dirty} saving={saving} />
