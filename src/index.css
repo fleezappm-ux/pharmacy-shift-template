@@ -608,3 +608,20 @@ body { margin:0; background:#f5f7fa; }
   .creation-head .shift-display-control select{max-width:none;flex:1}
   .creation-head .shift-display-control{width:100%}
 }
+
+/* マイページの見出し：状態色（橙＝案／青＝確定）と区別するため落ち着いた灰青 */
+.mypage-header{display:grid;gap:12px;padding:14px 16px;border-radius:16px;background:linear-gradient(135deg,#334155 0%,#475569 55%,#64748b 100%);color:#fff}
+.mypage-header-top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px}
+.mypage-header .mypage-back{justify-self:start;height:36px;color:#fff!important;font-weight:800}
+.mypage-header .mypage-back:hover{background:rgba(255,255,255,.15)!important}
+.mypage-title{display:flex;align-items:center;gap:8px;margin:0;color:#fff;font-size:22px;font-weight:900}
+.mypage-guide{justify-self:end;display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 10px;border:1px solid rgba(255,255,255,.55);border-radius:8px;background:rgba(255,255,255,.12);color:#fff;font-size:12px;font-weight:800}
+.mypage-header-period{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px}
+.mypage-header-period strong{text-align:center;color:#fff;font-size:20px;font-weight:900;white-space:nowrap}
+.mypage-header-period button{height:40px;padding:0 14px;border-radius:9px;background:#fff!important;color:#334155!important;font-weight:800}
+@media(min-width:901px){
+  .mypage-header{padding:18px 24px}
+  .mypage-title{font-size:26px}
+  .mypage-header-period{grid-template-columns:auto auto auto;justify-content:center;gap:24px}
+  .mypage-header-period strong{min-width:200px;font-size:24px}
+}
