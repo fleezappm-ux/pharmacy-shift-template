@@ -10,6 +10,7 @@ export function AutoDraftSettings({ settings, onChange, onStart }: { settings: S
       <p>帯色だけでは勤務を変えません。定休日・特殊日の「休みにする」設定はシフト案の作成時とクール適用時に反映します。クールの週の進み方は変わりません。</p>
       <p>確定済みシフトと手動変更済みの勤務は上書きしません。</p>
     </div>
+    <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">✓ 切り替えると、その場で自動的に保存されます（保存ボタンはありません）</p>
     {!settings.enabled && <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">現在、シフト案の自動作成は停止しています。作成済みのシフト案は削除されません。</p>}
     {settings.enabled && !settings.started && <Button className="h-12 w-full font-bold" onClick={() => void onStart()}><Play className="mr-2 h-4 w-4" />シフト案の自動作成を開始する</Button>}
     {settings.started && <div className="rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-800">自動作成：稼働中{settings.lastRunAt ? `　最終作成 ${new Date(settings.lastRunAt).toLocaleString("ja-JP")}` : ""}</div>}
