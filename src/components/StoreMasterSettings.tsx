@@ -79,6 +79,6 @@ export function StoreMasterSettings({ master, onMasterChange, period, periodDraf
       <p className={description}>※ここで変更中の内容は、先に下の「店舗マスタを保存」を押してから移動してください。</p>
     </div>
     <SaveStatus dirty={dirty} saving={busy || saving} />
-    <Button className="sticky bottom-20 z-10 h-11 w-full font-bold shadow-lg sm:bottom-2" disabled={saving || busy || !dirty} onClick={() => void save()}><Save className="mr-2 h-4 w-4" />{busy ? "保存中…" : "店舗マスタを保存"}</Button>
+    <div className={(dirty || busy || saving) ? "h-20 md:hidden" : "hidden"} /><Button className={`fixed inset-x-4 bottom-[76px] z-40 h-12 font-bold shadow-xl md:sticky md:inset-x-auto md:bottom-2 md:z-10 md:w-full ${(dirty || busy || saving) ? "" : "max-md:hidden"}`} disabled={saving || busy || !dirty} onClick={() => void save()}><Save className="mr-2 h-4 w-4" />{busy ? "保存中…" : "店舗マスタを保存"}</Button>
   </section>;
 }

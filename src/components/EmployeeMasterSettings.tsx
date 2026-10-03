@@ -77,6 +77,6 @@ export function EmployeeMasterSettings({ employees, roles, onSave, operatorId, l
     {loadError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-xs font-bold text-red-700">{loadError}</p>}
     {newerFromServer && <div role="alert" className="rounded-lg bg-amber-50 p-3 text-xs font-bold text-amber-900">他の端末で従業員が更新されました。このまま保存すると失敗します。<Button size="sm" variant="outline" className="ml-2" onClick={() => { syncedRef.current = newerFromServer; setDrafts(newerFromServer); setNewerFromServer(null); }}>最新を読み込む（入力中の変更は消えます）</Button></div>}
     <SaveStatus dirty={dirty} saving={saving} />
-    <Button className="sticky bottom-20 z-10 h-11 w-full font-bold shadow-lg sm:bottom-2" disabled={saving || !!loadError || !dirty} onClick={() => void submit()}><Save className="mr-2 h-4 w-4" />{saving ? "保存中…" : "従業員マスタを保存"}</Button>
+    <div className={(dirty || saving) ? "h-20 md:hidden" : "hidden"} /><Button className={`fixed inset-x-4 bottom-[76px] z-40 h-12 font-bold shadow-xl md:sticky md:inset-x-auto md:bottom-2 md:z-10 md:w-full ${(dirty || saving) ? "" : "max-md:hidden"}`} disabled={saving || !!loadError || !dirty} onClick={() => void submit()}><Save className="mr-2 h-4 w-4" />{saving ? "保存中…" : "従業員マスタを保存"}</Button>
   </section>;
 }
