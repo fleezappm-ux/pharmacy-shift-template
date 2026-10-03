@@ -1848,14 +1848,19 @@ export default function App() {
 
       {/* Main Content */}
       <main className={`shift-main flex-1 flex flex-col overflow-hidden p-6 pb-24 md:pb-6 gap-6 ${activeTab === "dashboard" ? "dashboard-active" : ""}`}>
-        {appSession.role === "employee" && activeTab !== "home" && <div className="flex shrink-0 justify-end"><button type="button" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 text-sm font-bold text-blue-700" onClick={() => openGuide(activeTab === "dashboard" ? "dashboard" : activeTab === "board" ? "board" : activeTab === "requests" ? "requests" : activeTab === "mypage" ? "mypage" : "personal")}><BookOpen className="h-4 w-4" />このページの説明</button></div>}
+        {appSession.role === "employee" && activeTab !== "home" && activeTab !== "mypage" && <div className="flex shrink-0 justify-end"><button type="button" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 text-sm font-bold text-blue-700" onClick={() => openGuide(activeTab === "dashboard" ? "dashboard" : activeTab === "board" ? "board" : activeTab === "requests" ? "requests" : activeTab === "mypage" ? "mypage" : "personal")}><BookOpen className="h-4 w-4" />このページの説明</button></div>}
         {activeTab === "mypage" && (
-        <header className="shift-page-header period-navigation mypage-period-header shrink-0">
-          <Button variant="ghost" size="sm" className="period-back" onClick={goBack}><ArrowLeft className="w-4 h-4" />戻る</Button>
-          <h1 className="mypage-heading"><UserRound className="h-7 w-7" />マイページ</h1>
-          <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, -1))}><ChevronLeft className="w-4 h-4" />前の期間</Button>
-          <strong>{dateRange.length ? `${format(dateRange[0], "M/d")}〜${format(dateRange[dateRange.length - 1], "M/d")}` : "期間未設定"}</strong>
-          <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, 1))}>次の期間<ChevronRight className="w-4 h-4" /></Button>
+        <header className="mypage-header shrink-0">
+          <div className="mypage-header-top">
+            <Button variant="ghost" size="sm" className="mypage-back" onClick={goBack}><ArrowLeft className="w-4 h-4" />戻る</Button>
+            <h1 className="mypage-title"><UserRound className="h-6 w-6" />マイページ</h1>
+            {appSession.role === "employee" && <button type="button" className="mypage-guide" onClick={() => openGuide("mypage")}><BookOpen className="h-4 w-4" /><span className="sm:hidden">説明</span><span className="hidden sm:inline">このページの説明</span></button>}
+          </div>
+          <div className="mypage-header-period">
+            <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, -1))}><ChevronLeft className="w-4 h-4" />前の期間</Button>
+            <strong>{dateRange.length ? `${format(dateRange[0], "M/d")}〜${format(dateRange[dateRange.length - 1], "M/d")}` : "期間未設定"}</strong>
+            <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, 1))}>次の期間<ChevronRight className="w-4 h-4" /></Button>
+          </div>
         </header>
         )}
 
