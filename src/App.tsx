@@ -983,8 +983,9 @@ export default function App() {
     { title: "管理者用の接続キーを入れる", hint: "「その他設定」で接続キーを入れて「保存して接続を確認」を押します。✓が出れば成功です（端末ごとに1回）", done: apiKeyVerified, onClick: () => goSettings("other") },
     { title: "従業員を登録して保存する", hint: "最初は操作員1名だけです。名前を自分の名前に直して、ほかの従業員を追加し、最後に「保存」を押します（1人だけのお店でも、名前を直して保存すれば完了）", done: setupSeen.includes("employee-saved"), onClick: () => goSettings("employee") },
     { title: "店舗名と月の区切りを決めて保存する", hint: "店舗名と、シフト表の月の区切り（例：毎月1日〜月末）を決めて「保存」を押します", done: setupSeen.includes("store-saved"), onClick: () => goSettings("store") },
-    { title: "お店のお休みの日を決めて保存する", hint: "日曜・祝日など、お店の休みの日を決めます。休みがなければ「定休日はない」にチェックして保存します", done: setupSeen.includes("holiday-saved"), onClick: () => goSettings("special") },
+    { title: "帯色（お店のお休みの日）を決めて保存する", hint: "日曜・祝日など、カレンダーに色をつける休みの日を決めます。休みがなければ「定休日はない」にチェックして保存します", done: setupSeen.includes("holiday-saved"), onClick: () => goSettings("special") },
     { title: "勤務時間を確認する", hint: "早番・遅番などの初期の勤務時間を、自分のお店に合わせて直します。このままでよければ、開いて「このままでOK」を押します", done: setupSeen.includes("worktime-confirmed"), onClick: () => goSettings("worktime") },
+    { title: "クール（くり返す勤務の型）を見る", hint: "毎週・2週間ごとなど、くり返す勤務の型です。使わないお店は、開いて見るだけでOKです（見たら✓がつきます）", done: setupSeen.includes("cycle-seen"), onClick: () => { markSetupSeen("cycle-seen"); goSettings("operations"); } },
     { title: "シフトを作ってみる", hint: "「シフト作成」で、1日だけ勤務を入れてみましょう", done: employees.some(employee => employee.shifts.some(shift => shift.shift || shift.customShiftText)), onClick: () => requestEditAccess(() => { setActiveTab("dashboard"); setIsFromAdmin(true); }) },
     { title: "使い方・説明書を読む", hint: "困ったときはここを開きます", done: setupSeen.includes("guide"), onClick: () => { markSetupSeen("guide"); setGuideOpen(true); } },
   ];
@@ -1410,6 +1411,7 @@ export default function App() {
       const saved = await saveCycleMaster({ names: cycleNames, lengths: cycleLengths, patterns: cyclePatterns, assignments: cycleAssignments });
       setCycleNames(saved.names); setCycleLengths(saved.lengths); setCyclePatterns(saved.patterns); setCycleAssignments(saved.assignments || {});
       setCycleBaseline(JSON.stringify([saved.names, saved.lengths, saved.patterns, saved.assignments || {}]));
+      markSetupSeen("cycle-seen");
       toast.success("クールマスタを全端末へ保存しました");
     } catch (error) { toast.error(error instanceof Error ? error.message : "クール作成マスタを保存できませんでした"); }
     finally { setCycleSaving(false); }
