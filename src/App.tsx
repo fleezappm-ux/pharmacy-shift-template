@@ -2284,7 +2284,7 @@ export default function App() {
                           </div>;
                         })}</div>
                         <SaveStatus className="mt-4" dirty={cycleDirty} saving={cycleSaving} />
-                        <Button className="sticky bottom-20 z-10 mt-2 h-11 w-full font-bold shadow-lg sm:bottom-2" disabled={cycleSaving || !cycleDirty} onClick={() => void handleSaveCycleMaster()}>{cycleSaving ? "保存中…" : "クール作成マスタを保存"}</Button>
+                        <div className={(cycleDirty || cycleSaving) ? "h-20 md:hidden" : "hidden"} /><Button className={`fixed inset-x-4 bottom-[76px] z-40 h-12 font-bold shadow-xl md:sticky md:inset-x-auto md:bottom-2 md:z-10 md:w-full ${(cycleDirty || cycleSaving) ? "" : "max-md:hidden"}`} disabled={cycleSaving || !cycleDirty} onClick={() => void handleSaveCycleMaster()}>{cycleSaving ? "保存中…" : "クール作成マスタを保存"}</Button>
                       </section>
 
 </CardContent></Card></motion.div>

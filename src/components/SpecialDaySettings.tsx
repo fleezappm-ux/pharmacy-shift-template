@@ -148,6 +148,6 @@ export function SpecialDaySettings({ rules, employees, loading, onSave }: Props)
     </div>
           <Button disabled={addLocked || loading} onClick={add} className={addLocked ? "special-add-done h-12 w-full px-4 text-sm font-black" : "h-12 w-full bg-blue-600 px-4 text-sm font-black text-white shadow-md hover:bg-blue-700"}>{addLocked ? <Check className="w-4 h-4 mr-1" /> : <Plus className="w-4 h-4 mr-1" />}{addLocked ? "追加しました" : "お休みの日を追加"}</Button>
     <SaveStatus className="mt-3" dirty={dirty} saving={loading} />
-    <Button className="sticky bottom-20 z-10 h-11 w-full font-bold shadow-lg sm:bottom-2" disabled={loading || !dirty || (drafts.some(fixedRule) && !closedSettings.name.trim()) || drafts.some(rule => !fixedRule(rule) && (!rule.name.trim() || !validRest(rule))) || (drafts.some(fixedRule) && !validRest(closedSettings))} onClick={() => onSave(unifyClosed(drafts))}><Save className="w-4 h-4 mr-2" />お休みの日の設定を保存</Button>
+    <div className={(dirty || loading) ? "h-20 md:hidden" : "hidden"} /><Button className={`fixed inset-x-4 bottom-[76px] z-40 h-12 font-bold shadow-xl md:sticky md:inset-x-auto md:bottom-2 md:z-10 md:w-full ${(dirty || loading) ? "" : "max-md:hidden"}`} disabled={loading || !dirty || (drafts.some(fixedRule) && !closedSettings.name.trim()) || drafts.some(rule => !fixedRule(rule) && (!rule.name.trim() || !validRest(rule))) || (drafts.some(fixedRule) && !validRest(closedSettings))} onClick={() => onSave(unifyClosed(drafts))}><Save className="w-4 h-4 mr-2" />お休みの日の設定を保存</Button>
   </section>;
 }
