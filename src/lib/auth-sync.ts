@@ -1,5 +1,5 @@
+import { gasFetch } from "./gas-fetch";
 import { templateStorage } from "./template-storage";
-import { getGasUrl } from "./gas-config";
 
 const SESSION_KEY = "shift_app_session";
 const API_KEY_KEY = "shift_api_key";
@@ -17,7 +17,7 @@ async function call(action: string, payload: Record<string, unknown> = {}) {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), 12000);
   try {
-    const response = await fetch(getGasUrl(), {
+    const response = await gasFetch({
       method: "POST",
       headers: { "Content-Type": "text/plain" },
       body: JSON.stringify({ action, ...payload }),

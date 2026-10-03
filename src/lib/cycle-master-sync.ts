@@ -1,7 +1,7 @@
+import { gasFetch } from "./gas-fetch";
 import { CyclePatterns } from "../constants";
 import { getShiftSession } from "./auth-sync";
 
-import { getGasUrl } from "./gas-config";
 export interface CycleMasterData {
   names: Record<number, string>;
   lengths: Record<number, number>;
@@ -10,7 +10,7 @@ export interface CycleMasterData {
 }
 
 async function call(action: string, payload: Record<string, unknown> = {}) {
-  const response = await fetch(getGasUrl(), { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ action, sessionToken: getShiftSession()?.token || "", ...payload }) });
+  const response = await gasFetch({ method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ action, sessionToken: getShiftSession()?.token || "", ...payload }) });
   if (!response.ok) throw new Error(`通信に失敗しました（${response.status}）`);
   const json = await response.json();
   if (!json.success) throw new Error(json.message || "クールマスタを処理できませんでした");
