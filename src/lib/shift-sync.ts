@@ -64,7 +64,7 @@ export interface ShiftFetchResult {
 
 async function callGas(action: string, extra: Record<string, unknown> = {}, requireApiKey = true): Promise<any> {
   const shiftApiKey = templateStorage.getItem(SHIFT_API_KEY_STORAGE) || "";
-  if (requireApiKey && !shiftApiKey) throw new Error("GAS接続キーが未設定です。設定画面で登録してください。");
+  if (requireApiKey && !shiftApiKey) throw new Error("管理者用の接続キーが未設定です。設定の「その他設定」で登録してください。");
   const response = await fetch(getGasUrl(), {
     method: "POST",
     headers: { "Content-Type": "text/plain" }, // GAS doPostはContent-Typeに関わらずpostData.contentsを見るため、プリフライトを避けるtext/plainにしています

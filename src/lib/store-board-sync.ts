@@ -38,3 +38,13 @@ export async function saveCorrectionVisibility(visibility: "all" | "private"): P
   const json = await call("saveShiftCorrectionVisibility", { visibility });
   return json.visibility === "all" ? "all" : "private";
 }
+
+export interface SharedStoreSettings { storeName: string; showStoreNameOnHome: boolean }
+export async function fetchStoreSettings(): Promise<SharedStoreSettings> {
+  const json = await call("getShiftStoreSettings");
+  return { storeName: String(json.settings?.storeName || ""), showStoreNameOnHome: json.settings?.showStoreNameOnHome === true };
+}
+export async function saveStoreSettings(settings: SharedStoreSettings): Promise<SharedStoreSettings> {
+  const json = await call("saveShiftStoreSettings", { settings });
+  return { storeName: String(json.settings?.storeName || ""), showStoreNameOnHome: json.settings?.showStoreNameOnHome === true };
+}

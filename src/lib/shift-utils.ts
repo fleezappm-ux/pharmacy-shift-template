@@ -146,27 +146,6 @@ function formatMinutes(minutes: number): string {
   return `${h}:${m.toString().padStart(2, "0")}`;
 }
 
-/**
- * 指定された年月の21日から翌月20日までの日付リストを生成する
- */
-export function generateDateRange(year: number, month: number): Date[] {
-  const dates: Date[] = [];
-  const start = new Date(year, month - 1, 21);
-  
-  for (let i = 0; i < 32; i++) {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    
-    // 翌月の20日を超えたら終了
-    if (d.getMonth() === (month % 12) && d.getDate() > 20) break;
-    // 年をまたぐ場合の考慮
-    if (month === 12 && d.getMonth() === 0 && d.getDate() > 20) break;
-
-    dates.push(d);
-  }
-  
-  return dates;
-}
 
 /** 店舗ごとの開始日・終了日から、開始月を基準にシフト期間を生成します。 */
 export function generateConfiguredDateRange(year: number, month: number, startDay: number, endDay: number): Date[] {

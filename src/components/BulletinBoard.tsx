@@ -8,9 +8,9 @@ import { EmployeeMasterItem } from "../lib/employee-master-sync";
 
 export type BoardVisibility = "immediate" | "after_approval" | "private";
 export interface BoardPeriod { label: string; locked: boolean; requests: LeaveRequest[]; }
-interface Props { periods: BoardPeriod[]; isEditor: boolean; visibility?: BoardVisibility; correctionVisibility?: "all" | "private"; operatorName?: string; compact?: boolean; pendingCorrections?: LeaveRequest[]; onResolve?: (request: LeaveRequest) => Promise<void>; onShiftPeriod?: (direction: number) => void; onOpenBoard?: () => void; onBack?: () => void; notices?: AdminNotice[]; employees?: EmployeeMasterItem[]; defaultNoticeVisibility?: AdminNoticeVisibility; onCreateNotice?: (text: string, visibility: AdminNoticeVisibility, ids: string[]) => Promise<void>; onDeleteNotice?: (id: string) => Promise<void> }
+interface Props { periods: BoardPeriod[]; isEditor: boolean; visibility?: BoardVisibility; correctionVisibility?: "all" | "private"; operatorName?: string; operatorId?: string; compact?: boolean; pendingCorrections?: LeaveRequest[]; onResolve?: (request: LeaveRequest) => Promise<void>; onShiftPeriod?: (direction: number) => void; onOpenBoard?: () => void; onBack?: () => void; notices?: AdminNotice[]; employees?: EmployeeMasterItem[]; defaultNoticeVisibility?: AdminNoticeVisibility; onCreateNotice?: (text: string, visibility: AdminNoticeVisibility, ids: string[]) => Promise<void>; onDeleteNotice?: (id: string) => Promise<void> }
 
-export function BulletinBoard({ periods, isEditor, visibility = "immediate", correctionVisibility = "private", operatorName, compact = false, pendingCorrections, onResolve, onShiftPeriod, onOpenBoard, onBack, notices = [], employees = [], defaultNoticeVisibility = "all", onCreateNotice, onDeleteNotice }: Props) {
+export function BulletinBoard({ periods, isEditor, visibility = "immediate", correctionVisibility = "private", operatorName, operatorId, compact = false, pendingCorrections, onResolve, onShiftPeriod, onOpenBoard, onBack, notices = [], employees = [], defaultNoticeVisibility = "all", onCreateNotice, onDeleteNotice }: Props) {
   const [resolving, setResolving] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   const [noticeText, setNoticeText] = useState("");
@@ -21,7 +21,7 @@ export function BulletinBoard({ periods, isEditor, visibility = "immediate", cor
   const noticeCards = notices.map(item => <article key={item.id} className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm"><div className="flex items-center justify-between gap-3"><strong className="text-blue-800">管理者からのお知らせ</strong>{isEditor && !compact && onDeleteNotice && <button type="button" className="text-xs text-red-700" onClick={() => void onDeleteNotice(item.id)}>削除</button>}</div><p className="mt-2 whitespace-pre-wrap break-words">{item.text}</p><small className="mt-2 block text-slate-500">{new Date(item.createdAt).toLocaleDateString("ja-JP")}{isEditor && item.visibility === "selected" ? " · 指定従業員のみ" : ""}</small></article>);
   const canShow = (item: LeaveRequest) => {
     if (item.status === "取消") return false;
-    const own = item.employeeName === operatorName;
+    const own = item.employeeId && operatorId ? item.employeeId === operatorId : item.employeeName === operatorName;
     if (item.status === "却下") return isEditor && !compact;
     if (item.type === "訂正依頼") return isEditor || own || correctionVisibility === "all";
     if (item.commentVisibility === "editors" && !isEditor && !own) return false;

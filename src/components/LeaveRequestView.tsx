@@ -77,7 +77,7 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
   const periodEnd = dates.length ? format(dates[dates.length - 1], "yyyy-MM-dd") : "";
   const periodLabel = dates.length ? `${format(dates[0], "M/d")}〜${format(dates[dates.length - 1], "M/d")}` : "期間未設定";
   const fullPeriodLabel = dates.length ? `${format(dates[0], "yyyy年M月d日")}〜${format(dates[dates.length - 1], "M月d日")}` : "期間未設定";
-  const mine = useMemo(() => requests.filter(item => item.employeeName === employeeName && item.status !== "取消"), [requests, employeeName]);
+  const mine = useMemo(() => requests.filter(item => (item.employeeId ? item.employeeId === operatorId : item.employeeName === employeeName) && item.status !== "取消"), [requests, employeeName, operatorId]);
   const requestByDate = new Map<string, LeaveRequest>(mine.filter(item => item.date).map(item => [item.date, item] as [string, LeaveRequest]));
   const draftEntries = (Object.entries(drafts) as [string, Draft][]).sort(([a], [b]) => a.localeCompare(b));
   const hasInvalidTime = draftEntries.some(([date, draft]) => draft.type === "出勤希望" && (!times[date]?.start || !times[date]?.end || times[date].start >= times[date].end));

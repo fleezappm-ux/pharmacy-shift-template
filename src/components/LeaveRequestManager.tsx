@@ -33,7 +33,7 @@ export function LeaveRequestManager({ requests, loading, onStatusChange, onDelet
       {[...pendingItems].sort((a,b)=>a.date.localeCompare(b.date)).map(item => <div key={item.id} className={`leave-manager-row status-${item.status}`}>
         <div className="leave-manager-date"><strong>{item.date ? format(new Date(`${item.date}T00:00:00`),"M/d",{locale:ja}) : "希望"}</strong><span>{item.date ? format(new Date(`${item.date}T00:00:00`),"E",{locale:ja}) : "なし"}</span></div>
         <div className="leave-manager-person"><strong>{item.employeeName}</strong><span>{item.type}{item.comment ? `・${item.comment}` : ""}</span>{item.rejectionReason && <small className="text-red-600">却下理由：{item.rejectionReason}</small>}</div>
-        <span className="leave-status">{item.status === "申請中" ? "確認中" : item.status}</span>
+        <span className="leave-status">{item.status === "申請中" ? "申請中" : item.status}</span>
         {item.status === "申請中" && item.type !== "希望なし" && item.type !== "訂正依頼" && <div className="leave-manager-actions"><button disabled={loading} onClick={()=>setTarget({request:item,status:"承認"})}><Check className="w-4 h-4"/>承認</button><button disabled={loading} onClick={()=>setTarget({request:item,status:"却下"})}><X className="w-4 h-4"/>却下</button><button disabled={loading} title="申請を削除" onClick={() => setDeleting(item)}><Trash2 className="w-4 h-4"/>削除</button></div>}
       </div>)}
     </div>}

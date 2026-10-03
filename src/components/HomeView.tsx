@@ -86,10 +86,10 @@ export function HomeView({
     <motion.div key="home" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }} className="space-y-4 pb-4">
       <header className="home-brand-header">
         <div className="home-brand-cluster">
-          <button type="button" className="home-app-icon" onClick={onInstall} title={installLabel} aria-label={installLabel}><img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="薬局シフトをホーム画面に追加" /></button>
+          <button type="button" className="home-app-icon" onClick={onInstall} title={installLabel} aria-label={installLabel}><img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="シフトをホーム画面に追加" /></button>
           <div className="home-brand-copy">
             <div className="home-title-line">
-              <h1 className={isEditor ? "home-admin-title" : "home-store-title"} style={isEditor ? undefined : { fontSize: `clamp(0.85rem, ${Math.max(1, 1.75 - Math.max(0, storeName.length - 8) * 0.06)}rem, 1.75rem)` }}>{isEditor ? "シフト管理者" : showStoreNameOnHome && storeName.trim() && storeName !== "薬局名を設定" ? `${storeName.trim().slice(0, 30)} シフト` : "シフト"}</h1>
+              <h1 className={isEditor ? "home-admin-title" : "home-store-title"} style={isEditor ? undefined : { fontSize: `clamp(0.85rem, ${Math.max(1, 1.75 - Math.max(0, storeName.length - 8) * 0.06)}rem, 1.75rem)` }}>{isEditor ? "シフト管理者" : showStoreNameOnHome && storeName.trim() && storeName !== "薬局名を設定" && storeName !== "店舗名を設定" ? `${storeName.trim().slice(0, 30)} シフト` : "シフト"}</h1>
               <span className="relative inline-flex items-center">
                 <button type="button" className="home-operator cursor-pointer" aria-expanded={showLogout} onClick={() => setShowLogout(value => !value)}><UserRound className="h-4 w-4" />操作員：{operatorName}</button>
                 {showLogout && <button type="button" className="absolute right-0 top-full z-50 mt-2 whitespace-nowrap rounded-lg border bg-white px-4 py-3 font-bold text-slate-900 shadow-lg" onClick={onLogout}>ログアウトして別のIDで入る</button>}

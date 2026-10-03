@@ -8,7 +8,7 @@ const keys = {
 const pages = { shifts: Array.from({length: 22}, (_, i) => ({id: `s${i}`, archived:false})), requests: [{id:'r0',archived:false}], store: [{id:'t0',archived:false}] };
 let held = false;
 const props = {getProperty:k=>keys[k] || null,setProperty:(k,v)=>{keys[k]=v},deleteProperty:k=>{delete keys[k]},getProperties:()=>({...keys})};
-const sandbox = { console, Date, PropertiesService:{getScriptProperties:()=>props}, Utilities:{getUuid:()=>`token-${Date.now()}`,sleep:()=>{}}, LockService:{getScriptLock:()=>({tryLock:()=>{held=true;return true},hasLock:()=>held,releaseLock:()=>{held=false}})} };
+const sandbox = { console, Date, PropertiesService:{getScriptProperties:()=>props}, Utilities:{getUuid:()=>`token-${Date.now()}`,sleep:()=>{}}, LockService:{getScriptLock:()=>({tryLock:()=>{held=true;return true},waitLock:()=>{held=true},hasLock:()=>held,releaseLock:()=>{held=false}})} };
 vm.createContext(sandbox);vm.runInContext(fs.readFileSync('gas/Code.gs','utf8'),sandbox);
 sandbox.requireShiftSession=()=>({employeeId:'operator',role:'admin'});sandbox.verifyShiftApiKey=()=>{};
 sandbox.assertTemplateResetTarget=()=>props;sandbox.getStoreId=()=> 'TEST_ONLY';
