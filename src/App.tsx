@@ -274,7 +274,7 @@ export default function App() {
   const [homeBoardRequests, setHomeBoardRequests] = useState<LeaveRequest[]>([]);
   const [homePendingCorrections, setHomePendingCorrections] = useState<LeaveRequest[]>([]);
   const [boardPeriods, setBoardPeriods] = useState<BoardPeriod[]>([]);
-  const [boardAnchor, setBoardAnchor] = useState(() => getCurrentShiftMonth(new Date(), { startDay: 21, endDay: 20 }));
+  const [boardAnchor, setBoardAnchor] = useState(() => getCurrentShiftMonth(new Date(), calendarPeriodSettings));
   const [correctionVisibility, setCorrectionVisibility] = useState<"all" | "private">("all");
   const [specialDayRules, setSpecialDayRules] = useState<SpecialDayRule[]>(DEFAULT_SPECIAL_DAY_RULES);
   const [specialDayLoading, setSpecialDayLoading] = useState(false);
@@ -1726,7 +1726,7 @@ export default function App() {
                 全体シフト
               </Button>
               {appSession.role === "employee" && <>
-                <Button variant="outline" className="w-full justify-start h-12 px-4 text-sm font-semibold" onClick={() => setActiveTab("board")}><MessageSquareText className="mr-3 h-4 w-4 text-amber-600" />お知らせ掲示板</Button>
+                <Button variant="outline" className="w-full justify-start h-12 px-4 text-sm font-semibold" onClick={() => { setBoardAnchor(homeBoardMonth); setActiveTab("board"); }}><MessageSquareText className="mr-3 h-4 w-4 text-amber-600" />お知らせ掲示板</Button>
                 <Button variant="outline" className="w-full justify-start h-12 px-4 text-sm font-semibold" onClick={() => setActiveTab("mypage")}><UserRound className="mr-3 h-4 w-4 text-blue-600" />マイページ</Button>
               </>}
               <Button variant="outline" className="sidebar-leave-button w-full justify-start h-12 px-4 text-sm font-semibold" onClick={() => { setActiveTab("requests"); setIsFromAdmin(false); }}><CalendarDays className="mr-3 h-4 w-4" />休み希望日提出</Button>
@@ -1836,12 +1836,12 @@ export default function App() {
           全体
         </button>
         {appSession.role === "employee" ? <>
-          <button className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold ${activeTab === "board" ? "text-blue-600" : "text-slate-500"}`} onClick={() => { setActiveTab("board"); setIsFromAdmin(false); }}><MessageSquareText className="w-5 h-5" />掲示板</button>
+          <button className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold ${activeTab === "board" ? "text-blue-600" : "text-slate-500"}`} onClick={() => { setBoardAnchor(homeBoardMonth); setActiveTab("board"); setIsFromAdmin(false); }}><MessageSquareText className="w-5 h-5" />掲示板</button>
           <button className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold ${activeTab === "requests" ? "text-pink-600" : "text-slate-500"}`} onClick={() => { setActiveTab("requests"); setIsFromAdmin(false); }}><CalendarDays className="w-5 h-5" />休み希望</button>
           <button className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold ${activeTab === "mypage" ? "text-blue-600" : "text-slate-500"}`} onClick={() => { setActiveTab("mypage"); setIsFromAdmin(false); }}><UserRound className="w-5 h-5" />マイページ</button>
         </> : <>
           <button className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold ${isFromAdmin && activeTab !== "admin" ? "text-blue-600" : "text-slate-500"}`} onClick={() => requestEditAccess(() => { setActiveTab("dashboard"); setIsFromAdmin(true); })}><PencilLine className="w-5 h-5" />シフト作成</button>
-          <button className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold ${activeTab === "board" ? "text-amber-600" : "text-slate-500"}`} onClick={() => { setActiveTab("board"); setIsFromAdmin(true); }}><MessageSquareText className="w-5 h-5" />掲示板</button>
+          <button className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold ${activeTab === "board" ? "text-amber-600" : "text-slate-500"}`} onClick={() => { setBoardAnchor(homeBoardMonth); setActiveTab("board"); setIsFromAdmin(true); }}><MessageSquareText className="w-5 h-5" />掲示板</button>
           <button className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold ${(activeTab === "admin" && isFromAdmin) ? "text-blue-600" : "text-slate-500"}`} onClick={() => { requestEditAccess(() => { setActiveTab("admin"); setIsFromAdmin(true); setSettingsPage("menu"); }); }}><FileCode className="w-5 h-5" />設定</button>
         </>}
       </nav>
