@@ -961,6 +961,16 @@ export default function App() {
     }
   };
 
+  const [setupHidden, setSetupHidden] = useState(() => templateStorage.getItem("setup_checklist_hidden") === "1");
+  const [setupSeen, setSetupSeen] = useState<string[]>(() => { try { const v = JSON.parse(templateStorage.getItem("setup_checklist_seen") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } });
+  const markSetupSeen = (key: string) => setSetupSeen(current => { if (current.includes(key)) return current; const next = [...current, key]; templateStorage.setItem("setup_checklist_seen", JSON.stringify(next)); return next; });
+  const setupSteps = [
+    { title: "店舗名と集計期間を決める", hint: "店舗マスタで、店舗名とシフトの月の区切りを設定します", done: storeMaster.storeName.trim() !== "" || employeeMaster.length > 0, onClick: () => setSettingsPage("store") },
+    { title: "従業員を登録する", hint: "従業員マスタで名前と役職を登録します（最大50人）", done: employeeMaster.length > 0, onClick: () => setSettingsPage("employee") },
+    { title: "勤務時間を確認する", hint: "初期の早番・遅番などを、自分の店舗に合わせて直します（このままでもOK）", done: setupSeen.includes("worktime"), onClick: () => { markSetupSeen("worktime"); setSettingsPage("worktime"); } },
+    { title: "シフトを作ってみる", hint: "「シフト作成」で、1日だけ勤務を入れてみましょう", done: employees.some(employee => employee.shifts.some(shift => shift.shift || shift.customShiftText)), onClick: () => requestEditAccess(() => { setActiveTab("dashboard"); setIsFromAdmin(true); }) },
+    { title: "使い方・説明書を読む", hint: "困ったときはここを開きます", done: setupSeen.includes("guide"), onClick: () => { markSetupSeen("guide"); setGuideOpen(true); } },
+  ];
   const handleSaveCalendarPeriod = async (): Promise<boolean> => {
     const startDay = calendarPeriodDraft.startDay;
     const settings = { startDay, endDay: startDay === 1 ? 0 : startDay - 1 };
@@ -2105,7 +2115,10 @@ export default function App() {
                     <CardDescription className="text-xs">変更したい項目を選んでください</CardDescription>
                   </CardHeader>
                   <CardContent className="grid gap-4 p-6 sm:grid-cols-2">
-                    {employeeMaster.length === 0 && <button type="button" onClick={() => setSettingsPage("employee")} className="sm:col-span-2 flex items-center gap-3 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 text-left font-bold text-amber-900"><Users className="h-5 w-5 shrink-0" /><span>まず従業員マスタで従業員を登録してください<small className="mt-0.5 block text-xs font-medium text-amber-800">登録するとホーム・全体シフト・シフト作成が使えるようになります。ここを押すと従業員マスタが開きます。</small></span><ChevronRight className="ml-auto h-4 w-4 shrink-0" /></button>}
+                    {setupSteps.some(step => !step.done) && !setupHidden && <div className="sm:col-span-2 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
+                      <div className="flex items-start justify-between gap-3"><div><strong className="text-base text-amber-950">はじめの準備（{setupSteps.filter(step => step.done).length}/{setupSteps.length}完了）</strong><p className="mt-0.5 text-xs text-amber-800">上から順に進めると、すぐ使い始められます。押すと該当の画面が開きます。</p></div><button type="button" className="shrink-0 text-xs font-bold text-amber-800 underline" onClick={() => { templateStorage.setItem("setup_checklist_hidden", "1"); setSetupHidden(true); }}>閉じる</button></div>
+                      <div className="mt-3 grid gap-2">{setupSteps.map((step, index) => <button key={step.title} type="button" onClick={step.onClick} className={`flex items-center gap-3 rounded-xl border bg-white px-3 py-2.5 text-left ${step.done ? "border-emerald-200" : "border-amber-200"}`}><span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-black ${step.done ? "bg-emerald-500 text-white" : "bg-amber-200 text-amber-900"}`}>{step.done ? "✓" : index + 1}</span><span className="min-w-0"><strong className={`block text-sm ${step.done ? "text-slate-400 line-through" : "text-slate-900"}`}>{step.title}</strong><small className="block text-xs text-slate-500">{step.hint}</small></span><ChevronRight className="ml-auto h-4 w-4 shrink-0 text-slate-400" /></button>)}</div>
+                    </div>}
                     {[
                       { key: "store", icon: Building2, title: "店舗マスタ", description: "店舗名・集計期間・定休日" },
                       { key: "board", icon: MessageSquareText, title: "お知らせ掲示板設定", description: "お知らせ・希望の公開範囲" },
