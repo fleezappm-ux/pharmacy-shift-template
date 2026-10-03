@@ -1135,15 +1135,17 @@ export default function App() {
     setEmployees(prev => prev.map(emp => {
       if (emp.id !== employeeId) return emp;
       const existingShiftIndex = emp.shifts.findIndex(s => s.date === date);
-      const { breakTime, workTime } = calculateTimes(input);
+      const previous = existingShiftIndex >= 0 ? emp.shifts[existingShiftIndex] : undefined;
+      const { breakTime, workTime } = calculateTimes(input, previous?.breakCustom ? previous.breakTime : undefined);
+      const parsed = workTime !== "0:00";
       
       const newShifts = [...emp.shifts];
       if (existingShiftIndex >= 0) {
         newShifts[existingShiftIndex] = { 
           ...newShifts[existingShiftIndex], 
           customShiftText: input,
-          breakTime: breakTime !== "0:00" ? breakTime : newShifts[existingShiftIndex].breakTime,
-          workTime: workTime !== "0:00" ? workTime : newShifts[existingShiftIndex].workTime
+          breakTime: parsed ? breakTime : newShifts[existingShiftIndex].breakTime,
+          workTime: parsed ? workTime : newShifts[existingShiftIndex].workTime
         };
       } else {
         newShifts.push({ date, shift: "任意入力", customShiftText: input, breakTime, workTime, comment: "" });
@@ -1163,13 +1165,14 @@ export default function App() {
       const finalized = finalizeShiftText(currentShift.customShiftText || "");
       if (finalized === currentShift.customShiftText) return emp;
 
-      const { breakTime, workTime } = calculateTimes(finalized);
+      const { breakTime, workTime } = calculateTimes(finalized, currentShift.breakCustom ? currentShift.breakTime : undefined);
+      const parsed = workTime !== "0:00";
       const newShifts = [...emp.shifts];
       newShifts[existingShiftIndex] = {
         ...currentShift,
         customShiftText: finalized,
-        breakTime: breakTime !== "0:00" ? breakTime : currentShift.breakTime,
-        workTime: workTime !== "0:00" ? workTime : currentShift.workTime
+        breakTime: parsed ? breakTime : currentShift.breakTime,
+        workTime: parsed ? workTime : currentShift.workTime
       };
       return { ...emp, shifts: newShifts };
     }));
@@ -1211,18 +1214,19 @@ export default function App() {
     templateStorage.setItem(EMPLOYEE_MASTER_CACHE_KEY, JSON.stringify(saved.employees));
   };
 
-  const handleCustomTimeChange = (employeeId: string, date: string, field: "breakTime" | "workTime", value: string) => {
+  // 任意入力の休憩：「標準（6時間より長いと1時間）」か「それ以外（自分で入力）」。実働時間は自動で計算します。
+  const handleCustomBreakChange = (employeeId: string, date: string, mode: "standard" | "custom", value?: string) => {
     if (isLocked) return;
     setEmployees(prev => prev.map(emp => {
       if (emp.id !== employeeId) return emp;
-      const existingShiftIndex = emp.shifts.findIndex(s => s.date === date);
-      const newShifts = [...emp.shifts];
-      if (existingShiftIndex >= 0) {
-        newShifts[existingShiftIndex] = { ...newShifts[existingShiftIndex], [field]: value };
-      } else {
-        newShifts.push({ date, shift: "任意入力", breakTime: field === "breakTime" ? value : "0:00", workTime: field === "workTime" ? value : "0:00", comment: "" });
-      }
-      return { ...emp, shifts: newShifts };
+      return { ...emp, shifts: emp.shifts.map(item => {
+        if (item.date !== date) return item;
+        const text = item.customShiftText || "";
+        if (mode === "standard") return { ...item, ...calculateTimes(text), breakCustom: false };
+        const breakTime = value ?? item.breakTime ?? "0:00";
+        const times = calculateTimes(text, breakTime || "0:00");
+        return { ...item, breakTime, workTime: times.workTime, breakCustom: true };
+      }) };
     }));
   };
 
@@ -2497,34 +2501,22 @@ export default function App() {
                                       </div>
                                     </TableCell>
                                     <TableCell className="py-1 text-muted-foreground text-xs border-r border-border">
-                                      {s?.shift === "任意入力" ? (
-                                        <Input 
-                                          type="text"
-                                          className="h-7 text-[10px] w-16 px-1 bg-white border-primary/30 focus:border-primary" 
-                                          value={s?.breakTime || ""} 
-                                          placeholder="0:00"
-                                          onChange={(e) => handleCustomTimeChange(emp.id, dateStr, "breakTime", e.target.value)}
-                                          onFocus={(e) => e.target.select()}
-                                          disabled={isLocked}
-                                        />
-                                      ) : (
+                                      {s?.shift === "任意入力" ? (() => {
+                                        const standard = calculateTimes(s?.customShiftText || "").breakTime;
+                                        const isCustom = Boolean(s?.breakCustom) || (s?.breakTime || "0:00") !== standard;
+                                        return <div className="flex flex-col gap-1">
+                                          <select aria-label="休憩" className="h-7 rounded-md border border-primary/30 bg-white px-1 text-[10px]" value={isCustom ? "custom" : "standard"} disabled={isLocked} onChange={event => handleCustomBreakChange(emp.id, dateStr, event.target.value === "custom" ? "custom" : "standard")}>
+                                            <option value="standard">標準（6時間超は1時間）</option>
+                                            <option value="custom">それ以外</option>
+                                          </select>
+                                          {isCustom && <Input type="text" aria-label="休憩時間" className="h-7 w-16 border-primary/30 bg-white px-1 text-[10px] focus:border-primary" value={s?.breakTime || ""} placeholder="0:30" onChange={event => handleCustomBreakChange(emp.id, dateStr, "custom", event.target.value)} onFocus={event => event.target.select()} disabled={isLocked} />}
+                                        </div>;
+                                      })() : (
                                         s?.breakTime || "0:00"
                                       )}
                                     </TableCell>
                                     <TableCell className="py-1 font-semibold text-xs border-r border-border">
-                                      {s?.shift === "任意入力" ? (
-                                        <Input 
-                                          type="text"
-                                          className="h-7 text-[10px] w-16 px-1 bg-white border-primary/30 focus:border-primary" 
-                                          value={s?.workTime || ""} 
-                                          placeholder="0:00"
-                                          onChange={(e) => handleCustomTimeChange(emp.id, dateStr, "workTime", e.target.value)}
-                                          onFocus={(e) => e.target.select()}
-                                          disabled={isLocked}
-                                        />
-                                      ) : (
-                                        s?.workTime || "0:00"
-                                      )}
+                                      {s?.workTime || "0:00"}
                                     </TableCell>
 
                                   </TableRow>

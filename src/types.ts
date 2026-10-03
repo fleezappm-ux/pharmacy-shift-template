@@ -7,6 +7,7 @@ export interface DayShift {
   customShiftText?: string; // e.g. "9時～17時"
   breakTime: string; // e.g. "1:00"
   workTime: string; // e.g. "8:30"
+  breakCustom?: boolean; // 任意入力で、休憩を標準以外にして入力中（画面だけの目印）
   comment: string;
 }
 

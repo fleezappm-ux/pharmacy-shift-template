@@ -91,7 +91,7 @@ export function finalizeShiftText(text: string): string {
 /**
  * シフト文字列から拘束時間を計算し、休憩時間と実働時間を返す
  */
-export function calculateTimes(shiftInput: string): { breakTime: string; workTime: string } {
+export function calculateTimes(shiftInput: string, customBreak?: string): { breakTime: string; workTime: string } {
   if (!shiftInput || shiftInput === "有休" || shiftInput === "休み" || shiftInput === "任意入力") {
     return { breakTime: "0:00", workTime: "0:00" };
   }
@@ -128,7 +128,12 @@ export function calculateTimes(shiftInput: string): { breakTime: string; workTim
     let durationMinutes = endMinutes - startMinutes;
     if (durationMinutes <= 0) durationMinutes += 24 * 60; // 日をまたぐ場合
 
-    const breakMinutes = durationMinutes > 6 * 60 ? 60 : 0;
+    let breakMinutes = durationMinutes > 6 * 60 ? 60 : 0;
+    if (customBreak !== undefined) {
+      const [bh, bm] = customBreak.replace(/[^0-9:]/g, "").split(":");
+      const parsed = (parseInt(bh) || 0) * 60 + (parseInt(bm) || 0);
+      breakMinutes = Math.min(parsed, durationMinutes);
+    }
     const workMinutes = durationMinutes - breakMinutes;
 
     return {
