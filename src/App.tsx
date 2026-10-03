@@ -3,6 +3,7 @@ import { templateStorage } from "./lib/template-storage";
 import { TemplateResetSettings, RESET_PENDING_KEY } from "./components/TemplateResetSettings";
 import { ShiftToolGuide, type EmployeeGuideSection } from "./components/ShiftToolGuide";
 import { useState, useEffect, useRef } from "react";
+import { syncResetEpoch } from "./lib/reset-epoch";
 import { format, addMonths } from "date-fns";
 import { ja } from "date-fns/locale/ja";
 import { 
@@ -148,6 +149,13 @@ export default function App() {
   });
   const visibleWorkTimes = workTimes.filter(item => item.visible).map(workTimeValue);
   useEffect(() => { templateStorage.setItem("shift_display_mode", shiftDisplayMode); }, [shiftDisplayMode]);
+  useEffect(() => {
+    void syncResetEpoch();
+    const check = () => { if (document.visibilityState === "visible") void syncResetEpoch(); };
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+    return () => { document.removeEventListener("visibilitychange", check); window.removeEventListener("focus", check); };
+  }, []);
   useEffect(() => {
     if (!appSession?.token) { setWorkTimeReady(false); return; }
     setWorkTimeReady(false);

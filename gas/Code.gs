@@ -5,13 +5,14 @@ function doPost(e) {
     if (!data || !data.action) throw new Error("actionが必要です。");
     // 公開ログイン操作以外は、ルーティング時に必ずセッションを検証する。
     // 各関数内の本人・接続キー・管理者チェックも引き続き適用する。
-    var publicActions = ["loginShift", "loginShiftAdmin", "loginShiftEmployee", "getShiftLoginEmployees"];
+    var publicActions = ["loginShift", "loginShiftAdmin", "loginShiftEmployee", "getShiftLoginEmployees", "getShiftResetEpoch"];
     var adminActions = ["previewTemplateReset", "getTemplateResetStatus", "runTemplateReset", "clearTemplateShiftRemarks", "saveShiftEmployeeMaster", "saveShiftRoleMaster", "saveShiftHomeLayout", "saveShiftAdminNotice", "deleteShiftAdminNotice", "saveShiftAdminNoticeVisibility", "saveShiftWorkTimeMaster", "saveShiftCycleMaster", "saveShiftAutoDraftSettings", "saveShiftStoreBoardVisibility", "saveShiftCorrectionVisibility", "updateShiftLeaveRequestStatus", "deleteShiftLeaveRequest", "saveShiftSpecialDayRules", "saveShiftCalendarPeriodSettings", "saveShiftPeriodStatus", "saveShift", "saveShiftMonth", "deleteShift"];
     if (publicActions.indexOf(data.action) < 0) requireShiftSession(data.sessionToken, adminActions.indexOf(data.action) >= 0 ? "admin" : null);
     if (data.action === "previewTemplateReset") return previewTemplateReset(data);
     if (data.action === "getTemplateResetStatus") return getTemplateResetStatus(data);
     if (data.action === "runTemplateReset") return runTemplateReset(data);
     if (data.action === "clearTemplateShiftRemarks") return clearTemplateShiftRemarks(data);
+    if (data.action === "getShiftResetEpoch") return createJsonDataResponse({ success: true, epoch: PropertiesService.getScriptProperties().getProperty("SHIFT_RESET_EPOCH") || "" });
     if (data.action === "loginShift") return loginShift(data);
     if (data.action === "loginShiftAdmin") return loginShiftAdmin(data);
     if (data.action === "loginShiftEmployee") return loginShiftEmployee(data);
@@ -1928,6 +1929,8 @@ function runTemplateReset(data) {
       if (key.indexOf("SHIFT_SESSION_") === 0) p.deleteProperty(key);
     });
     p.deleteProperty("SHIFT_TEMPLATE_RESET_AUTH");
+    // 他の端末が次に開いたとき、端末内の設定を自動で消すための目印。
+    p.setProperty("SHIFT_RESET_EPOCH", String(Date.now()));
     return createJsonDataResponse({ success: true, done: true, archived: archived });
   } catch (error) {
     if (p && authorization && archived > 0 && !checkpointed) {
