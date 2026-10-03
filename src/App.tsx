@@ -2111,7 +2111,7 @@ export default function App() {
                       </form>}
                     </dialog>
                     {isFromAdmin && showLeaveManager && <LeaveRequestManager requests={leaveRequests} loading={leaveRequestLoading} onStatusChange={handleLeaveRequestStatus} onDelete={handleLeaveRequestDelete} />}
-                    <div className="dashboard-table-wrap overflow-x-auto">
+                    <div className="dashboard-table-wrap overflow-x-auto" onScroll={event => { const el = event.currentTarget; if (window.innerWidth < 768 && el.scrollTop > 0 && el.getBoundingClientRect().top > 8) el.scrollIntoView({ block: "start" }); }}>
                       <Table className="dashboard-table text-[13px]">
                         <TableHeader>
                           <TableRow className="bg-muted/30 hover:bg-muted/30">
@@ -2307,6 +2307,7 @@ export default function App() {
                           <Input type="password" value={managementApiKey} onChange={event => setManagementApiKey(event.target.value)} placeholder="管理者用の接続キー" className="h-11 bg-white" />
                           <Button className="h-11 font-bold" disabled={apiKeyChecking} onClick={() => void saveAndCheckApiKey()}>{apiKeyChecking ? "確認中…" : "保存して接続を確認"}</Button>
                         </div>
+                        {managementApiKey && (managementApiKey.length < 10 || /^\d+$/.test(managementApiKey) || /^[a-zA-Z]+$/.test(managementApiKey)) && <p role="alert" className="rounded-lg border-2 border-red-300 bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-800">⚠ この接続キーは簡単すぎます（短い・数字だけ・英字だけ）。他の人に当てられると、シフトを書き換えられるおそれがあります。GAS側の「SHIFT_API_KEY」と、ここの入力を、12文字以上の英字と数字がまざったものに変えてください。</p>}
                         {(apiKeyCheck || apiKeyVerified) && <p role="status" className={`rounded-lg px-3 py-2 text-xs font-bold ${(apiKeyCheck ? apiKeyCheck.ok : apiKeyVerified) ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{apiKeyCheck ? (apiKeyCheck.ok ? "✓ " : "× ") + apiKeyCheck.message : "✓ この端末は接続確認ずみです"}</p>}
                         <p className="text-[11px] text-slate-500">従業員は共通の従業員ID・パスワードでログイン後、自分の名前を選んで希望を提出します。</p>
                       </div>
