@@ -219,6 +219,8 @@ export default function App() {
     }));
   });
   const [employeeMaster, setEmployeeMaster] = useState<EmployeeMasterItem[]>(cachedEmployeeMaster || []);
+  // 従業員名を直したら、ログインし直さなくても操作員の名前をすぐ最新にします。
+  const operatorName = employeeMaster.find(item => item.id === appSession?.employeeId)?.displayName || appSession?.employeeName || "";
   const [roles, setRoles] = useState<ShiftRole[]>(DEFAULT_ROLES);
   const [adminNotices, setAdminNotices] = useState<AdminNotice[]>([]);
   const [adminNoticeVisibility, setAdminNoticeVisibility] = useState<AdminNoticeVisibility>("all");
@@ -875,7 +877,7 @@ export default function App() {
   );
   const outputPeriods = activeTab === "home" ? homeOutputPeriods : [dateRange];
   const dashboardEmployees = sortEmployeesForDisplay(employees);
-  const operatorEmployee = dashboardEmployees.find(item => item.id === appSession?.employeeId || (item.displayName || item.name) === appSession?.employeeName);
+  const operatorEmployee = dashboardEmployees.find(item => item.id === appSession?.employeeId || (item.displayName || item.name) === operatorName);
   const masterLoginEmployees = employeeMaster.filter(item => !PLACEHOLDER_EMPLOYEE_PATTERN.test(item.displayName || item.name));
   const cachedLoginEmployees = employees.filter(item => !PLACEHOLDER_EMPLOYEE_PATTERN.test(item.displayName || item.name));
   const loginEmployees: EmployeeMasterItem[] = masterLoginEmployees.length
@@ -897,7 +899,7 @@ export default function App() {
   useEffect(() => { templateStorage.setItem("shift_auto_draft_settings", JSON.stringify(autoDraftSettings)); }, [autoDraftSettings]);
   useEffect(() => { if (appSession?.role !== "admin") return; fetchAutoDraftSettings().then(value => { if (value) setAutoDraftSettings(value); }).catch(() => undefined); }, [appSession?.role]);
 
-  const updateAutoDraftSettings = async (value: AutoDraftSettings) => { setAutoDraftSettings(value); try { setAutoDraftSettings(await saveAutoDraftSettings(value)); } catch (error) { toast.error(error instanceof Error ? error.message : "自動作成設定を保存できませんでした"); } };
+  const updateAutoDraftSettings = async (value: AutoDraftSettings): Promise<boolean> => { setAutoDraftSettings(value); try { setAutoDraftSettings(await saveAutoDraftSettings(value)); return true; } catch (error) { toast.error(error instanceof Error ? error.message : "自動作成設定を保存できませんでした"); return false; } };
 
   const [autoDraftRun, setAutoDraftRun] = useState<{ state: "idle" | "running" | "done" | "error"; message: string; at?: string }>({ state: "idle", message: "" });
   const startAutoDraft = async (silent = false) => {
@@ -940,13 +942,14 @@ export default function App() {
     let skipped = 0;
     for (const range of targetRanges) {
       try {
-        await saveMonthToServer(generatedEmployees, globalRemarks, getDateStr(range[0]), getDateStr(range[range.length - 1]), appSession?.employeeName || "シフト編集者");
+        await saveMonthToServer(generatedEmployees, globalRemarks, getDateStr(range[0]), getDateStr(range[range.length - 1]), operatorName || "シフト編集者");
       } catch (error) {
         // 確定済みの期間は保存できないため、その期間だけ飛ばして続けます。
         if (error instanceof Error && /確定|ロック/.test(error.message)) skipped += 1; else throw error;
       }
     }
-    await updateAutoDraftSettings({ ...autoDraftSettings, started: true, lastRunAt: new Date().toISOString() });
+    const recorded = await updateAutoDraftSettings({ ...autoDraftSettings, started: true, lastRunAt: new Date().toISOString() });
+    if (!recorded) { setAutoDraftRun({ state: "error", message: "シフト案は作成しましたが、「開始ずみ」の記録を共通設定に保存できませんでした。もう一度「開始する」を押してください（作成ずみの勤務は上書きされません）", at: new Date().toLocaleString("ja-JP") }); return; }
     const doneMessage = skipped ? `シフト案を作成しました（確定済みの${skipped}期間は変更していません）` : "シフト案を作成しました。「全体」「シフト作成」で確認できます";
     setAutoDraftRun({ state: "done", message: doneMessage, at: new Date().toLocaleString("ja-JP") });
     toast.success(doneMessage);
@@ -1032,7 +1035,7 @@ export default function App() {
   const saveCurrentMonth = (): Promise<void> => {
     if (!dateRange.length) return Promise.resolve();
     const revision = editRevisionRef.current;
-    const snapshot = { employees, globalRemarks, start: getDateStr(dateRange[0]), end: getDateStr(dateRange[dateRange.length - 1]), editor: appSession?.employeeName || "シフト編集者" };
+    const snapshot = { employees, globalRemarks, start: getDateStr(dateRange[0]), end: getDateStr(dateRange[dateRange.length - 1]), editor: operatorName || "シフト編集者" };
     const task = saveQueueRef.current.catch(() => {}).then(async () => {
       if (savedRevisionRef.current >= revision) { toast.info("保存する変更はありません"); return; }
       setSyncState("saving");
@@ -1995,7 +1998,7 @@ export default function App() {
                 onOpenLeaveRequest={() => { setActiveTab("requests"); setIsFromAdmin(false); }}
                 onInstall={installToHomeScreen}
                 installLabel={installLabel}
-                operatorName={appSession.employeeName || "未選択"}
+                operatorName={operatorName || "未選択"}
                 onOpenGuide={() => openGuide("home")}
                 onLogout={() => { logoutShiftSession(); setAppSession(null); setActiveTab("home"); setIsFromAdmin(false); }}
                 requests={homeBoardRequests}
@@ -2011,7 +2014,7 @@ export default function App() {
             ) : activeTab === "requests" ? (
               <LeaveRequestView employees={dashboardEmployees} dates={dateRange} remarks={displayRemarks} requests={leaveRequests} locked={isLocked} loading={leaveRequestLoading || periodStatusLoading} operatorId={appSession.employeeId || ""} isAdmin={appSession.role === "admin"} onCheckPeriodStatus={fetchShiftPeriodStatus} onSubmit={handleLeaveRequestSubmit} onCancel={handleLeaveRequestCancel} onSaveWorkTime={async (id, start, end) => { const saved = await updateLeaveRequestWorkTime(id, start, end); setLeaveRequests(prev => prev.map(item => item.id === id ? saved : item)); }} onPeriodChange={async direction => { if (appSession.role === "admin" && (syncState === "dirty" || syncState === "saving")) { try { await saveCurrentMonth(); } catch { return; } } setCurrentMonth(prev => addMonths(prev, direction)); }} />
             ) : activeTab === "board" ? (
-              <BulletinBoard onBack={goBack} notices={adminNotices} employees={employeeMaster} defaultNoticeVisibility={adminNoticeVisibility} onCreateNotice={async (text, visibility, ids) => { try { const notice = await createAdminNotice(text, visibility, ids); setAdminNotices(items => [notice, ...items]); toast.success("お知らせを公開しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "公開できませんでした"); throw error; } }} onDeleteNotice={async id => { if (!window.confirm("このお知らせを削除しますか？")) return; try { await removeAdminNotice(id); setAdminNotices(items => items.filter(item => item.id !== id)); } catch (error) { toast.error(error instanceof Error ? error.message : "削除できませんでした"); } }} periods={boardPeriods} isEditor={appSession.role === "admin"} visibility={storeMaster.leaveRequestBoardVisibility || "immediate"} correctionVisibility={correctionVisibility} operatorName={appSession.employeeName} operatorId={appSession.employeeId} onShiftPeriod={direction => setBoardAnchor(prev => addMonths(prev, direction))} onResolve={async item => { const saved = await updateLeaveRequestStatus(item.id, "対応済み"); setBoardPeriods(prev => prev.map(period => ({ ...period, requests: period.requests.map(request => request.id === saved.id ? saved : request) }))); setHomeBoardRequests(prev => prev.map(request => request.id === saved.id ? saved : request)); setHomePendingCorrections(prev => prev.filter(request => request.id !== saved.id)); }} />
+              <BulletinBoard onBack={goBack} notices={adminNotices} employees={employeeMaster} defaultNoticeVisibility={adminNoticeVisibility} onCreateNotice={async (text, visibility, ids) => { try { const notice = await createAdminNotice(text, visibility, ids); setAdminNotices(items => [notice, ...items]); toast.success("お知らせを公開しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "公開できませんでした"); throw error; } }} onDeleteNotice={async id => { if (!window.confirm("このお知らせを削除しますか？")) return; try { await removeAdminNotice(id); setAdminNotices(items => items.filter(item => item.id !== id)); } catch (error) { toast.error(error instanceof Error ? error.message : "削除できませんでした"); } }} periods={boardPeriods} isEditor={appSession.role === "admin"} visibility={storeMaster.leaveRequestBoardVisibility || "immediate"} correctionVisibility={correctionVisibility} operatorName={operatorName} operatorId={appSession.employeeId} onShiftPeriod={direction => setBoardAnchor(prev => addMonths(prev, direction))} onResolve={async item => { const saved = await updateLeaveRequestStatus(item.id, "対応済み"); setBoardPeriods(prev => prev.map(period => ({ ...period, requests: period.requests.map(request => request.id === saved.id ? saved : request) }))); setHomeBoardRequests(prev => prev.map(request => request.id === saved.id ? saved : request)); setHomePendingCorrections(prev => prev.filter(request => request.id !== saved.id)); }} />
             ) : activeTab === "mypage" ? (
               <MyPage employee={operatorEmployee} requests={leaveRequests} locked={isLocked} initialBalance={paidLeaveBalance} onSaveBalance={async balance => { const saved = await savePaidLeaveBalance(balance); setPaidLeaveBalance(saved); }} onCancel={handleLeaveRequestCancel} onSaveWorkTime={async (id, start, end) => { const saved = await updateLeaveRequestWorkTime(id, start, end); setLeaveRequests(prev => prev.map(item => item.id === id ? saved : item)); }} onEdit={() => setActiveTab("requests")} />
             ) : activeTab === "dashboard" && dashboardEmployees.length === 0 ? (
@@ -2034,7 +2037,7 @@ export default function App() {
                       <div className="creation-head-row">
                         <div className="creation-head-title">
                           <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" />
-                          <div><CardTitle>シフト作成</CardTitle><span><UserRound className="h-3.5 w-3.5" />操作員：{appSession.employeeName || "未選択"}</span></div>
+                          <div><CardTitle>シフト作成</CardTitle><span><UserRound className="h-3.5 w-3.5" />操作員：{operatorName || "未選択"}</span></div>
                         </div>
                         <div className="creation-head-main">
                           {renderSyncStatus()}
@@ -2063,7 +2066,7 @@ export default function App() {
                     {!isFromAdmin && <div className="dashboard-blue-top">
                       <div className="dashboard-blue-brand">
                         <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" />
-                        <div><CardTitle className={appSession.role === "admin" ? "admin-shift-title" : ""}>{isLocked ? "全体シフト（確定）" : "全体シフト（案）"}</CardTitle><span><UserRound className="h-3.5 w-3.5" />操作員：{appSession.employeeName || "未選択"}</span></div>
+                        <div><CardTitle className={appSession.role === "admin" ? "admin-shift-title" : ""}>{isLocked ? "全体シフト（確定）" : "全体シフト（案）"}</CardTitle><span><UserRound className="h-3.5 w-3.5" />操作員：{operatorName || "未選択"}</span></div>
                       </div>
                       <div className="dashboard-blue-period">
                         {dateRange.length > 0 ? `${format(dateRange[0], "yyyy年M月d日")}〜${format(dateRange[dateRange.length - 1], "M月d日")}` : "期間未設定"}
