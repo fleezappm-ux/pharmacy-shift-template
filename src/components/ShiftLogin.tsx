@@ -11,11 +11,13 @@ export function ShiftLogin({ employees, onLogin }: { employees: EmployeeMasterIt
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [operatorId, setOperatorId] = useState("");
-  const [operatorOptions, setOperatorOptions] = useState<ShiftLoginEmployee[]>(employees);
+  // 前回の端末内の名簿は、サーバーから取れなかった時だけの予備にします（初期化後の古い名前を出さないため）。
+  const [operatorOptions, setOperatorOptions] = useState<ShiftLoginEmployee[]>([]);
+  const [listState, setListState] = useState<"loading" | "ready" | "failed">("loading");
   useEffect(() => { fetchShiftLoginEmployees().then(items => {
-    const realEmployees = items.filter(item => !/^従業員[A-EＡ-Ｅ]$/.test(item.displayName || item.name));
-    if (realEmployees.length) setOperatorOptions(realEmployees);
-  }).catch(() => undefined); }, []);
+    setOperatorOptions(items.filter(item => !/^従業員[A-EＡ-Ｅ]$/.test(item.displayName || item.name)));
+    setListState("ready");
+  }).catch(() => { setOperatorOptions(employees); setListState("failed"); }); }, []);
   const [loading, setLoading] = useState(false);
   const submit = async () => {
     if (!loginId.trim() || !password || !operatorId) return toast.error("ID・パスワード・操作員を入力してください");
@@ -40,7 +42,8 @@ export function ShiftLogin({ employees, onLogin }: { employees: EmployeeMasterIt
         <option value="">名前を選択してください</option>
         {operatorOptions.filter(item => item.active).map(item => <option key={item.id} value={item.id}>{item.displayName || item.name}</option>)}
       </select>
-      {operatorOptions.filter(item => item.active).length === 0 && <p className="mt-2 text-xs font-bold text-red-600">従業員マスタが未設定です。管理者へ確認してください。</p>}
+      {listState === "loading" && <p className="mt-2 text-xs text-slate-500">名前の一覧を読み込み中…</p>}
+      {listState !== "loading" && operatorOptions.filter(item => item.active).length === 0 && <p className="mt-2 text-xs font-bold text-red-600">従業員マスタが未設定です。管理者へ確認してください。</p>}
       <Button className="mt-6 h-12 w-full rounded-xl font-bold" disabled={loading} onClick={() => void submit()}><LogIn className="mr-2 h-4 w-4" />{loading ? "確認中…" : "ログイン"}</Button>
       <p className="mt-4 text-center text-[11px] text-slate-400">ID・パスワードを忘れた場合は管理者へ確認してください。</p>
     </section>
