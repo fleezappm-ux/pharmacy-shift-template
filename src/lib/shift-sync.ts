@@ -71,11 +71,13 @@ async function callGas(action: string, extra: Record<string, unknown> = {}, requ
     body: JSON.stringify({ action, shiftApiKey, sessionToken: getShiftSession()?.token || "", ...extra })
   });
   // Googleのサーバーが一時的に404/5xxを返すことがあるため、届いていない場合だけ自動でやり直します。
-  let response = await send();
-  for (let attempt = 1; attempt <= 3 && (response.status === 404 || response.status === 429 || response.status >= 500); attempt += 1) {
+  const trySend = async (): Promise<Response | null> => { try { return await send(); } catch { return null; } };
+  let response = await trySend();
+  for (let attempt = 1; attempt <= 3 && (!response || response.status === 404 || response.status === 429 || response.status >= 500); attempt += 1) {
     await new Promise(resolve => window.setTimeout(resolve, attempt * 1200));
-    response = await send();
+    response = await trySend();
   }
+  if (!response) throw new Error("通信できませんでした（電波・Wi-Fiを確認してください）。編集内容は端末に残っています。電波が戻ったら「再保存」を押してください。");
   if (!response.ok) {
     throw new Error("サーバーとの通信に失敗しました（status " + response.status + "）。少し待ってから「再保存」を押してください。");
   }
