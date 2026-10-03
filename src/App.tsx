@@ -155,6 +155,10 @@ export default function App() {
     window.addEventListener("focus", check);
     return () => { document.removeEventListener("visibilitychange", check); window.removeEventListener("focus", check); };
   }, []);
+  // 勤務時間は、ログイン後に1回読み込んで端末に持っておく。設定画面を開くたびに「読み込み中」に戻さず、裏で最新を取り直すだけにする。
+  const settingsPageRef = useRef(settingsPage);
+  settingsPageRef.current = settingsPage;
+  const refreshWorkTimeRef = useRef<() => Promise<void>>(async () => {});
   useEffect(() => {
     if (!appSession?.token) { setWorkTimeReady(false); return; }
     setWorkTimeReady(false); setWorkTimeLoading(true);
@@ -164,14 +168,17 @@ export default function App() {
         const master = await fetchWorkTimeMaster();
         if (cancelled) return;
         setWorkTimes(master.items); saveWorkTimes(master.items); setWorkTimeRevision(master.revision); setWorkTimeReady(true); setWorkTimeLoading(false);
-      } catch (error) { if (!cancelled) { setWorkTimeReady(false); setWorkTimeLoading(false); console.error("勤務時間マスタ取得", error); } }
+      } catch (error) { if (!cancelled) { setWorkTimeLoading(false); console.error("勤務時間マスタ取得", error); } }
     };
+    refreshWorkTimeRef.current = refresh;
     void refresh();
-    const focus = () => { if (settingsPage !== "worktime") void refresh(); };
-    const timer = window.setInterval(() => { if (settingsPage !== "worktime" && document.visibilityState === "visible") void refresh(); }, 30000);
+    const focus = () => { if (settingsPageRef.current !== "worktime") void refresh(); };
+    const timer = window.setInterval(() => { if (settingsPageRef.current !== "worktime" && document.visibilityState === "visible") void refresh(); }, 30000);
     window.addEventListener("focus", focus);
     return () => { cancelled = true; window.clearInterval(timer); window.removeEventListener("focus", focus); };
-  }, [appSession?.token, settingsPage]);
+  }, [appSession?.token]);
+  // 勤務時間の画面を開いたとき: いまの内容をすぐ見せつつ、裏で最新を確認する。
+  useEffect(() => { if (settingsPage === "worktime") void refreshWorkTimeRef.current(); }, [settingsPage]);
   const [storeMaster, setStoreMaster] = useState<StoreMaster>(() => {
     const saved = templateStorage.getItem("store_master_settings");
     if (!saved) return DEFAULT_STORE_MASTER;
