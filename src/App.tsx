@@ -913,7 +913,7 @@ export default function App() {
   const startAutoDraft = async (silent = false) => {
     if (autoDraftRun.state === "running") return;
     if (!silent && !window.confirm(`${autoDraftRangeLabel}のシフト案を作成します。確定済み・手動編集済みの勤務は上書きしません。開始しますか？`)) return;
-    setAutoDraftRun({ state: "running", message: "シフト案を作成してサーバーに保存しています…終わるまで画面を動かさないでください" });
+    setAutoDraftRun({ state: "running", message: "シフト案を作成しています…（アプリは閉じないでください）" });
     try {
     const baseMonth = addMonths(getCurrentShiftMonth(new Date(), calendarPeriodSettings), 1);
     const allRanges = Array.from({ length: 3 }, (_, offset) => {
@@ -952,7 +952,11 @@ export default function App() {
     });
     setEmployees(generatedEmployees);
     let skipped = lockedCount;
+    const startedAtMs = Date.now();
+    let rangeNo = 0;
     for (const range of targetRanges) {
+      rangeNo += 1;
+      setAutoDraftRun({ state: "running", message: `保存中… ${rangeNo}/${targetRanges.length}期間目（${format(range[0], "M/d")}〜${format(range[range.length - 1], "M/d")}）。1期間に1〜2分かかります。他の画面に移っても大丈夫ですが、アプリは閉じないでください`, at: `経過 ${Math.round((Date.now() - startedAtMs) / 1000)}秒` });
       try {
         let tries = 0;
         for (;;) {
@@ -1075,6 +1079,8 @@ export default function App() {
     saveQueueRef.current = task.catch(() => {});
     return task;
   };
+
+  useEffect(() => { if (isLocked && !periodStatusLoading && (syncState === "dirty" || syncState === "offline")) { setSyncFailure(null); setSyncState("saved"); } }, [isLocked, periodStatusLoading, syncState]);
 
   useEffect(() => {
     if (appSession?.role !== "admin" || !initialSyncComplete || periodStatusLoading || isLocked || syncState !== "dirty") return;
