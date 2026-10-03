@@ -79,6 +79,9 @@ import { DEFAULT_STORE_MASTER, StoreMaster, StoreMasterSettings } from "./compon
 import { ShiftLogin } from "./components/ShiftLogin";
 import { EmployeeMasterSettings } from "./components/EmployeeMasterSettings";
 import { RoleAndHomeSettings } from "./components/RoleAndHomeSettings";
+import { BoardSettings } from "./components/BoardSettings";
+import { SaveStatus } from "./components/SaveStatus";
+import { useUnsavedGuard } from "./lib/unsaved";
 import { EmployeeMasterItem, fetchEmployeeMaster, mergeEmployeesWithMaster, saveEmployeeMaster, DEFAULT_HOME_LAYOUT, DEFAULT_ROLES, fetchShiftRoles, fetchHomeLayout, saveShiftRoles, saveHomeLayout, ShiftRole, HomeLayout } from "./lib/employee-master-sync";
 import { fetchCycleMaster, saveCycleMaster } from "./lib/cycle-master-sync";
 import { BoardPeriod, BulletinBoard } from "./components/BulletinBoard";
@@ -263,6 +266,7 @@ export default function App() {
   });
   const [editingCycleId, setEditingCycleId] = useState<number | null>(null);
   const [cycleSaving, setCycleSaving] = useState(false);
+  const [cycleBaseline, setCycleBaseline] = useState<string | null>(null);
   const [syncState, setSyncState] = useState<"loading" | "saved" | "dirty" | "saving" | "offline" | "read-error">("loading");
   const [initialReadError, setInitialReadError] = useState("");
   const [readRetry, setReadRetry] = useState(0);
@@ -653,6 +657,7 @@ export default function App() {
       setCycleLengths(master.lengths);
       setCyclePatterns(master.patterns);
       setCycleAssignments(master.assignments || {});
+      setCycleBaseline(JSON.stringify([master.names, master.lengths, master.patterns, master.assignments || {}]));
     }).catch(error => console.error("クールマスタを取得できませんでした", error));
   }, [appSession?.token]);
 
@@ -1350,11 +1355,17 @@ export default function App() {
     setEditingCycleId(value => value === cycleId ? null : value);
   };
 
+  const cycleSnapshot = JSON.stringify([cycleNames, cycleLengths, cyclePatterns, cycleAssignments]);
+  const cycleInitialRef = useRef<string | null>(null);
+  if (cycleInitialRef.current === null) cycleInitialRef.current = cycleSnapshot;
+  const cycleDirty = cycleSnapshot !== (cycleBaseline ?? cycleInitialRef.current);
+  useUnsavedGuard("cycle-master", cycleDirty);
   const handleSaveCycleMaster = async () => {
     setCycleSaving(true);
     try {
       const saved = await saveCycleMaster({ names: cycleNames, lengths: cycleLengths, patterns: cyclePatterns, assignments: cycleAssignments });
       setCycleNames(saved.names); setCycleLengths(saved.lengths); setCyclePatterns(saved.patterns); setCycleAssignments(saved.assignments || {});
+      setCycleBaseline(JSON.stringify([saved.names, saved.lengths, saved.patterns, saved.assignments || {}]));
       toast.success("クールマスタを全端末へ保存しました");
     } catch (error) { toast.error(error instanceof Error ? error.message : "クール作成マスタを保存できませんでした"); }
     finally { setCycleSaving(false); }
@@ -2178,7 +2189,7 @@ export default function App() {
             ) : activeTab === "admin" && settingsPage === "board" ? (
               <motion.div key="settings-board" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
                 <SettingsHead title="お知らせ掲示板設定" description="承認済みの希望を従業員へ共有する設定" backLabel="設定へ戻る" onBack={() => goSettings("menu")} /><Card>
-                <CardContent className="p-6 space-y-4"><label className="block text-sm font-bold">休み希望の公開設定<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={storeMaster.leaveRequestBoardVisibility || "immediate"} onChange={e => setStoreMaster(v => ({...v, leaveRequestBoardVisibility:e.target.value as StoreMaster["leaveRequestBoardVisibility"]}))}><option value="immediate">提出と同時に全員へ公開</option><option value="after_approval">管理者確認後に全員へ公開</option><option value="private">本人と編集者だけに表示</option></select></label><Button className="w-full h-11 font-bold" onClick={() => void handleSaveBoardVisibility(storeMaster.leaveRequestBoardVisibility)}>休み希望の公開設定を保存</Button><div className="border-t pt-4"><label className="block text-sm font-bold">管理者からのお知らせ設定<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={adminNoticeVisibility} onChange={event => setAdminNoticeVisibility(event.target.value as AdminNoticeVisibility)}><option value="all">全員</option><option value="selected">指定従業員</option></select></label><Button className="mt-3 w-full h-11" onClick={async () => { try { setAdminNoticeVisibility(await saveAdminNoticeVisibility(adminNoticeVisibility)); toast.success("お知らせ公開設定を保存しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "保存できませんでした"); } }}>管理者からのお知らせ設定を保存</Button></div><div className="border-t pt-4"><label className="block text-sm font-bold">確定シフト訂正依頼の公開範囲<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={correctionVisibility} onChange={e => setCorrectionVisibility(e.target.value as "all" | "private")}><option value="all">全員に表示</option><option value="private">本人と管理者のみ表示</option></select></label><Button className="mt-3 w-full h-11" onClick={async () => { try { setCorrectionVisibility(await saveCorrectionVisibility(correctionVisibility)); toast.success("訂正依頼の公開設定を保存しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "保存できませんでした"); } }}>訂正依頼の公開設定を保存</Button></div></CardContent></Card>
+                <CardContent className="p-6"><BoardSettings leave={storeMaster.leaveRequestBoardVisibility || "immediate"} notice={adminNoticeVisibility} correction={correctionVisibility} onSaveLeave={value => handleSaveBoardVisibility(value)} onSaveNotice={async value => { const saved = await saveAdminNoticeVisibility(value); setAdminNoticeVisibility(saved); return saved; }} onSaveCorrection={async value => { const saved = await saveCorrectionVisibility(value); setCorrectionVisibility(saved); return saved; }} /></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "employee" ? (
               <motion.div key="settings-employee" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><SettingsHead title="従業員マスタ" description="従業員の登録、役職、ホームの表示" backLabel="設定へ戻る" onBack={() => goSettings("menu")} /><EmployeeMasterSettings loadError={employeeMasterLoadError} employees={employeeMaster} roles={roles} onSave={handleSaveEmployeeMaster} operatorId={appSession?.employeeId} /><RoleAndHomeSettings roles={roles} layout={homeLayout} onSaveRoles={handleSaveRoles} onSaveLayout={async value => setHomeLayout(await saveHomeLayout(value))} /></motion.div>
@@ -2212,7 +2223,8 @@ export default function App() {
                             </div>}
                           </div>;
                         })}</div>
-                        <Button className="mt-4 h-11 w-full font-bold" disabled={cycleSaving} onClick={() => void handleSaveCycleMaster()}>{cycleSaving ? "保存中…" : "クール作成マスタを保存"}</Button>
+                        <SaveStatus className="mt-4" dirty={cycleDirty} saving={cycleSaving} />
+                        <Button className="sticky bottom-20 z-10 mt-2 h-11 w-full font-bold shadow-lg sm:bottom-2" disabled={cycleSaving || !cycleDirty} onClick={() => void handleSaveCycleMaster()}>{cycleSaving ? "保存中…" : "クール作成マスタを保存"}</Button>
                       </section>
 
 </CardContent></Card></motion.div>
