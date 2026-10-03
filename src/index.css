@@ -569,4 +569,42 @@ body { margin:0; background:#f5f7fa; }
 /* 全体画面：表示切り替えは見出しではなく表の上のツールバーに置く */
 .dashboard-overview-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;border-bottom:1px solid #e2e8f0;background:#f8fafc}
 .dashboard-overview-toolbar .dashboard-list-toggle{height:36px!important;padding:0 12px!important;border-color:#1762bb!important;background:#fff!important;color:#1762bb!important;font-size:12px!important;font-weight:900!important}
-.dashboard-overview-toolbar .dashboard-list-toggle svg,.dashboard-header-actions .dashboard-list-toggle svg{color:#1762bb;stroke:currentColor}
+.dashboard-overview-toolbar .dashboard-list-toggle svg,.page-blue-header .dashboard-header-actions .dashboard-list-toggle svg{color:#1762bb!important;stroke:#1762bb!important}
+
+/* シフト作成の見出し：2段（1段目＝題名と保存・確定／2段目＝操作と表示） */
+.creation-head{display:grid;gap:14px}
+.creation-head-row{display:flex;align-items:center;justify-content:space-between;gap:12px 16px;flex-wrap:wrap}
+.creation-head-title{display:flex;align-items:center;gap:12px;min-width:0}
+.creation-head-title img{width:44px;height:44px;border-radius:12px;flex-shrink:0}
+.creation-head-title [data-slot="card-title"]{color:#fff;font-size:26px;line-height:1.15}
+.creation-head-title span{display:flex;align-items:center;gap:4px;margin-top:3px;color:#fff;font-size:12px;font-weight:800}
+.creation-head-main{display:flex;align-items:center;gap:14px}
+.creation-head-tools{padding-top:14px;border-top:1px solid rgba(255,255,255,.3)}
+.creation-head-left,.creation-head-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+.creation-head-left select{height:40px;width:200px;max-width:100%;padding:0 12px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;color:#172033;font-size:14px;font-weight:800}
+.creation-mode-toggle{display:flex;height:40px;padding:4px;border-radius:10px;background:#fff;gap:2px}
+.creation-mode-toggle button{padding:0 16px;border-radius:7px;color:#334155;font-size:13px;font-weight:800}
+.creation-mode-toggle button.is-on{background:#e2e8f0}
+.creation-mode-toggle button.is-edit{background:#f59e0b;color:#fff}
+.creation-mode-toggle button:disabled{opacity:.4}
+.creation-head .creation-lock-button{height:40px!important;padding:0 16px!important;border:1px solid #0f3f86!important;background:#0f3f86!important;color:#fff!important;font-size:13px!important;font-weight:900!important}
+.creation-head .creation-lock-button.is-unlock{border-color:#fecaca!important;background:#fff!important;color:#b91c1c!important}
+.creation-head .shift-display-control{color:#fff;font-size:12px}
+.creation-head .shift-display-control select{height:40px;max-width:150px}
+.creation-head .dashboard-list-toggle{height:40px!important;padding:0 14px!important;border-color:#fff!important;background:#fff!important;color:#1762bb!important;font-size:13px!important;font-weight:900!important}
+.page-blue-header .creation-head .dashboard-list-toggle svg{color:#1762bb!important;stroke:#1762bb!important}.page-blue-header .creation-head .creation-lock-button:not(.is-unlock) svg{color:#fff!important}.page-blue-header .creation-head .creation-lock-button.is-unlock svg{color:#b91c1c!important}.page-blue-header .creation-head-title span svg{color:#fff!important}
+.creation-head .creation-save-status{font-size:12px}
+.creation-leave-strip{display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;border:0;border-bottom:1px solid #e2e8f0;background:#f8fafc;color:#475569;font-size:13px;font-weight:800;text-align:left;cursor:pointer}
+.creation-leave-strip.has-pending{background:#fef2f2;color:#b91c1c}
+.creation-leave-strip span{margin-left:auto;font-size:11px}
+@media(max-width:767px){
+  .creation-head-title [data-slot="card-title"]{font-size:20px}
+  .creation-head-title img{width:38px;height:38px}
+  .creation-head-row{gap:10px}
+  .creation-head-main{width:100%;justify-content:space-between}
+  .creation-head-left,.creation-head-right{width:100%}
+  .creation-head-left select{flex:1;width:auto}
+  .creation-head .dashboard-list-toggle{display:none}
+  .creation-head .shift-display-control select{max-width:none;flex:1}
+  .creation-head .shift-display-control{width:100%}
+}
