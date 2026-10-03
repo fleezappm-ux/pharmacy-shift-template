@@ -1,5 +1,5 @@
+import { gasFetch } from "./gas-fetch";
 import { templateStorage } from "./template-storage";
-import { getGasUrl } from "./gas-config";
 
 const SEEN_KEY = "reset_epoch_seen";
 const RESET_PENDING_KEY = "template_reset_pending_v1";
@@ -12,7 +12,7 @@ const RESET_PENDING_KEY = "template_reset_pending_v1";
 export async function syncResetEpoch(): Promise<void> {
   if (templateStorage.getItem(RESET_PENDING_KEY)) return;
   try {
-    const response = await fetch(getGasUrl(), { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ action: "getShiftResetEpoch" }) });
+    const response = await gasFetch({ method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ action: "getShiftResetEpoch" }) });
     if (!response.ok) return;
     const json = await response.json();
     if (!json?.success || typeof json.epoch !== "string") return;

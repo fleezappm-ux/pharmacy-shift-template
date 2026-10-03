@@ -1,14 +1,14 @@
+import { gasFetch } from "./gas-fetch";
 import { templateStorage } from "./template-storage";
 import { CommentVisibility, LeaveRequest, LeaveRequestStatus, LeaveRequestType, PaidLeaveBalance } from "../types";
 import { getEmployeeToken, getManagementApiKey, getShiftSession } from "./auth-sync";
-import { getGasUrl } from "./gas-config";
 
 const SHIFT_API_KEY_STORAGE = "shift_api_key";
 
 async function request(action: string, payload: Record<string, unknown>, requireKey = false) {
   const shiftApiKey = templateStorage.getItem(SHIFT_API_KEY_STORAGE) || "";
   if (requireKey && !shiftApiKey) throw new Error("管理者用の接続キーが未設定です");
-  const response = await fetch(getGasUrl(), {
+  const response = await gasFetch({
     method: "POST",
     headers: { "Content-Type": "text/plain" },
     body: JSON.stringify({ action, sessionToken: getShiftSession()?.token || "", shiftApiKey, ...payload })

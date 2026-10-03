@@ -1,13 +1,13 @@
+import { gasFetch } from "./gas-fetch";
 import { templateStorage } from "./template-storage";
 import { getShiftSession } from "./auth-sync";
 
 export type BoardVisibility = "immediate" | "after_approval" | "private";
 
-import { getGasUrl } from "./gas-config";
 const SHIFT_API_KEY_STORAGE = "shift_api_key";
 
 async function call(action: string, extra: Record<string, unknown> = {}) {
-  const response = await fetch(getGasUrl(), {
+  const response = await gasFetch({
     method: "POST",
     headers: { "Content-Type": "text/plain" },
     body: JSON.stringify({ action, sessionToken: getShiftSession()?.token || "", shiftApiKey: templateStorage.getItem(SHIFT_API_KEY_STORAGE) || "", ...extra })

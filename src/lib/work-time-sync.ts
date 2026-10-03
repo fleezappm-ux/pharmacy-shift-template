@@ -1,11 +1,11 @@
+import { gasFetch } from "./gas-fetch";
 import { getManagementApiKey, getShiftSession } from "./auth-sync";
-import { getGasUrl } from "./gas-config";
 import { WorkTimeOption } from "./work-time-options";
 class NetworkError extends Error {}
 async function call(action: string, extra: Record<string, unknown> = {}) {
   let response: Response;
   try {
-    response = await fetch(getGasUrl(), { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ action, sessionToken: getShiftSession()?.token || "", shiftApiKey: getManagementApiKey(), ...extra }) });
+    response = await gasFetch({ method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ action, sessionToken: getShiftSession()?.token || "", shiftApiKey: getManagementApiKey(), ...extra }) });
   } catch (error) {
     if (error instanceof TypeError) throw new NetworkError("通信が途中で切れました。電波のよい場所で、もう一度お試しください。");
     throw error;

@@ -1,3 +1,4 @@
+import { gasFetch } from "../lib/gas-fetch";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -5,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { getManagementApiKey, getShiftSession } from "@/lib/auth-sync";
-import { getGasUrl } from "@/lib/gas-config";
 import { templateStorage } from "@/lib/template-storage";
 
 export const RESET_PENDING_KEY = "template_reset_pending_v1";
@@ -28,7 +28,7 @@ async function resetRequest(action: string, payload: Record<string, unknown>) {
   if (session?.role !== "admin") throw new Error("管理者としてログインしてください。");
   const apiKey = getManagementApiKey();
   if (!apiKey) throw new Error("その他設定で管理者用の接続キーを設定してください。");
-  const response = await fetch(getGasUrl(), {
+  const response = await gasFetch({
     method: "POST",
     headers: { "Content-Type": "text/plain" },
     body: JSON.stringify({ action, sessionToken: session.token, apiKey, ...payload })

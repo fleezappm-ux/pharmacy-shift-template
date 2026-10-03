@@ -1,8 +1,8 @@
+import { gasFetch } from "./gas-fetch";
 import { Employee, EmployeeRole } from "../types";
 import { getShiftSession } from "./auth-sync";
 import { getManagementApiKey } from "./auth-sync";
 
-import { getGasUrl } from "./gas-config";
 
 export interface EmployeeMasterItem {
   id: string;
@@ -22,7 +22,7 @@ export const DEFAULT_HOME_LAYOUT: HomeLayout = { visible: true, columns: [["mana
 
 async function call(action: string, payload: Record<string, unknown> = {}) {
   const sessionToken = getShiftSession()?.token || "";
-  const response = await fetch(getGasUrl(), { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ action, sessionToken, ...payload }) });
+  const response = await gasFetch({ method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ action, sessionToken, ...payload }) });
   if (!response.ok) throw new Error(`通信に失敗しました（${response.status}）`);
   const json = await response.json();
   if (!json.success) throw new Error(json.message || "従業員マスタを処理できませんでした");

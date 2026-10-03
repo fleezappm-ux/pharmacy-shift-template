@@ -1,11 +1,11 @@
-import { getGasUrl } from "./gas-config";
+import { gasFetch } from "./gas-fetch";
 import { getManagementApiKey, getShiftSession } from "./auth-sync";
 
 export interface AdminNotice { id: string; text: string; visibility: "all" | "selected"; employeeIds: string[]; createdAt: string }
 export type AdminNoticeVisibility = "all" | "selected";
 
 async function call(action: string, payload: Record<string, unknown> = {}) {
-  const response = await fetch(getGasUrl(), { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ action, sessionToken: getShiftSession()?.token, ...payload }) });
+  const response = await gasFetch({ method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ action, sessionToken: getShiftSession()?.token, ...payload }) });
   if (!response.ok) throw new Error(`通信に失敗しました（${response.status}）`);
   const result = await response.json();
   if (!result.success) throw new Error(result.message || "お知らせを処理できませんでした");
