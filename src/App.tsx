@@ -81,6 +81,7 @@ import { EmployeeMasterSettings } from "./components/EmployeeMasterSettings";
 import { RoleAndHomeSettings } from "./components/RoleAndHomeSettings";
 import { BoardSettings } from "./components/BoardSettings";
 import { ToolHelp } from "./components/ToolHelp";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { SaveStatus } from "./components/SaveStatus";
 import { useUnsavedGuard } from "./lib/unsaved";
 import { EmployeeMasterItem, fetchEmployeeMaster, mergeEmployeesWithMaster, saveEmployeeMaster, DEFAULT_HOME_LAYOUT, DEFAULT_ROLES, fetchShiftRoles, fetchHomeLayout, saveShiftRoles, saveHomeLayout, ShiftRole, HomeLayout } from "./lib/employee-master-sync";
@@ -1735,7 +1736,7 @@ export default function App() {
     setCurrentMonth(previous => addMonths(previous, direction));
   };
   const renderCreationPeriod = () => <div className="creation-period-bar"><Button variant="outline" size="sm" disabled={syncState === "saving"} onClick={() => { void moveCreationPeriod(-1); }} aria-label="前の期間"><ChevronLeft className="h-4 w-4" /><span>前の期間</span></Button><div><small>{dateRange.length ? format(dateRange[0], "yyyy年") : ""}</small><strong>{dateRange.length ? `${format(dateRange[0], "M月d日")}〜${format(dateRange[dateRange.length - 1], "M月d日")}` : "期間未設定"}</strong></div><Button variant="outline" size="sm" disabled={syncState === "saving"} onClick={() => { void moveCreationPeriod(1); }} aria-label="次の期間"><span>次の期間</span><ChevronRight className="h-4 w-4" /></Button></div>;
-  if (!appSession) return <><ShiftLogin employees={loginEmployees} onLogin={session => { setAppSession(session); if (templateStorage.getItem("shift_guide_hidden_v1") !== "1") openGuide("home"); toast.success(session.role === "admin" ? "編集者としてログインしました" : "ログインしました"); }} /><Toaster position="top-center" /></>;
+  if (!appSession) return <><ShiftLogin employees={loginEmployees} onLogin={session => { setAppSession(session); if (templateStorage.getItem("shift_guide_hidden_v1") !== "1") openGuide("home"); toast.success(session.role === "admin" ? "編集者としてログインしました" : "ログインしました"); }} /><UpdateBanner /><Toaster position="top-center" /></>;
   if (!initialSyncComplete) return <main className="flex min-h-dvh items-center justify-center bg-slate-50"><div className="rounded-2xl bg-white px-8 py-7 text-center shadow-xl"><div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" /><strong className="text-slate-800">従業員マスタを同期しています</strong><p className="mt-2 text-xs text-slate-500">役職情報を確認してから表示します</p></div></main>;
 
   return (
@@ -2571,6 +2572,7 @@ export default function App() {
         </div>
       )}
       {guideOpen && <ShiftToolGuide role={appSession.role} initialSection={guideSection} onClose={hideNextTime => { if (hideNextTime) templateStorage.setItem("shift_guide_hidden_v1", "1"); setGuideOpen(false); }} />}
+      <UpdateBanner />
       <Toaster position="top-center" />
     </Tabs>
   );
