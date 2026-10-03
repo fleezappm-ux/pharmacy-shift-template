@@ -943,7 +943,15 @@ export default function App() {
     let skipped = 0;
     for (const range of targetRanges) {
       try {
-        await saveMonthToServer(generatedEmployees, globalRemarks, getDateStr(range[0]), getDateStr(range[range.length - 1]), operatorName || "シフト編集者");
+        let tries = 0;
+        for (;;) {
+          try { await saveMonthToServer(generatedEmployees, globalRemarks, getDateStr(range[0]), getDateStr(range[range.length - 1]), operatorName || "シフト編集者"); break; }
+          catch (innerError) {
+            // 別の保存が裏で動いているだけのときは、少し待ってやり直します。
+            if (innerError instanceof Error && /別の保存処理/.test(innerError.message) && tries < 5) { tries += 1; await new Promise(resolve => window.setTimeout(resolve, 8000)); continue; }
+            throw innerError;
+          }
+        }
       } catch (error) {
         // 確定済みの期間は保存できないため、その期間だけ飛ばして続けます。
         if (error instanceof Error && /確定|ロック/.test(error.message)) skipped += 1; else throw error;
