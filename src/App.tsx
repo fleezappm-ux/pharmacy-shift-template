@@ -899,8 +899,11 @@ export default function App() {
 
   const updateAutoDraftSettings = async (value: AutoDraftSettings) => { setAutoDraftSettings(value); try { setAutoDraftSettings(await saveAutoDraftSettings(value)); } catch (error) { toast.error(error instanceof Error ? error.message : "自動作成設定を保存できませんでした"); } };
 
+  const [autoDraftRun, setAutoDraftRun] = useState<{ state: "idle" | "running" | "done" | "error"; message: string; at?: string }>({ state: "idle", message: "" });
   const startAutoDraft = async (silent = false) => {
+    if (autoDraftRun.state === "running") return;
     if (!silent && !window.confirm("作成対象月から3か月先までのシフト案を作成します。確定済み・手動編集済みの勤務は上書きしません。開始しますか？")) return;
+    setAutoDraftRun({ state: "running", message: "シフト案を作成してサーバーに保存しています…終わるまで画面を動かさないでください" });
     try {
     const baseMonth = silent ? getCurrentShiftMonth(new Date(), calendarPeriodSettings) : currentMonth;
     const targetRanges = Array.from({ length: 4 }, (_, offset) => {
@@ -944,8 +947,10 @@ export default function App() {
       }
     }
     await updateAutoDraftSettings({ ...autoDraftSettings, started: true, lastRunAt: new Date().toISOString() });
-    toast.success(skipped ? `シフト案を作成しました（確定済みの${skipped}期間は変更していません）` : "シフト案の自動作成を開始しました");
-    } catch (error) { toast.error(error instanceof Error ? error.message : "シフト案を自動作成できませんでした"); }
+    const doneMessage = skipped ? `シフト案を作成しました（確定済みの${skipped}期間は変更していません）` : "シフト案を作成しました。「全体」「シフト作成」で確認できます";
+    setAutoDraftRun({ state: "done", message: doneMessage, at: new Date().toLocaleString("ja-JP") });
+    toast.success(doneMessage);
+    } catch (error) { const message = error instanceof Error ? error.message : "シフト案を自動作成できませんでした"; setAutoDraftRun({ state: "error", message: `作成できませんでした：${message}`, at: new Date().toLocaleString("ja-JP") }); toast.error(message); }
   };
 
   const autoDraftRunRef = useRef("");
@@ -2254,7 +2259,7 @@ export default function App() {
             ) : activeTab === "admin" && settingsPage === "worktime" ? (
               <motion.div key="settings-worktime" className="space-y-4"><SettingsHead title="勤務時間設定" description="シフトで使う勤務時間パターン" backLabel="シフトマスタへ戻る" onBack={() => goSettings("shift")} /><Card><CardContent className="p-5 sm:p-6"><ToolHelp title="勤務時間設定って何？"><p>シフトの入力で選べる「勤務時間」の候補を登録します。例：9:00〜18:00（早番）。</p><p>追加・変更は、押したその場で自動的に保存されます（保存ボタンはありません）。登録しなくても「休み」「有休」「任意入力」はいつでも選べます。</p><p>夜勤など日をまたぐ勤務は、退勤の時刻を出勤より早く入れると自動で判定されます。</p></ToolHelp><WorkTimeSettings values={workTimes} ready={workTimeReady} loading={workTimeLoading} onPendingChange={setWorkTimePending} confirmed={setupSeen.includes("worktime-confirmed")} onConfirm={() => { markSetupSeen("worktime-confirmed"); toast.success("勤務時間は、このままで使います"); }} onSave={async values => { markSetupSeen("worktime-confirmed"); const master = await saveWorkTimeMaster(values, workTimeRevision); saveWorkTimes(master.items); setWorkTimes(master.items); setWorkTimeRevision(master.revision); toast.success("勤務時間設定を共通保存しました"); }} /></CardContent></Card></motion.div>
             ) : activeTab === "admin" && settingsPage === "autodraft" ? (
-              <motion.div key="settings-autodraft" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><SettingsHead title="シフト案自動作成マスタ" description="シフト案を自動で作る条件" backLabel="シフトマスタへ戻る" onBack={() => goSettings("shift")} /><ToolHelp title="シフト案の自動作成って何？"><p>クールを割り当てた人について、先の月のシフト案を自動で作る機能です。クールを使っていないお店は、OFFのままで大丈夫です。</p><p>確定したシフトや、手で直した勤務は上書きしません。</p></ToolHelp><AutoDraftSettingsView settings={autoDraftSettings} onChange={value => void updateAutoDraftSettings(value)} onStart={startAutoDraft} /></motion.div>
+              <motion.div key="settings-autodraft" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><SettingsHead title="シフト案自動作成マスタ" description="シフト案を自動で作る条件" backLabel="シフトマスタへ戻る" onBack={() => goSettings("shift")} /><ToolHelp title="シフト案の自動作成って何？"><p>クールを割り当てた人について、先の月のシフト案を自動で作る機能です。クールを使っていないお店は、OFFのままで大丈夫です。</p><p>確定したシフトや、手で直した勤務は上書きしません。</p></ToolHelp><AutoDraftSettingsView settings={autoDraftSettings} onChange={value => void updateAutoDraftSettings(value)} onStart={() => startAutoDraft()} run={autoDraftRun} /></motion.div>
             ) : activeTab === "admin" && settingsPage === "special" ? (
               <motion.div key="settings-special" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
                 <SettingsHead title="お店のお休みの日・色付け" description="定休日・祝日・年末年始・毎月○日などを決める" backLabel="設定へ戻る" onBack={() => goSettings("menu")} /><Card><CardContent className="p-6"><div className="mb-4"><ToolHelp title="お休みの日・色付けって何？" defaultOpen><p>お店の休みの日を決めます。決めた日は、カレンダーやシフト表に色が付きます（初期は日曜と祝日が赤）。</p><p>「毎週の定休日」＝曜日で決まる休み／「お休みの日を追加」＝第○曜日・毎月○日・毎年同じ日・今年だけの日付。</p><p>色だけでなく、シフト案の自動作成で「その日を休みにする」こともできます。変更したら一番下の「保存」を押してください。</p></ToolHelp></div><SpecialDaySettings rules={specialDayRules} employees={employeeMaster} loading={specialDayLoading} onSave={handleSaveSpecialDayRules} /></CardContent></Card>
