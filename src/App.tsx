@@ -1308,7 +1308,12 @@ export default function App() {
       return { ...e, shifts: newShifts };
     }));
     
-    setCycleAssignments(prev => ({ ...prev, [employeeId]: { cycleType, anchorDate: startDateStr } }));
+    const nextAssignments = { ...cycleAssignments, [employeeId]: { cycleType, anchorDate: startDateStr } };
+    setCycleAssignments(nextAssignments);
+    // 「誰がどのクールか」は他の端末や自動作成でも使うため、適用した時点でサーバーにも保存します。
+    saveCycleMaster({ names: cycleNames, lengths: cycleLengths, patterns: cyclePatterns, assignments: nextAssignments })
+      .then(saved => setCycleBaseline(JSON.stringify([saved.names, saved.lengths, saved.patterns, saved.assignments || {}])))
+      .catch(error => toast.error(`クールの割り当てを共通保存できませんでした：${error instanceof Error ? error.message : "通信エラー"}。クール設定画面で「保存」を押してください`));
     const forcedRest = datesToUpdate.filter(dateStr => { const [y, m, d] = dateStr.split("-").map(Number); return shouldRestOnDate(new Date(y, m - 1, d), employeeId, specialDayRules); }).length;
     toast.success(`${cycleNames[cycleType]}を適用しました`, forcedRest ? { description: `お店の「お休みの日」設定で休みにしている日が${forcedRest}日あるため、その日は「休み」になっています（設定の「お店のお休みの日」で変更できます）`, duration: 9000 } : undefined);
   };
