@@ -861,7 +861,7 @@ function saveShiftRoleMaster(data) {
       p.setProperty("SHIFT_ROLE_MASTER_JSON", rolesJson);
       p.setProperty("SHIFT_EMPLOYEE_MASTER_JSON", employeesJson);
       appendShiftAudit(data, "役職マスタ保存", "SHIFT_ROLE_MASTER", before, roles);
-      return createJsonDataResponse({ success: true, roles: roles, employees: employees });
+      return createJsonDataResponse({ success: true, roles: roles, employees: employees, revision: shiftEmployeeMasterRevision_() });
     });
   } catch (error) { return createJsonResponse(false, error.message || "役職を保存できませんでした。"); }
 }
@@ -1009,12 +1009,19 @@ function saveShiftStoreSettings(data) {
   } catch (error) { return createJsonResponse(false, error.message || "店舗設定を保存できませんでした。"); }
 }
 
+/** 従業員マスタの「版」。他の端末が先に保存していたら、古い画面からの上書きを止めるために使います。 */
+function shiftEmployeeMasterRevision_() {
+  var raw = PropertiesService.getScriptProperties().getProperty("SHIFT_EMPLOYEE_MASTER_JSON") || "";
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, raw, Utilities.Charset.UTF_8);
+  return bytes.map(function(b) { var v = (b < 0 ? b + 256 : b).toString(16); return v.length < 2 ? "0" + v : v; }).join("");
+}
+
 function getShiftEmployeeMaster(data) {
   try {
     requireShiftSession(data.sessionToken);
     // Reading must never register names from a browser cache in a new store.
     var master = normalizeShiftEmployeeMaster(readShiftEmployeeMaster());
-    return createJsonDataResponse({ success: true, employees: master });
+    return createJsonDataResponse({ success: true, employees: master, revision: shiftEmployeeMasterRevision_() });
   } catch (error) { return createJsonResponse(false, error.message || "従業員マスターを取得できませんでした。"); }
 }
 
@@ -1031,10 +1038,14 @@ function saveShiftEmployeeMaster(data) {
       displayNames[item.displayName] = true;
     });
     return withShiftLock_(function() {
+      // 古い画面の内容で、他の端末が保存した最新の登録を上書きしないための確認です。
+      if (!data.revision || String(data.revision) !== shiftEmployeeMasterRevision_()) {
+        throw new Error("他の端末で従業員が更新されています。画面を開き直して、最新の状態から変更してください。（今回の変更は保存されていません）");
+      }
       var before = readShiftEmployeeMaster();
       safeSetProperty_("SHIFT_EMPLOYEE_MASTER_JSON", JSON.stringify(master));
       appendShiftAudit(data, "従業員マスター保存", "SHIFT_EMPLOYEE_MASTER", before, master);
-      return createJsonDataResponse({ success: true, employees: master });
+      return createJsonDataResponse({ success: true, employees: master, revision: shiftEmployeeMasterRevision_() });
     });
   } catch (error) { return createJsonResponse(false, error.message || "従業員マスターを保存できませんでした。"); }
 }

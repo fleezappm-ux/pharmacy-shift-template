@@ -29,14 +29,21 @@ async function call(action: string, payload: Record<string, unknown> = {}) {
   return json;
 }
 
+// サーバーから最後に読み込んだ従業員マスタの「版」。これが無い（＝最新を読めていない）ときは保存させません。
+let masterRevision: string | null = null;
+export const hasLatestEmployeeMaster = () => masterRevision !== null;
+
 export async function fetchEmployeeMaster(): Promise<EmployeeMasterItem[]> {
   // Never submit cached shift names to GAS: its legacy read endpoint auto-registers them.
   const json = await call("getShiftEmployeeMaster", { names: [] });
+  if (typeof json.revision === "string") masterRevision = json.revision;
   return Array.isArray(json.employees) ? json.employees : [];
 }
 
 export async function saveEmployeeMaster(employees: EmployeeMasterItem[]): Promise<EmployeeMasterItem[]> {
-  const json = await call("saveShiftEmployeeMaster", { employees });
+  if (masterRevision === null) throw new Error("最新の従業員一覧を読み込めていません。通信を確認して、画面を開き直してください。（保存はされていません）");
+  const json = await call("saveShiftEmployeeMaster", { employees, revision: masterRevision });
+  if (typeof json.revision === "string") masterRevision = json.revision;
   return Array.isArray(json.employees) ? json.employees : employees;
 }
 
@@ -46,6 +53,7 @@ export async function fetchShiftRoles(): Promise<ShiftRole[]> {
 }
 export async function saveShiftRoles(roles: ShiftRole[]): Promise<{ roles: ShiftRole[]; employees: EmployeeMasterItem[] }> {
   const json = await call("saveShiftRoleMaster", { roles, shiftApiKey: getManagementApiKey() });
+  if (typeof json.revision === "string") masterRevision = json.revision;
   return { roles: json.roles, employees: json.employees };
 }
 export async function fetchHomeLayout(): Promise<HomeLayout> {

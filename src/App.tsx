@@ -551,10 +551,14 @@ export default function App() {
     (async () => {
       try {
         // Both reads are independent. Cached master keeps the UI available while they refresh.
-        const [merged, master] = await Promise.all([fetchShiftsFromServer(employees, true), fetchEmployeeMaster()]);
+        // どちらか一方の取得に失敗しても、もう一方は使えるようにします（従業員は端末の古い記憶に頼らない）。
+        const [merged, fetchedMaster] = await Promise.all([fetchShiftsFromServer(employees, true), fetchEmployeeMaster().catch(error => { console.error("従業員マスタ取得", error); return null; })]);
         if (cancelled) return;
-        templateStorage.setItem(EMPLOYEE_MASTER_CACHE_KEY, JSON.stringify(master));
-        setEmployeeMaster(master);
+        const master = fetchedMaster ?? employeeMaster;
+        if (fetchedMaster) {
+          templateStorage.setItem(EMPLOYEE_MASTER_CACHE_KEY, JSON.stringify(fetchedMaster));
+          setEmployeeMaster(fetchedMaster);
+        }
         const pending = reLoginDraftRef.current;
         const resume = pending && appSession.role === "admin" && pending.operatorId === appSession.employeeId;
         const sourceEmployees = resume ? (merged?.employees || employees).map(employee => {
@@ -1145,12 +1149,25 @@ export default function App() {
     }));
   };
 
+  const [employeeMasterLoadError, setEmployeeMasterLoadError] = useState("");
+  // 従業員マスタの画面を開くたびに、サーバーの最新を取り直します（古い画面の内容で上書きしないため）。
+  useEffect(() => {
+    if (appSession?.role !== "admin" || settingsPage !== "employee") return;
+    let cancelled = false;
+    setEmployeeMasterLoadError("");
+    fetchEmployeeMaster()
+      .then(master => { if (cancelled) return; templateStorage.setItem(EMPLOYEE_MASTER_CACHE_KEY, JSON.stringify(master)); setEmployeeMaster(master); })
+      .catch(() => { if (!cancelled) setEmployeeMasterLoadError("最新の従業員一覧を読み込めませんでした。通信を確認して、もう一度開き直してください。"); });
+    return () => { cancelled = true; };
+  }, [appSession?.role, settingsPage]);
+
   const handleSaveEmployeeMaster = async (items: EmployeeMasterItem[]) => {
     const saved = await saveEmployeeMaster(items);
     templateStorage.setItem(EMPLOYEE_MASTER_CACHE_KEY, JSON.stringify(saved));
     setEmployeeMaster(saved);
     skipDirtyRef.current = true;
     setEmployees(mergeEmployeesWithMaster(employees, saved));
+    return saved;
   };
 
   const handleSaveRoles = async (items: ShiftRole[]) => {
@@ -2154,7 +2171,7 @@ export default function App() {
                 <CardContent className="p-6 space-y-4"><label className="block text-sm font-bold">休み希望の公開設定<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={storeMaster.leaveRequestBoardVisibility || "immediate"} onChange={e => setStoreMaster(v => ({...v, leaveRequestBoardVisibility:e.target.value as StoreMaster["leaveRequestBoardVisibility"]}))}><option value="immediate">提出と同時に全員へ公開</option><option value="after_approval">管理者確認後に全員へ公開</option><option value="private">本人と編集者だけに表示</option></select></label><Button className="w-full h-11 font-bold" onClick={() => void handleSaveBoardVisibility(storeMaster.leaveRequestBoardVisibility)}>休み希望の公開設定を保存</Button><div className="border-t pt-4"><label className="block text-sm font-bold">管理者からのお知らせ設定<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={adminNoticeVisibility} onChange={event => setAdminNoticeVisibility(event.target.value as AdminNoticeVisibility)}><option value="all">全員</option><option value="selected">指定従業員</option></select></label><Button className="mt-3 w-full h-11" onClick={async () => { try { setAdminNoticeVisibility(await saveAdminNoticeVisibility(adminNoticeVisibility)); toast.success("お知らせ公開設定を保存しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "保存できませんでした"); } }}>管理者からのお知らせ設定を保存</Button></div><div className="border-t pt-4"><label className="block text-sm font-bold">確定シフト訂正依頼の公開範囲<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={correctionVisibility} onChange={e => setCorrectionVisibility(e.target.value as "all" | "private")}><option value="all">全員に表示</option><option value="private">本人と管理者のみ表示</option></select></label><Button className="mt-3 w-full h-11" onClick={async () => { try { setCorrectionVisibility(await saveCorrectionVisibility(correctionVisibility)); toast.success("訂正依頼の公開設定を保存しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "保存できませんでした"); } }}>訂正依頼の公開設定を保存</Button></div></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "employee" ? (
-              <motion.div key="settings-employee" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><SettingsHead title="従業員マスタ" description="従業員の登録、役職、ホームの表示" backLabel="設定へ戻る" onBack={() => setSettingsPage("menu")} /><EmployeeMasterSettings employees={employeeMaster} roles={roles} onSave={handleSaveEmployeeMaster} operatorId={appSession?.employeeId} /><RoleAndHomeSettings roles={roles} layout={homeLayout} onSaveRoles={handleSaveRoles} onSaveLayout={async value => setHomeLayout(await saveHomeLayout(value))} /></motion.div>
+              <motion.div key="settings-employee" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><SettingsHead title="従業員マスタ" description="従業員の登録、役職、ホームの表示" backLabel="設定へ戻る" onBack={() => setSettingsPage("menu")} /><EmployeeMasterSettings loadError={employeeMasterLoadError} employees={employeeMaster} roles={roles} onSave={handleSaveEmployeeMaster} operatorId={appSession?.employeeId} /><RoleAndHomeSettings roles={roles} layout={homeLayout} onSaveRoles={handleSaveRoles} onSaveLayout={async value => setHomeLayout(await saveHomeLayout(value))} /></motion.div>
             ) : activeTab === "admin" && settingsPage === "shift" ? (
               <motion.div key="settings-shift" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><SettingsHead title="シフトマスタ" description="シフト作成のもとになる設定" backLabel="設定へ戻る" onBack={() => setSettingsPage("menu")} /><div className="grid gap-3 sm:grid-cols-2">{[
                   { key: "worktime", icon: Clock, title: "勤務時間設定", description: "早番・遅番などの時間と略称" },
