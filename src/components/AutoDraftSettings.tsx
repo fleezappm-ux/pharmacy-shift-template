@@ -2,9 +2,9 @@ import { CalendarClock, Play, Power } from "lucide-react";
 import { AutoDraftSettings as Settings } from "../types";
 import { Button } from "@/components/ui/button";
 
-export function AutoDraftSettings({ settings, onChange, onStart, run }: { settings: Settings; onChange: (value: Settings) => void; onStart: () => Promise<void>; run?: { state: "idle" | "running" | "done" | "error"; message: string; at?: string } }) {
+export function AutoDraftSettings({ settings, onChange, onStart, run, rangeLabel }: { rangeLabel?: string; settings: Settings; onChange: (value: Settings) => void; onStart: () => Promise<void>; run?: { state: "idle" | "running" | "done" | "error"; message: string; at?: string } }) {
   return <section className="space-y-4 rounded-2xl border bg-white p-5">
-    <div className="flex items-center justify-between gap-4"><div><h2 className="flex items-center gap-2 font-black"><CalendarClock className="h-5 w-5 text-blue-600" />シフト案自動作成</h2><p className="mt-1 text-xs text-slate-500">作成対象月から3か月先までのシフト案を維持します。</p></div><Button variant={settings.enabled ? "default" : "outline"} onClick={() => onChange({ ...settings, enabled: !settings.enabled, started: settings.enabled ? false : settings.started })}><Power className="mr-2 h-4 w-4" />{settings.enabled ? "ON" : "OFF"}</Button></div>
+    <div className="flex items-center justify-between gap-4"><div><h2 className="flex items-center gap-2 font-black"><CalendarClock className="h-5 w-5 text-blue-600" />シフト案自動作成</h2><p className="mt-1 text-xs text-slate-500">今の期間から先の3期間分（4期間）のシフト案を作ります。{rangeLabel ? `今は ${rangeLabel} です。` : ""}</p></div><Button variant={settings.enabled ? "default" : "outline"} onClick={() => onChange({ ...settings, enabled: !settings.enabled, started: settings.enabled ? false : settings.started })}><Power className="mr-2 h-4 w-4" />{settings.enabled ? "ON" : "OFF"}</Button></div>
     <div className="rounded-xl bg-slate-50 p-4 text-sm leading-7 text-slate-700"><strong className="block text-slate-900">作成ルール</strong>
       <p>各従業員のクールを前月から継続します。週間の基準勤務扱いは、勤務時間にかかわらず5日です。</p>
       <p>帯色だけでは勤務を変えません。定休日・特殊日の「休みにする」設定はシフト案の作成時とクール適用時に反映します。クールの週の進み方は変わりません。</p>
