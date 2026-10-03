@@ -299,6 +299,9 @@ export default function App() {
   const [dashboardListView, setDashboardListView] = useState(false);
   const [showLeaveManager, setShowLeaveManager] = useState(false);
   const [overviewEditing, setOverviewEditing] = useState(false);
+  const [creationHintHidden, setCreationHintHidden] = useState(() => templateStorage.getItem("creation_hint_hidden") === "1");
+  const inCreation = isFromAdmin && activeTab === "dashboard" && appSession?.role === "admin";
+
   const [overviewCell, setOverviewCell] = useState<{ employeeId: string; date: string } | null>(null);
   const [overviewShift, setOverviewShift] = useState("none");
   const [overviewCustom, setOverviewCustom] = useState("");
@@ -1030,7 +1033,8 @@ export default function App() {
   }, [employees, globalRemarks, currentMonthKey, syncState, initialSyncComplete, periodStatusLoading, isLocked, appSession?.role]);
 
   useEffect(() => {
-    setOverviewEditing(false);
+    // 「シフト作成」に入った時は、すぐ入力できるよう編集モードで始めます（閲覧に切り替えることもできます）。
+    setOverviewEditing(inCreation && !isLocked);
     setOverviewCell(null);
   }, [activeTab, currentMonthKey, isFromAdmin, isLocked]);
 
@@ -1953,6 +1957,10 @@ export default function App() {
                           <Button variant="outline" size="sm" className="dashboard-list-toggle" onClick={() => setDashboardListView(value => !value)}><Grid3X3 className="w-3.5 h-3.5 mr-1.5" />{dashboardListView ? "通常表示" : "一覧表示"}</Button>
                         </div>
                       </div>
+                      {appSession.role === "admin" && !creationHintHidden && <div className="creation-hint mt-3 rounded-xl bg-white p-3 text-xs leading-6 text-slate-800">
+                        <div className="flex items-start justify-between gap-3"><strong className="text-sm text-blue-900">ここでシフトを作ります</strong><button type="button" className="shrink-0 rounded-md border px-2 py-1 text-[11px] font-bold text-slate-600" onClick={() => { templateStorage.setItem("creation_hint_hidden", "1"); setCreationHintHidden(true); }}>閉じる</button></div>
+                        {isLocked ? <p>この期間は「確定」されているので、いまは見るだけです。直したいときは右上の「確定を解除」を押します。</p> : overviewEditing ? <ol className="mt-1 list-decimal space-y-0.5 pl-4"><li>表のマス目（人と日付の交わるところ）をタップして、勤務を選びます。</li><li>1人ずつ入れたいときは、上の「全体編集」の欄から名前を選びます。</li><li>できあがったら、右上の「シフトを確定」を押します。確定するとみんなに公開されます。</li></ol> : <p>いまは「閲覧」モードで、見るだけです。入力するには、左上の「編集」を押してください。</p>}
+                      </div>}
                     </div>}
                     {!isFromAdmin && <div className="dashboard-blue-top">
                       <div className="dashboard-blue-brand">
