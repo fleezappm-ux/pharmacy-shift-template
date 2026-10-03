@@ -1916,7 +1916,8 @@ export default function App() {
       </aside>
 
       {/* Mobile bottom bar (PCはサイドバーのまま) */}
-      <nav className="shift-bottom-nav md:hidden fixed bottom-0 inset-x-0 z-40 bg-card border-t border-border flex items-stretch">
+      {appSession?.role === "admin" && (syncState === "saving" || syncState === "dirty" || syncState === "offline") && <div role="status" className={`md:hidden fixed inset-x-3 bottom-[76px] z-50 rounded-xl px-4 py-3 text-center text-base font-black shadow-xl ${syncState === "offline" ? "bg-red-600 text-white" : "bg-amber-400 text-slate-900"}`}>{syncState === "offline" ? "⚠ 保存できていません。通信を確認してください" : "保存しています…この画面を動かさないでください"}</div>}
+      <nav onClickCapture={event => { if (appSession?.role === "admin" && (syncState === "saving" || syncState === "dirty")) { event.stopPropagation(); event.preventDefault(); toast.error("保存中です。数秒待ってから移動してください"); } }} className="shift-bottom-nav md:hidden fixed bottom-0 inset-x-0 z-40 bg-card border-t border-border flex items-stretch">
         <button
           className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold ${(activeTab === "home" && !isFromAdmin) ? "text-blue-600" : "text-slate-500"}`}
           onClick={goHome}
