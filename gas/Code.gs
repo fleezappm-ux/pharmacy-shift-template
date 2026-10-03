@@ -1582,14 +1582,18 @@ function getShiftSpecialDayRules() {
     var props = PropertiesService.getScriptProperties();
     var raw = props.getProperty("SHIFT_SPECIAL_DAY_RULES_JSON");
     var rules = raw ? JSON.parse(raw) : [];
-    if (props.getProperty("SHIFT_BAND_V3_MIGRATED") !== "1") {
-      // The duplicate template's old store-specific presets are replaced once.
+    var migrated = props.getProperty("SHIFT_BAND_V3_MIGRATED") === "1";
+    if (!migrated || raw === null) {
+      // 初期値（日曜・祝日が赤）。初期化のあとも、保存されるまではこの初期値を返す。
+      // 管理者が「定休日なし」で保存した場合は "[]" が保存されるので、初期値には戻らない。
       rules = [
         { id: "band-v3:closed-0", name: "日曜", color: "red", behavior: "information", enabled: true, mode: "recurring", weekday: 0, weeks: [1,2,3,4,5], dates: [], showName: true, restMode: "none", restEmployeeIds: [] },
         { id: "band-v3:holiday", name: "祝日", color: "red", behavior: "information", enabled: true, mode: "annual", weekday: 0, weeks: [], dates: [], showName: true, restMode: "none", restEmployeeIds: [] }
       ];
-      props.setProperty("SHIFT_SPECIAL_DAY_RULES_JSON", JSON.stringify(rules));
-      props.setProperty("SHIFT_BAND_V3_MIGRATED", "1");
+      if (!migrated) {
+        props.setProperty("SHIFT_SPECIAL_DAY_RULES_JSON", JSON.stringify(rules));
+        props.setProperty("SHIFT_BAND_V3_MIGRATED", "1");
+      }
     }
     return createJsonDataResponse({ success: true, rules: rules });
   } catch (error) { return createJsonResponse(false, error.message || "特殊日設定を取得できませんでした。"); }

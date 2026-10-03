@@ -80,6 +80,7 @@ import { ShiftLogin } from "./components/ShiftLogin";
 import { EmployeeMasterSettings } from "./components/EmployeeMasterSettings";
 import { RoleAndHomeSettings } from "./components/RoleAndHomeSettings";
 import { BoardSettings } from "./components/BoardSettings";
+import { ToolHelp } from "./components/ToolHelp";
 import { SaveStatus } from "./components/SaveStatus";
 import { useUnsavedGuard } from "./lib/unsaved";
 import { EmployeeMasterItem, fetchEmployeeMaster, mergeEmployeesWithMaster, saveEmployeeMaster, DEFAULT_HOME_LAYOUT, DEFAULT_ROLES, fetchShiftRoles, fetchHomeLayout, saveShiftRoles, saveHomeLayout, ShiftRole, HomeLayout } from "./lib/employee-master-sync";
@@ -269,7 +270,7 @@ export default function App() {
     return DEFAULT_CYCLE_PATTERNS;
   });
   const [cycleLengths, setCycleLengths] = useState<Record<number, number>>(() => {
-    try { return JSON.parse(templateStorage.getItem("cycle_lengths") || "null") || { 1: 2, 2: 2, 3: 2, 4: 2, 5: 1, 6: 1, 7: 1 }; } catch { return { 1: 2, 2: 2, 3: 2, 4: 2, 5: 1, 6: 1, 7: 1 }; }
+    try { return JSON.parse(templateStorage.getItem("cycle_lengths") || "null") || { 1: 1, 2: 2, 3: 2, 4: 2, 5: 1, 6: 1, 7: 1 }; } catch { return { 1: 1, 2: 2, 3: 2, 4: 2, 5: 1, 6: 1, 7: 1 }; }
   });
   const [editingCycleId, setEditingCycleId] = useState<number | null>(null);
   const [cycleSaving, setCycleSaving] = useState(false);
@@ -685,7 +686,7 @@ export default function App() {
     if (!dateRange.length || periodStatusLoading) return;
     const nextLocked = !isLocked;
     const confirmed = window.confirm(nextLocked
-      ? "このシフト案を確定しますか？\n\n確定後は一般ユーザーへ確定シフトとして表示され、通常の編集はできなくなります。"
+      ? `【${format(dateRange[0], "M月d日")}〜${format(dateRange[dateRange.length - 1], "M月d日")}】の全員のシフトを「確定」します。\n\n・従業員の画面に、確定したシフトとして表示されます\n・確定を解除するまで、編集できなくなります（解除はいつでもできます）\n\n本当に確定しますか？`
       : "確定シフトを解除して、シフト案・編集中に戻しますか？");
     if (!confirmed) return;
     setPeriodStatusLoading(true);
@@ -1314,7 +1315,7 @@ export default function App() {
       toast.info(`現在${cycleNames[cycleType]}が割り当てられている従業員はいません`);
       return;
     }
-    if (!window.confirm(`${cycleNames[cycleType]}を${targets.length}名の表示中の期間へ再適用します。手入力した勤務時間も上書きされます。よろしいですか？`)) return;
+    if (!window.confirm(`「${cycleNames[cycleType]}」を割り当て済みの${targets.length}名（${targets.map(emp => emp.displayName || emp.name).join("・")}）の、いま表示している期間（${format(dateRange[0], "M月d日")}〜${format(dateRange[dateRange.length - 1], "M月d日")}）に入れ直します。\n手で入れた勤務も上書きされます。よろしいですか？`)) return;
 
     setEmployees(prev => prev.map(emp => {
       const assignment = cycleAssignments[emp.id];
@@ -1718,7 +1719,8 @@ export default function App() {
     try { await navigator.clipboard.writeText(detail); toast.success("エラー詳細をコピーしました。管理者へお伝えください。"); }
     catch { window.prompt("この内容をコピーして管理者へお伝えください。", detail); }
   };
-  const renderSyncStatus = () => <span className={`creation-save-status status-${syncState}`} role="status"><i aria-hidden="true" />{syncState === "loading" ? "読込中…" : syncState === "saving" ? "保存中…" : syncState === "dirty" ? "自動保存待ち" : syncState === "offline" ? "保存失敗" : syncState === "read-error" ? needsReLogin ? "再ログインが必要" : "読込失敗" : "保存済み"}</span>;
+  const renderSyncStatus = () => <span className={`creation-save-status status-${syncState}`} role="status"><i aria-hidden="true" />{syncState === "loading" ? "読込中…" : syncState === "saving" ? "保存中…" : syncState === "dirty" ? "まもなく自動保存します…" : syncState === "offline" ? "保存できていません" : syncState === "read-error" ? needsReLogin ? "再ログインが必要" : "読込失敗" : "✓ 自動保存ずみ"}</span>;
+  const renderAutoSaveNote = () => <p className="mx-3 my-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">この画面は、入力すると自動で保存されます（保存ボタンはありません）。右の表示が「✓ 自動保存ずみ」になれば保存できています。</p>;
   const renderSyncFailure = () => (syncState === "offline" || syncState === "read-error") && <div className="creation-sync-error" role="alert">
     <strong>{needsReLogin ? "再ログインしてください。未保存の編集内容は保持します。" : syncState === "read-error" ? "共有データを読み込めませんでした。" : "保存できませんでした。編集内容は端末に残っています。"}</strong>
     <p>{syncFailure?.message || initialReadError}</p>
@@ -2006,6 +2008,7 @@ export default function App() {
                         <div className="flex items-start justify-between gap-3"><strong className="text-sm text-blue-900">ここでシフトを作ります</strong><button type="button" className="shrink-0 rounded-md border px-2 py-1 text-[11px] font-bold text-slate-600" onClick={() => { templateStorage.setItem("creation_hint_hidden", "1"); setCreationHintHidden(true); }}>閉じる</button></div>
                         {isLocked ? <p>この期間は「確定」されているので、いまは見るだけです。直したいときは右上の「確定を解除」を押します。</p> : overviewEditing ? <ol className="mt-1 list-decimal space-y-0.5 pl-4"><li>表のマス目（人と日付の交わるところ）をタップして、勤務を選びます。</li><li>1人ずつ入れたいときは、上の「全体編集」の欄から名前を選びます。</li><li>できあがったら、右上の「シフトを確定」を押します。確定するとみんなに公開されます。</li></ol> : <p>いまは「閲覧」モードで、見るだけです。入力するには、左上の「編集」を押してください。</p>}
                       </div>}
+                      {appSession.role === "admin" && renderAutoSaveNote()}
                     </div>}
                     {!isFromAdmin && <div className="dashboard-blue-top">
                       <div className="dashboard-blue-brand">
@@ -2209,23 +2212,27 @@ export default function App() {
                 ].map(item => <button key={item.key} type="button" onClick={() => goSettings(item.key as typeof settingsPage)} className="group flex min-h-24 items-center gap-4 rounded-2xl border-2 border-slate-100 bg-white p-5 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><item.icon className="h-6 w-6" /></span><span><strong className="flex items-center gap-2 text-base text-slate-900">{item.title}<ChevronRight className="h-4 w-4 transition group-hover:translate-x-1" /></strong><small className="mt-1 block leading-relaxed text-slate-500">{item.description}</small></span></button>)}</div>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "worktime" ? (
-              <motion.div key="settings-worktime" className="space-y-4"><SettingsHead title="勤務時間設定" description="シフトで使う勤務時間パターン" backLabel="シフトマスタへ戻る" onBack={() => goSettings("shift")} /><Card><CardContent className="p-5 sm:p-6"><WorkTimeSettings values={workTimes} ready={workTimeReady} loading={workTimeLoading} onPendingChange={setWorkTimePending} confirmed={setupSeen.includes("worktime-confirmed")} onConfirm={() => { markSetupSeen("worktime-confirmed"); toast.success("勤務時間は、このままで使います"); }} onSave={async values => { markSetupSeen("worktime-confirmed"); const master = await saveWorkTimeMaster(values, workTimeRevision); saveWorkTimes(master.items); setWorkTimes(master.items); setWorkTimeRevision(master.revision); toast.success("勤務時間設定を共通保存しました"); }} /></CardContent></Card></motion.div>
+              <motion.div key="settings-worktime" className="space-y-4"><SettingsHead title="勤務時間設定" description="シフトで使う勤務時間パターン" backLabel="シフトマスタへ戻る" onBack={() => goSettings("shift")} /><Card><CardContent className="p-5 sm:p-6"><ToolHelp title="勤務時間設定って何？"><p>シフトの入力で選べる「勤務時間」の候補を登録します。例：9:00〜18:00（早番）。</p><p>追加・変更は、押したその場で自動的に保存されます（保存ボタンはありません）。登録しなくても「休み」「有休」「任意入力」はいつでも選べます。</p><p>夜勤など日をまたぐ勤務は、退勤の時刻を出勤より早く入れると自動で判定されます。</p></ToolHelp><WorkTimeSettings values={workTimes} ready={workTimeReady} loading={workTimeLoading} onPendingChange={setWorkTimePending} confirmed={setupSeen.includes("worktime-confirmed")} onConfirm={() => { markSetupSeen("worktime-confirmed"); toast.success("勤務時間は、このままで使います"); }} onSave={async values => { markSetupSeen("worktime-confirmed"); const master = await saveWorkTimeMaster(values, workTimeRevision); saveWorkTimes(master.items); setWorkTimes(master.items); setWorkTimeRevision(master.revision); toast.success("勤務時間設定を共通保存しました"); }} /></CardContent></Card></motion.div>
             ) : activeTab === "admin" && settingsPage === "autodraft" ? (
-              <motion.div key="settings-autodraft" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><SettingsHead title="シフト案自動作成マスタ" description="シフト案を自動で作る条件" backLabel="シフトマスタへ戻る" onBack={() => goSettings("shift")} /><AutoDraftSettingsView settings={autoDraftSettings} onChange={value => void updateAutoDraftSettings(value)} onStart={startAutoDraft} /></motion.div>
+              <motion.div key="settings-autodraft" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><SettingsHead title="シフト案自動作成マスタ" description="シフト案を自動で作る条件" backLabel="シフトマスタへ戻る" onBack={() => goSettings("shift")} /><ToolHelp title="シフト案の自動作成って何？"><p>クールを割り当てた人について、先の月のシフト案を自動で作る機能です。クールを使っていないお店は、OFFのままで大丈夫です。</p><p>確定したシフトや、手で直した勤務は上書きしません。</p></ToolHelp><AutoDraftSettingsView settings={autoDraftSettings} onChange={value => void updateAutoDraftSettings(value)} onStart={startAutoDraft} /></motion.div>
             ) : activeTab === "admin" && settingsPage === "special" ? (
               <motion.div key="settings-special" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-                <SettingsHead title="お店のお休みの日・色付け" description="定休日・祝日・年末年始・毎月○日などを決める" backLabel="設定へ戻る" onBack={() => goSettings("menu")} /><Card><CardContent className="p-6"><SpecialDaySettings rules={specialDayRules} employees={employeeMaster} loading={specialDayLoading} onSave={handleSaveSpecialDayRules} /></CardContent></Card>
+                <SettingsHead title="お店のお休みの日・色付け" description="定休日・祝日・年末年始・毎月○日などを決める" backLabel="設定へ戻る" onBack={() => goSettings("menu")} /><Card><CardContent className="p-6"><div className="mb-4"><ToolHelp title="お休みの日・色付けって何？" defaultOpen><p>お店の休みの日を決めます。決めた日は、カレンダーやシフト表に色が付きます（初期は日曜と祝日が赤）。</p><p>「毎週の定休日」＝曜日で決まる休み／「お休みの日を追加」＝第○曜日・毎月○日・毎年同じ日・今年だけの日付。</p><p>色だけでなく、シフト案の自動作成で「その日を休みにする」こともできます。変更したら一番下の「保存」を押してください。</p></ToolHelp></div><SpecialDaySettings rules={specialDayRules} employees={employeeMaster} loading={specialDayLoading} onSave={handleSaveSpecialDayRules} /></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "operations" ? (
-              <motion.div key="settings-cycles" className="space-y-4"><SettingsHead title="クール作成マスタ" description="1〜4週間の勤務パターン" backLabel="シフトマスタへ戻る" onBack={() => goSettings("shift")} /><Card><CardContent className="p-6">                      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                        <div className="mb-4 flex items-center justify-between gap-3"><div><h4 className="font-black text-slate-900">クール作成マスタ</h4><p className="mt-1 text-xs text-slate-500">1〜4週間の勤務パターンを登録します。編集するクールだけを開きます。</p></div><Button variant="outline" onClick={addCycle}><PlusCircle className="mr-1 h-4 w-4" />クール追加</Button></div>
+              <motion.div key="settings-cycles" className="space-y-4"><SettingsHead title="クール作成マスタ" description="1〜4週間の勤務パターン" backLabel="シフトマスタへ戻る" onBack={() => goSettings("shift")} /><Card><CardContent className="space-y-4 p-6">
+                      <ToolHelp title="クールって何？使い方は？"><p><b>クール</b>＝くり返す勤務の「型」です。例：「毎週、月〜金が勤務・土日が休み」は1週間の型。「A週は土曜出勤、B週は日曜出勤」は2週間の型です。</p><p><b>使う手順</b>：①ここで型を作る（曜日ごとに勤務を選ぶ）→ ②「シフト作成」→人ごとの画面で、「この日から」と日付を選んでクールを当てはめる → ③型を直したら、ここの「今期を作り直す」で入れ直す。</p><p>使わなくても大丈夫です。毎週同じなら、手で入れる方が早いこともあります。</p></ToolHelp>
+                      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                        <div className="mb-4 flex items-center justify-between gap-3"><div><h4 className="font-black text-slate-900">クール作成マスタ</h4><p className="mt-1 text-xs text-slate-500">「クール」は、くり返す勤務の型です（例：毎週同じ／2週間で交代）。編集するクールだけを開きます。</p></div><Button variant="outline" onClick={addCycle}><PlusCircle className="mr-1 h-4 w-4" />クール追加</Button></div>
                         <div className="space-y-3">{Object.keys(cycleNames).map(Number).sort((a, b) => a - b).map(num => {
                           const isOpen = editingCycleId === num;
-                          const length = cycleLengths[num] || 2;
+                          const length = cycleLengths[num] || 1;
+                          const assignedNames = employees.filter(emp => cycleAssignments[emp.id]?.cycleType === num).map(emp => emp.displayName || emp.name);
                           return <div key={num} className="rounded-xl border border-slate-200 bg-white p-4">
-                            <div className="flex flex-wrap items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-sm font-black">{num}</span><strong className="min-w-0 flex-1 text-sm">{cycleNames[num]}</strong><Badge variant="outline">{length}週間</Badge><Button variant="outline" size="sm" onClick={() => setEditingCycleId(isOpen ? null : num)}>{isOpen ? "閉じる" : "編集"}</Button><Button variant="ghost" size="sm" className="text-red-600" onClick={() => deleteCycle(num)}>削除</Button></div>
+                            <div className="flex flex-wrap items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-sm font-black">{num}</span><Input aria-label="クールの名前" className="h-9 min-w-[8rem] flex-1 text-sm font-bold" value={cycleNames[num]} onChange={event => renameCycle(num, event.target.value)} /><Badge variant="outline">{length}週間</Badge><Button variant="outline" size="sm" onClick={() => setEditingCycleId(isOpen ? null : num)}>{isOpen ? "閉じる" : "編集"}</Button><Button variant="ghost" size="sm" className="text-red-600" onClick={() => deleteCycle(num)}>削除</Button></div>
                             {isOpen && <div className="mt-4 border-t pt-4">
-                              <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_180px_auto]"><label><span className="mb-1 block text-xs font-bold text-slate-600">クール名</span><Input value={cycleNames[num]} onChange={event => renameCycle(num, event.target.value)} /></label><label><span className="mb-1 block text-xs font-bold text-slate-600">周期</span><select className="h-10 w-full rounded-md border bg-white px-3 text-sm" value={length} onChange={event => setCycleLengths(previous => ({ ...previous, [num]: Number(event.target.value) }))}>{[1,2,3,4].map(value => <option key={value} value={value}>{value}週間</option>)}</select></label><Button className="self-end" variant="outline" onClick={() => reapplyCycleToCurrentMonth(num)}>表示期間へ適用</Button></div>
+                              <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_180px_auto]"><label><span className="mb-1 block text-xs font-bold text-slate-600">クールの名前（自由に変えられます）</span><Input value={cycleNames[num]} onChange={event => renameCycle(num, event.target.value)} /></label><label><span className="mb-1 block text-xs font-bold text-slate-600">周期</span><select className="h-10 w-full rounded-md border bg-white px-3 text-sm" value={length} onChange={event => setCycleLengths(previous => ({ ...previous, [num]: Number(event.target.value) }))}>{[1,2,3,4].map(value => <option key={value} value={value}>{value}週間</option>)}</select></label></div>
+                              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950"><strong className="block">この型を、いま表示している期間のシフトに入れ直す</strong>{assignedNames.length ? <>このクールを割り当て済みの人：{assignedNames.join("・")}。押すと、この人たちの「いま表示している期間」のシフトが、この型で作り直されます（手で入れた勤務も上書きされます）。</> : <>まだ誰にも割り当てていません。割り当ては、「シフト作成」→人ごとの画面で、日付を選んでクールを当てはめます。</>}<Button className="mt-2 w-full" variant="outline" disabled={!assignedNames.length} onClick={() => reapplyCycleToCurrentMonth(num)}>割り当て済みの人の今期を作り直す</Button></div>
                               <div className="space-y-3 overflow-x-auto">{Array.from({ length }, (_, weekIndex) => { const weekKey = `week${weekIndex + 1}` as "week1" | "week2" | "week3" | "week4"; return <div key={weekKey} className="min-w-[760px]"><strong className="mb-2 block text-xs text-blue-700">第{weekIndex + 1}週</strong><div className="grid grid-cols-7 gap-2">{["日", "月", "火", "水", "木", "金", "土"].map((label, dayIdx) => <label key={label} className="text-center"><span className="mb-1 block text-[10px] font-bold text-slate-500">{label}</span><select className="h-10 w-full rounded-lg border bg-white px-2 text-xs" value={cyclePatterns[num]?.[dayIdx]?.[weekKey] || ""} onChange={event => setCyclePatterns(previous => { const pattern = [...previous[num]]; pattern[dayIdx] = { ...pattern[dayIdx], [weekKey]: event.target.value as ShiftType }; return { ...previous, [num]: pattern }; })}><option value="">なし</option>{[...new Set([...visibleWorkTimes, cyclePatterns[num]?.[dayIdx]?.[weekKey], "有休", "休み"])].filter(Boolean).map(option => <option key={option} value={option}>{displayShift(option, workTimes, "both")}</option>)}</select></label>)}</div></div>; })}</div>
                             </div>}
                           </div>;
@@ -2347,7 +2354,7 @@ export default function App() {
                         <div className="employee-blue-controls"><div className="employee-month-step"><Button variant="outline" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, -1))}><ChevronLeft className="h-4 w-4" />前の期間</Button><strong>{format(dateRange[0], "M月d日")}〜{format(dateRange[dateRange.length - 1], "M月d日")}</strong><Button variant="outline" size="sm" onClick={() => setCurrentMonth(prev => addMonths(prev, 1))}>次の期間<ChevronRight className="h-4 w-4" /></Button></div></div></CardHeader>
                       <CardContent className="p-0">
                         <div className="personal-display-toolbar"><ShiftDisplayControl value={shiftDisplayMode} onChange={setShiftDisplayMode} /></div>
-                        {isFromAdmin && <><div className="creation-person-status personal-creation-picker"><select aria-label="全体編集・個人編集の選択" value={emp.id} onChange={event => setActiveTab(event.target.value)}><option value="dashboard">全体編集</option>{dashboardEmployees.map(employee => <option key={employee.id} value={employee.id}>{employee.displayName || employee.name}</option>)}</select>{renderSyncStatus()}<Button disabled={periodStatusLoading} size="sm" onClick={toggleLock}>{isLocked ? "確定を解除" : "シフトを確定"}</Button></div>{renderSyncFailure()}</>}
+                        {isFromAdmin && <><div className="creation-person-status personal-creation-picker"><select aria-label="全体編集・個人編集の選択" value={emp.id} onChange={event => setActiveTab(event.target.value)}><option value="dashboard">全体編集</option>{dashboardEmployees.map(employee => <option key={employee.id} value={employee.id}>{employee.displayName || employee.name}</option>)}</select>{renderSyncStatus()}</div>{renderAutoSaveNote()}{isLocked && <p className="mx-3 mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">この期間は「確定」されています。解除したいときは、上の選択を「全体編集」に戻して、右上の「確定を解除」を押してください。</p>}{renderSyncFailure()}</>}
                         {!isFromAdmin ? <div className="personal-overview-layout">
                           <PersonalShiftList employee={emp} dates={dateRange} remarks={displayRemarks} workTimes={workTimes} displayMode={shiftDisplayMode} />
                           <aside className="personal-summary-panel">
