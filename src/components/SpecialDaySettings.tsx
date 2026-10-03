@@ -59,10 +59,10 @@ export function SpecialDaySettings({ rules, employees, loading, onSave }: Props)
     const id = crypto.randomUUID();
     const rule: SpecialDayRule = { id: `band-v3:${id}`, name: "新しいお休みの日", color: "amber", behavior: "information", enabled: true, mode: "monthly", weekday: 0, weeks: [1], dates: [], monthDates: [] };
     const ruleId = rule.id;
-    setDrafts(current => [rule, ...current]);
+    setDrafts(current => [...current, rule]);
     setNewRuleId(ruleId);
     setAddLocked(true);
-    toast.success("新しいお休みの日を一番上に追加しました。名前と日にちを入れて、一番下の保存を押してください");
+    toast.success("新しいお休みの日を追加しました（②の一番下です）。名前と日にちを入れて、一番下の保存を押してください");
     window.setTimeout(() => {
       document.getElementById(`special-rule-${ruleId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
       setAddLocked(false);
@@ -104,7 +104,7 @@ export function SpecialDaySettings({ rules, employees, loading, onSave }: Props)
   return <section className="special-day-settings">
     <div className="special-settings-title">
       <div><CalendarPlus className="w-5 h-5" /><div><strong>お店のお休みの日・色付け</strong><span>休みの日を決めると、カレンダーに色が付きます</span></div></div>
-      <Button disabled={addLocked || loading} onClick={add} className={addLocked ? "special-add-done h-11 px-4 text-sm font-black" : "h-11 bg-blue-600 px-4 text-sm font-black text-white shadow-md hover:bg-blue-700"}>{addLocked ? <Check className="w-4 h-4 mr-1" /> : <Plus className="w-4 h-4 mr-1" />}{addLocked ? "追加しました" : "お休みの日を追加"}</Button>
+
     </div>
     <p className="special-save-guide">お店が休みの日（例：日曜、祝日、年末年始、毎月15日など）を決めます。決めた日はカレンダーに色が付き、シフト案の自動作成では「休み」として入れられます。すでに入力したシフトは変わりません。変更したら、一番下の「保存」を押してください。</p>
     <section className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
@@ -117,6 +117,11 @@ export function SpecialDaySettings({ rules, employees, loading, onSave }: Props)
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={closedSettings.showName} onChange={event => setClosed({ showName: event.target.checked })} />カレンダーのその日に、上の文字も表示する</label>
       {restFields(closedSettings, patch => setClosed(patch))}
       </>}
+    </section>
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2">
+      <h3 className="font-black">② 特別なお休みの日（棚卸し・年末年始・毎月15日など）</h3>
+      <p className="text-xs text-slate-600">曜日では決まらない休みはここに追加します。追加すると、下の一覧の一番下にカードが増えます。</p>
+      {drafts.filter(rule => !fixedRule(rule)).length === 0 && <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">まだありません。必要なときだけ追加してください。</p>}
     </section>
     <div className="special-rule-list">
       {drafts.filter(rule => !fixedRule(rule)).map(rule => <div id={`special-rule-${rule.id}`} key={rule.id} className={`special-rule-card ${newRuleId === rule.id ? "is-new" : ""}`}>
@@ -141,6 +146,7 @@ export function SpecialDaySettings({ rules, employees, loading, onSave }: Props)
         </div>}
       </div>)}
     </div>
+          <Button disabled={addLocked || loading} onClick={add} className={addLocked ? "special-add-done h-12 w-full px-4 text-sm font-black" : "h-12 w-full bg-blue-600 px-4 text-sm font-black text-white shadow-md hover:bg-blue-700"}>{addLocked ? <Check className="w-4 h-4 mr-1" /> : <Plus className="w-4 h-4 mr-1" />}{addLocked ? "追加しました" : "お休みの日を追加"}</Button>
     <SaveStatus className="mt-3" dirty={dirty} saving={loading} />
     <Button className="sticky bottom-20 z-10 h-11 w-full font-bold shadow-lg sm:bottom-2" disabled={loading || !dirty || (drafts.some(fixedRule) && !closedSettings.name.trim()) || drafts.some(rule => !fixedRule(rule) && (!rule.name.trim() || !validRest(rule))) || (drafts.some(fixedRule) && !validRest(closedSettings))} onClick={() => onSave(unifyClosed(drafts))}><Save className="w-4 h-4 mr-2" />お休みの日の設定を保存</Button>
   </section>;
