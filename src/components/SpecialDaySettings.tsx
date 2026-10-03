@@ -94,7 +94,7 @@ export function SpecialDaySettings({ rules, employees, loading, onSave }: Props)
 
   return <section className="special-day-settings">
     <div className="special-settings-title">
-      <div><CalendarPlus className="w-5 h-5" /><div><strong>カレンダー帯色設定</strong><span>有効にした日だけ、全カレンダーへ帯色を表示します</span></div></div>
+      <div><CalendarPlus className="w-5 h-5" /><div><strong>定休日・帯色マスタ</strong><span>有効にした日だけ、全カレンダーへ帯色を表示します</span></div></div>
       <Button variant="outline" disabled={addLocked || loading} onClick={add} className={addLocked ? "special-add-done" : ""}>{addLocked ? <Check className="w-4 h-4 mr-1" /> : <Plus className="w-4 h-4 mr-1" />}{addLocked ? "追加しました" : "特殊日を追加"}</Button>
     </div>
     <p className="special-save-guide">設定を変えるだけでは既存シフトを変更しません。休み判定はシフト案の自動作成とクール適用時に反映します。重なる日は「指定した日付・毎年同じ日」→「祝日」→「第何週の曜日」→「毎週の定休日」の順に優先します。変更後は一番下の保存を押してください。</p>
