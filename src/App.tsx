@@ -1344,14 +1344,49 @@ export default function App() {
     setCycleNames(prev => ({ ...prev, [num]: name }));
   };
 
+  const isUntouchedCycle = (num: number) => {
+    const pattern = cyclePatterns[num] || [];
+    const blank = pattern.every(day => ["week1", "week2", "week3", "week4"].every(key => (day as Record<string, string>)[key] === "休み"));
+    return /^クール\d+$/.test(cycleNames[num] || "") && blank && !Object.values(cycleAssignments).some(assignment => (assignment as { cycleType: number }).cycleType === num);
+  };
+  const newCycleRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (newCycleRef.current === null) return;
+    const row = document.querySelector<HTMLElement>(`[data-cycle-row="${newCycleRef.current}"]`);
+    newCycleRef.current = null;
+    if (row) { row.scrollIntoView({ behavior: "smooth", block: "center" }); row.querySelector<HTMLInputElement>("input")?.focus(); }
+  }, [cycleNames]);
   const addCycle = () => {
-    if (!window.confirm("新しいクールを1件追加しますか？")) return;
-    const nextId = Math.max(0, ...Object.keys(cycleNames).map(Number)) + 1;
+    const ids = Object.keys(cycleNames).map(Number);
+    const untouched = ids.find(isUntouchedCycle);
+    if (untouched !== undefined) {
+      toast.error(`「${cycleNames[untouched]}」がまだ空のままです。先にそのクールの中身を入れてください（連続追加はできません）`);
+      newCycleRef.current = untouched; setEditingCycleId(untouched); setCycleNames(previous => ({ ...previous }));
+      return;
+    }
+    if (ids.length >= 12) return toast.error("クールは12件までです。使わないものを削除してください");
+    const nextId = Math.max(0, ...ids) + 1;
     const blank = Array.from({ length: 7 }, () => ({ week1: "休み" as ShiftType, week2: "休み" as ShiftType, week3: "休み" as ShiftType, week4: "休み" as ShiftType }));
+    newCycleRef.current = nextId;
     setCycleNames(previous => ({ ...previous, [nextId]: `クール${nextId}` }));
     setCyclePatterns(previous => ({ ...previous, [nextId]: blank }));
     setCycleLengths(previous => ({ ...previous, [nextId]: 1 }));
     setEditingCycleId(nextId);
+    toast.success(`新しいクール（${ids.length + 1}件目）を追加しました。名前と曜日ごとの勤務を入れて、いちばん下の保存を押してください`);
+  };
+  const removeUntouchedCycles = () => {
+    const ids = Object.keys(cycleNames).map(Number);
+    const targets = ids.filter(isUntouchedCycle);
+    const removable = targets.length >= ids.length ? targets.slice(1) : targets;
+    if (!removable.length) return;
+    if (!window.confirm(`中身が空のままのクール${removable.length}件をまとめて削除しますか？\n（名前を変えたもの・中身を入れたもの・人に割り当てたものは残ります）`)) return;
+    const drop = new Set(removable);
+    const keep = <T,>(record: Record<number, T>) => Object.fromEntries(Object.entries(record).filter(([key]) => !drop.has(Number(key)))) as Record<number, T>;
+    setCycleNames(previous => keep(previous));
+    setCyclePatterns(previous => keep(previous));
+    setCycleLengths(previous => keep(previous));
+    setEditingCycleId(value => value !== null && drop.has(value) ? null : value);
+    toast.success(`${removable.length}件を削除しました。いちばん下の保存を押すと確定します`);
   };
 
   const deleteCycle = (cycleId: number) => {
@@ -2225,11 +2260,12 @@ export default function App() {
                       <ToolHelp title="クールって何？使い方は？"><p><b>クール</b>＝くり返す勤務の「型」です。例：「毎週、月〜金が勤務・土日が休み」は1週間の型。「A週は土曜出勤、B週は日曜出勤」は2週間の型です。</p><p><b>使う手順</b>：①ここで型を作る（曜日ごとに勤務を選ぶ）→ ②「シフト作成」→人ごとの画面で、「この日から」と日付を選んでクールを当てはめる → ③型を直したら、ここの「今期を作り直す」で入れ直す。</p><p>使わなくても大丈夫です。毎週同じなら、手で入れる方が早いこともあります。</p></ToolHelp>
                       <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
                         <div className="mb-4 flex items-center justify-between gap-3"><div><h4 className="font-black text-slate-900">クール作成マスタ</h4><p className="mt-1 text-xs text-slate-500">「クール」は、くり返す勤務の型です（例：毎週同じ／2週間で交代）。編集するクールだけを開きます。</p></div><Button variant="outline" onClick={addCycle}><PlusCircle className="mr-1 h-4 w-4" />クール追加</Button></div>
+                        {Object.keys(cycleNames).map(Number).filter(isUntouchedCycle).length >= 2 && <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs font-bold text-amber-900">中身が空のままのクールが{Object.keys(cycleNames).map(Number).filter(isUntouchedCycle).length}件あります。<Button size="sm" variant="outline" className="ml-2 text-red-600" onClick={removeUntouchedCycles}>空のクールをまとめて削除</Button></div>}
                         <div className="space-y-3">{Object.keys(cycleNames).map(Number).sort((a, b) => a - b).map(num => {
                           const isOpen = editingCycleId === num;
                           const length = cycleLengths[num] || 1;
                           const assignedNames = employees.filter(emp => cycleAssignments[emp.id]?.cycleType === num).map(emp => emp.displayName || emp.name);
-                          return <div key={num} className="rounded-xl border border-slate-200 bg-white p-4">
+                          return <div key={num} data-cycle-row={num} className="rounded-xl border border-slate-200 bg-white p-4">
                             <div className="flex flex-wrap items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-sm font-black">{num}</span><Input aria-label="クールの名前" className="h-9 min-w-[8rem] flex-1 text-sm font-bold" value={cycleNames[num]} onChange={event => renameCycle(num, event.target.value)} /><Badge variant="outline">{length}週間</Badge><Button variant="outline" size="sm" onClick={() => setEditingCycleId(isOpen ? null : num)}>{isOpen ? "閉じる" : "編集"}</Button><Button variant="ghost" size="sm" className="text-red-600" onClick={() => deleteCycle(num)}>削除</Button></div>
                             {isOpen && <div className="mt-4 border-t pt-4">
                               <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_180px_auto]"><label><span className="mb-1 block text-xs font-bold text-slate-600">クールの名前（自由に変えられます）</span><Input value={cycleNames[num]} onChange={event => renameCycle(num, event.target.value)} /></label><label><span className="mb-1 block text-xs font-bold text-slate-600">周期</span><select className="h-10 w-full rounded-md border bg-white px-3 text-sm" value={length} onChange={event => setCycleLengths(previous => ({ ...previous, [num]: Number(event.target.value) }))}>{[1,2,3,4].map(value => <option key={value} value={value}>{value}週間</option>)}</select></label></div>
