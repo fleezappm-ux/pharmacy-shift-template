@@ -25,7 +25,7 @@ export function RoleAndHomeSettings({ roles, layout, onSaveRoles, onSaveLayout }
   return <div className="space-y-5">
     <section className="rounded-2xl border bg-white p-5">
       <h3 className="font-black">役職プルダウン編集</h3>
-      <p className="mt-1 text-xs text-slate-600">名前だけ変更しても登録済み従業員との紐付けは維持されます。薬剤師の登録がない店舗でも使用できます。</p>
+      <p className="mt-1 text-xs text-slate-600">名前だけ変更しても登録済み従業員との紐付けは維持されます。役職は業種に合わせて自由に追加・変更できます（例：店長・事務・スタッフ）。</p>
       <div className="mt-4 space-y-2">{drafts.map((role, index) => <div key={role.id} className="flex items-center gap-2">
         <b className="w-7 text-center text-slate-500">{index + 1}</b><Input aria-label={`役職${index + 1}`} value={role.name} onChange={event => setDrafts(current => current.map(item => item.id === role.id ? { ...item, name: event.target.value } : item))} />
         <Button variant="outline" disabled={index === 0} onClick={() => setDrafts(current => { const copy = [...current]; [copy[index - 1], copy[index]] = [copy[index], copy[index - 1]]; return copy; })}>↑</Button>
