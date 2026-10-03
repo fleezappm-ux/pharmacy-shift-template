@@ -73,7 +73,7 @@ import { fetchSpecialDayRules, saveSpecialDayRules } from "./lib/special-day-syn
 import { buildDisplayRemarks, colorForRemark, DEFAULT_SPECIAL_DAY_RULES, withDefaultSpecialDayRules, shouldRestOnDate } from "./lib/special-day-utils";
 import { CalendarPeriodSettings, fetchCalendarPeriodSettings, saveCalendarPeriodSettings } from "./lib/calendar-period-sync";
 import { BoardVisibility, fetchStoreSettings, saveStoreSettings, fetchBoardVisibility, saveBoardVisibility, fetchCorrectionVisibility, saveCorrectionVisibility } from "./lib/store-board-sync";
-import { getManagementApiKey, getShiftSession, logoutShiftSession, saveManagementApiKey, ShiftSession } from "./lib/auth-sync";
+import { getManagementApiKey, getShiftSession, logoutShiftSession, saveManagementApiKey, checkManagementApiKey, ShiftSession } from "./lib/auth-sync";
 import { DEFAULT_STORE_MASTER, StoreMaster, StoreMasterSettings } from "./components/StoreMasterSettings";
 import { ShiftLogin } from "./components/ShiftLogin";
 import { EmployeeMasterSettings } from "./components/EmployeeMasterSettings";
@@ -283,6 +283,18 @@ export default function App() {
   const [specialDayLoading, setSpecialDayLoading] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [managementApiKey, setManagementApiKey] = useState(() => getManagementApiKey());
+  const [apiKeyVerified, setApiKeyVerified] = useState(() => templateStorage.getItem("api_key_verified") === "1" && !!getManagementApiKey());
+  const [apiKeyCheck, setApiKeyCheck] = useState<{ ok: boolean; message: string } | null>(null);
+  const [apiKeyChecking, setApiKeyChecking] = useState(false);
+  const saveAndCheckApiKey = async () => {
+    setApiKeyChecking(true); setApiKeyCheck(null);
+    saveManagementApiKey(managementApiKey);
+    const result = await checkManagementApiKey(managementApiKey);
+    setApiKeyCheck(result); setApiKeyChecking(false);
+    setApiKeyVerified(result.ok);
+    if (result.ok) templateStorage.setItem("api_key_verified", "1"); else templateStorage.removeItem("api_key_verified");
+    if (result.ok) toast.success("接続できました"); else toast.error(result.message);
+  };
   const [dashboardListView, setDashboardListView] = useState(false);
   const [showLeaveManager, setShowLeaveManager] = useState(false);
   const [overviewEditing, setOverviewEditing] = useState(false);
@@ -944,6 +956,7 @@ export default function App() {
   const [setupSeen, setSetupSeen] = useState<string[]>(() => { try { const v = JSON.parse(templateStorage.getItem("setup_checklist_seen") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } });
   const markSetupSeen = (key: string) => setSetupSeen(current => { if (current.includes(key)) return current; const next = [...current, key]; templateStorage.setItem("setup_checklist_seen", JSON.stringify(next)); return next; });
   const setupSteps = [
+    { title: "管理者用の接続キーを入れる", hint: "「その他設定」で接続キーを入れて「保存して接続を確認」を押します。✓が出れば成功です（端末ごとに1回）", done: apiKeyVerified, onClick: () => setSettingsPage("other") },
     { title: "従業員を登録する", hint: "最初は操作員1名だけです。名前を自分の名前に直して、ほかの従業員を追加します（最大50人）", done: employeeMaster.length >= 2 || setupSeen.includes("employee"), onClick: () => { markSetupSeen("employee"); setSettingsPage("employee"); } },
     { title: "店舗名と集計期間を決める", hint: "店舗マスタで、店舗名とシフトの月の区切りを設定します", done: storeMaster.storeName.trim() !== "" || setupSeen.includes("store"), onClick: () => { markSetupSeen("store"); setSettingsPage("store"); } },
     { title: "勤務時間を確認する", hint: "初期の早番・遅番などを、自分の店舗に合わせて直します（このままでもOK）", done: setupSeen.includes("worktime"), onClick: () => { markSetupSeen("worktime"); setSettingsPage("worktime"); } },
@@ -2176,8 +2189,9 @@ export default function App() {
                         <p className="rounded-lg bg-slate-100 px-3 py-2 text-[11px] font-semibold text-slate-600">従業員ID・パスワードはGAS側で設定済みです。安全のため、この画面には値を表示しません。</p>
                         <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
                           <Input type="password" value={managementApiKey} onChange={event => setManagementApiKey(event.target.value)} placeholder="管理者用の接続キー" className="h-11 bg-white" />
-                          <Button className="h-11 font-bold" onClick={() => { saveManagementApiKey(managementApiKey); toast.success("この端末に接続キーを保存しました"); }}>この端末に保存</Button>
+                          <Button className="h-11 font-bold" disabled={apiKeyChecking} onClick={() => void saveAndCheckApiKey()}>{apiKeyChecking ? "確認中…" : "保存して接続を確認"}</Button>
                         </div>
+                        {(apiKeyCheck || apiKeyVerified) && <p role="status" className={`rounded-lg px-3 py-2 text-xs font-bold ${(apiKeyCheck ? apiKeyCheck.ok : apiKeyVerified) ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{apiKeyCheck ? (apiKeyCheck.ok ? "✓ " : "× ") + apiKeyCheck.message : "✓ この端末は接続確認ずみです"}</p>}
                         <p className="text-[11px] text-slate-500">従業員は共通の従業員ID・パスワードでログイン後、自分の名前を選んで希望を提出します。</p>
                       </div>
                       <div className="pt-6 border-t border-slate-100">

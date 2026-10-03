@@ -6,7 +6,7 @@ function doPost(e) {
     // 公開ログイン操作以外は、ルーティング時に必ずセッションを検証する。
     // 各関数内の本人・接続キー・管理者チェックも引き続き適用する。
     var publicActions = ["loginShift", "getShiftLoginEmployees", "getShiftResetEpoch"];
-    var adminActions = ["previewTemplateReset", "getTemplateResetStatus", "runTemplateReset", "clearTemplateShiftRemarks", "saveShiftEmployeeMaster", "saveShiftRoleMaster", "saveShiftHomeLayout", "saveShiftAdminNotice", "deleteShiftAdminNotice", "saveShiftAdminNoticeVisibility", "saveShiftWorkTimeMaster", "saveShiftCycleMaster", "saveShiftAutoDraftSettings", "saveShiftStoreBoardVisibility", "saveShiftCorrectionVisibility", "updateShiftLeaveRequestStatus", "deleteShiftLeaveRequest", "saveShiftSpecialDayRules", "saveShiftCalendarPeriodSettings", "saveShiftPeriodStatus", "saveShiftStoreSettings", "saveShiftMonth"];
+    var adminActions = ["previewTemplateReset", "getTemplateResetStatus", "runTemplateReset", "clearTemplateShiftRemarks", "saveShiftEmployeeMaster", "saveShiftRoleMaster", "saveShiftHomeLayout", "saveShiftAdminNotice", "deleteShiftAdminNotice", "saveShiftAdminNoticeVisibility", "saveShiftWorkTimeMaster", "saveShiftCycleMaster", "saveShiftAutoDraftSettings", "saveShiftStoreBoardVisibility", "saveShiftCorrectionVisibility", "updateShiftLeaveRequestStatus", "deleteShiftLeaveRequest", "saveShiftSpecialDayRules", "saveShiftCalendarPeriodSettings", "saveShiftPeriodStatus", "saveShiftStoreSettings", "checkShiftApiKey", "saveShiftMonth"];
     if (publicActions.indexOf(data.action) < 0) requireShiftSession(data.sessionToken, adminActions.indexOf(data.action) >= 0 ? "admin" : null);
     if (data.action === "previewTemplateReset") return previewTemplateReset(data);
     if (data.action === "getTemplateResetStatus") return getTemplateResetStatus(data);
@@ -15,6 +15,7 @@ function doPost(e) {
     if (data.action === "getShiftResetEpoch") return createJsonDataResponse({ success: true, epoch: PropertiesService.getScriptProperties().getProperty("SHIFT_RESET_EPOCH") || "" });
     if (data.action === "loginShift") return loginShift(data);
     if (data.action === "logoutShift") return logoutShift(data);
+    if (data.action === "checkShiftApiKey") { verifyShiftApiKey(data.shiftApiKey); return createJsonDataResponse({ success: true }); }
     if (data.action === "getShiftStoreSettings") return getShiftStoreSettings(data);
     if (data.action === "saveShiftStoreSettings") return saveShiftStoreSettings(data);
     if (data.action === "getShiftLoginEmployees") return getShiftLoginEmployees(data);
