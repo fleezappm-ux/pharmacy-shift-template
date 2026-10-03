@@ -104,7 +104,7 @@ export function SpecialDaySettings({ rules, employees, loading, onSave }: Props)
   return <section className="special-day-settings">
     <div className="special-settings-title">
       <div><CalendarPlus className="w-5 h-5" /><div><strong>お店のお休みの日・色付け</strong><span>休みの日を決めると、カレンダーに色が付きます</span></div></div>
-      <Button variant="outline" disabled={addLocked || loading} onClick={add} className={addLocked ? "special-add-done" : ""}>{addLocked ? <Check className="w-4 h-4 mr-1" /> : <Plus className="w-4 h-4 mr-1" />}{addLocked ? "追加しました" : "お休みの日を追加"}</Button>
+      <Button disabled={addLocked || loading} onClick={add} className={addLocked ? "special-add-done h-11 px-4 text-sm font-black" : "h-11 bg-blue-600 px-4 text-sm font-black text-white shadow-md hover:bg-blue-700"}>{addLocked ? <Check className="w-4 h-4 mr-1" /> : <Plus className="w-4 h-4 mr-1" />}{addLocked ? "追加しました" : "お休みの日を追加"}</Button>
     </div>
     <p className="special-save-guide">お店が休みの日（例：日曜、祝日、年末年始、毎月15日など）を決めます。決めた日はカレンダーに色が付き、シフト案の自動作成では「休み」として入れられます。すでに入力したシフトは変わりません。変更したら、一番下の「保存」を押してください。</p>
     <section className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
@@ -136,7 +136,7 @@ export function SpecialDaySettings({ rules, employees, loading, onSave }: Props)
           <div className="special-date-list">{(rule.monthDays || []).map(day => <div key={day} className="special-date-chip"><span>{day}</span><button type="button" aria-label={`${day}を削除`} onClick={() => update(rule.id, { monthDays: (rule.monthDays || []).filter(value => value !== day) })}><Trash2 className="w-3.5 h-3.5" /></button></div>)}</div>
         </div> : <div className="special-annual">
           <label className="special-date-label">休みにする日（カレンダーから選んで追加）</label>
-          <div className="special-date-entry"><input type="date" value={dateInputs[rule.id] || ""} onChange={event => setDateInputs(current => ({ ...current, [rule.id]: event.target.value }))} /><Button type="button" variant="outline" onClick={() => addDate(rule)}><Plus className="w-4 h-4 mr-1" />この日を追加</Button></div>
+          <div className="special-date-entry"><input type="date" value={dateInputs[rule.id] || ""} onChange={event => setDateInputs(current => ({ ...current, [rule.id]: event.target.value }))} /><Button type="button" className="bg-blue-600 font-bold text-white hover:bg-blue-700" onClick={() => addDate(rule)}><Plus className="w-4 h-4 mr-1" />この日を追加</Button></div>
           <div className="special-date-list">{rule.dates.length ? rule.dates.map((date, index) => <div key={date} className="special-date-chip"><span><b>{index + 1}</b>{displayDate(date)}</span><button type="button" aria-label={`${date}を削除`} onClick={() => update(rule.id, { dates: rule.dates.filter(value => value !== date) })}><Trash2 className="w-3.5 h-3.5" /></button></div>) : <small>登録日はまだありません</small>}</div>
         </div>}
       </div>)}
