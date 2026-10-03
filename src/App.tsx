@@ -952,7 +952,7 @@ export default function App() {
       const saved = await saveSpecialDayRules(rules);
       const effectiveRules = saved.length ? saved : rules;
       setSpecialDayRules(effectiveRules);
-      toast.success("カレンダー帯色設定を保存しました");
+      toast.success("定休日・帯色マスタを保存しました");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "特殊日設定を保存できませんでした");
       throw error;
