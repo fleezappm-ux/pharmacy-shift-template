@@ -1304,7 +1304,8 @@ export default function App() {
     }));
     
     setCycleAssignments(prev => ({ ...prev, [employeeId]: { cycleType, anchorDate: startDateStr } }));
-    toast.success(`${cycleNames[cycleType]}を適用しました`);
+    const forcedRest = datesToUpdate.filter(dateStr => { const [y, m, d] = dateStr.split("-").map(Number); return shouldRestOnDate(new Date(y, m - 1, d), employeeId, specialDayRules); }).length;
+    toast.success(`${cycleNames[cycleType]}を適用しました`, forcedRest ? { description: `お店の「お休みの日」設定で休みにしている日が${forcedRest}日あるため、その日は「休み」になっています（設定の「お店のお休みの日」で変更できます）`, duration: 9000 } : undefined);
   };
 
   const reapplyCycleToCurrentMonth = (cycleType: number) => {
@@ -2424,6 +2425,7 @@ export default function App() {
                                     <TableCell className="py-1 border-r border-border">{format(date, "MM/dd")}</TableCell>
                                     <TableCell className="py-1 text-muted-foreground border-r border-border">{format(date, "E", { locale: ja })}</TableCell>
                                     <TableCell className="py-1 border-r border-border">
+                                      {getGlobalRemark(date)?.type && <div className="mb-1 text-[11px] font-bold text-slate-700">📅 {getGlobalRemark(date)?.type}{shouldRestOnDate(date, emp.id, specialDayRules) ? "（設定で休みになる日）" : ""}</div>}
                                       <div className="flex flex-col gap-1">
                                         <div className="flex items-center gap-1">
                                           <Select 
