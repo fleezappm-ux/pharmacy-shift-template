@@ -11,27 +11,10 @@ export interface StoreMaster {
   storeName: string;
   showStoreNameOnHome: boolean;
   leaveRequestBoardVisibility: "immediate" | "after_approval" | "private";
-  businessDays: number[];
-  useJapaneseHolidays: boolean;
-  yearEndEnabled: boolean;
-  yearEndStart: string;
-  yearEndEnd: string;
-  obonEnabled: boolean;
-  obonStart: string;
-  obonEnd: string;
-  holidayBandEnabled: boolean;
-  holidayColor: SpecialDayColor;
-  yearEndBandEnabled: boolean;
-  yearEndColor: SpecialDayColor;
-  obonBandEnabled: boolean;
-  obonColor: SpecialDayColor;
 }
 
 export const DEFAULT_STORE_MASTER: StoreMaster = {
-  storeName: "", showStoreNameOnHome: false, leaveRequestBoardVisibility: "immediate", businessDays: [1, 2, 3, 4, 5, 6], useJapaneseHolidays: true,
-  yearEndEnabled: true, yearEndStart: "12-31", yearEndEnd: "01-03",
-  obonEnabled: true, obonStart: "08-13", obonEnd: "08-15",
-  holidayBandEnabled: true, holidayColor: "red", yearEndBandEnabled: true, yearEndColor: "red", obonBandEnabled: true, obonColor: "red"
+  storeName: "", showStoreNameOnHome: false, leaveRequestBoardVisibility: "immediate"
 };
 
 interface Props {
@@ -41,8 +24,7 @@ interface Props {
   periodDraft: CalendarPeriodSettings;
   saving: boolean;
   onPeriodDraftChange: (settings: CalendarPeriodSettings) => void;
-  onSavePeriod: () => Promise<void>;
-  onSaveBoardVisibility: (visibility: StoreMaster["leaveRequestBoardVisibility"]) => Promise<void>;
+  onSavePeriod: () => Promise<boolean>;
   onOpenBandSettings: () => void;
 }
 
@@ -53,11 +35,13 @@ const field = "h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text
 
 export function StoreMasterSettings({ master, onMasterChange, period, periodDraft, saving, onPeriodDraftChange, onSavePeriod, onOpenBandSettings }: Props) {
   const [draft, setDraft] = useState(master);
-  useEffect(() => setDraft(master), [master.businessDays.join(",")]);
+  useEffect(() => setDraft(master), [master.storeName, master.showStoreNameOnHome]);
   const save = async () => {
     onMasterChange(draft);
     templateStorage.setItem("store_master_settings", JSON.stringify(draft));
-    if (period.startDay !== periodDraft.startDay || period.endDay !== periodDraft.endDay) await onSavePeriod();
+    if (period.startDay !== periodDraft.startDay || period.endDay !== periodDraft.endDay) {
+      if (!await onSavePeriod()) { toast.error("店名などは保存しましたが、集計期間は保存できませんでした"); return; }
+    }
     toast.success("店舗マスタを保存しました");
   };
 
@@ -77,8 +61,8 @@ export function StoreMasterSettings({ master, onMasterChange, period, periodDraf
       </div>
     </div>
     <div className={panel}>
-      <h4 className={heading}>定休日</h4><p className={description}>曜日と祝日、帯色、シフト案・クール適用時の休み判定を一か所で設定できます。</p>
-      <Button variant="outline" className="mt-3" onClick={onOpenBandSettings}>定休日を設定 →</Button>
+      <h4 className={heading}>定休日・帯色</h4><p className={description}>定休日の曜日、祝日・年末年始、帯色、シフト案・クール適用時の休み判定を一か所で設定できます。</p>
+      <Button variant="outline" className="mt-3" onClick={onOpenBandSettings}>定休日・帯色を設定 →</Button>
     </div>
     <Button className="h-11 w-full font-bold" disabled={saving} onClick={() => void save()}><Save className="mr-2 h-4 w-4" />店舗マスタを保存</Button>
   </section>;

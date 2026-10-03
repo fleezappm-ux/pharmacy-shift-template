@@ -114,7 +114,7 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-const DEFAULT_CALENDAR_PERIOD: CalendarPeriodSettings = { startDay: 21, endDay: 20 };
+const DEFAULT_CALENDAR_PERIOD: CalendarPeriodSettings = { startDay: 1, endDay: 0 };
 
 /** 今日を含む設定済みシフト期間の開始月を返します。 */
 function getCurrentShiftMonth(today = new Date(), settings = DEFAULT_CALENDAR_PERIOD) {
@@ -224,10 +224,6 @@ export default function App() {
       }
     }
     return [];
-  });
-  const [dashboardTitle, setDashboardTitle] = useState(() => {
-    const savedTitle = templateStorage.getItem("dashboard_title");
-    return !savedTitle || savedTitle === "全体シフト集約" ? "全体シフト" : savedTitle;
   });
   const [isFromAdmin, setIsFromAdmin] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -606,10 +602,6 @@ export default function App() {
   }, [globalRemarks]);
 
   useEffect(() => {
-    templateStorage.setItem("dashboard_title", dashboardTitle);
-  }, [dashboardTitle]);
-
-  useEffect(() => {
     templateStorage.setItem("cycle_names", JSON.stringify(cycleNames));
   }, [cycleNames]);
 
@@ -969,7 +961,7 @@ export default function App() {
     }
   };
 
-  const handleSaveCalendarPeriod = async () => {
+  const handleSaveCalendarPeriod = async (): Promise<boolean> => {
     const startDay = calendarPeriodDraft.startDay;
     const settings = { startDay, endDay: startDay === 1 ? 0 : startDay - 1 };
     setCalendarPeriodSaving(true);
@@ -980,8 +972,10 @@ export default function App() {
       templateStorage.setItem("calendar_period_settings", JSON.stringify(saved));
       setCurrentMonth(getCurrentShiftMonth(new Date(), saved));
       toast.success(`シフト期間を「毎月${saved.startDay}日〜${saved.endDay === 0 ? "月末" : `翌月${saved.endDay}日`}」に設定しました`);
+      return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "カレンダー期間を保存できませんでした");
+      return false;
     } finally {
       setCalendarPeriodSaving(false);
     }
@@ -2130,12 +2124,12 @@ export default function App() {
               <TemplateResetSettings onBack={() => setSettingsPage("menu")} onProgress={setResetProgress} />
             ) : activeTab === "admin" && settingsPage === "store" ? (
               <motion.div key="settings-store" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-                <SettingsHead title="店舗マスタ" description="店舗全体の基本ルール" backLabel="設定へ戻る" onBack={() => setSettingsPage("menu")} /><Card><CardContent className="p-6 space-y-5"><StoreMasterSettings master={{ ...storeMaster, businessDays: businessDaysFromRules(specialDayRules) }} onMasterChange={setStoreMaster} period={calendarPeriodSettings} periodDraft={calendarPeriodDraft} saving={calendarPeriodSaving} onPeriodDraftChange={setCalendarPeriodDraft} onSavePeriod={handleSaveCalendarPeriod} onSaveBoardVisibility={handleSaveBoardVisibility} onOpenBandSettings={() => setSettingsPage("special")} /></CardContent></Card>
+                <SettingsHead title="店舗マスタ" description="店舗全体の基本ルール" backLabel="設定へ戻る" onBack={() => setSettingsPage("menu")} /><Card><CardContent className="p-6 space-y-5"><StoreMasterSettings master={storeMaster} onMasterChange={setStoreMaster} period={calendarPeriodSettings} periodDraft={calendarPeriodDraft} saving={calendarPeriodSaving} onPeriodDraftChange={setCalendarPeriodDraft} onSavePeriod={handleSaveCalendarPeriod} onOpenBandSettings={() => setSettingsPage("special")} /></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "board" ? (
               <motion.div key="settings-board" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
                 <SettingsHead title="お知らせ掲示板設定" description="承認済みの希望を従業員へ共有する設定" backLabel="設定へ戻る" onBack={() => setSettingsPage("menu")} /><Card>
-                <CardContent className="p-6 space-y-4"><label className="block text-sm font-bold">休み希望の公開設定<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={storeMaster.leaveRequestBoardVisibility || "immediate"} onChange={e => setStoreMaster(v => ({...v, leaveRequestBoardVisibility:e.target.value as StoreMaster["leaveRequestBoardVisibility"]}))}><option value="immediate">提出と同時に全員へ公開</option><option value="after_approval">管理者確認後に全員へ公開</option><option value="private">本人と編集者だけに表示</option></select></label><Button className="w-full h-11 font-bold" onClick={() => void handleSaveBoardVisibility(storeMaster.leaveRequestBoardVisibility)}>お知らせ掲示板マスタを保存</Button><div className="border-t pt-4"><label className="block text-sm font-bold">管理者からのお知らせ設定<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={adminNoticeVisibility} onChange={event => setAdminNoticeVisibility(event.target.value as AdminNoticeVisibility)}><option value="all">全員</option><option value="selected">指定従業員</option></select></label><Button className="mt-3 w-full h-11" onClick={async () => { try { setAdminNoticeVisibility(await saveAdminNoticeVisibility(adminNoticeVisibility)); toast.success("お知らせ公開設定を保存しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "保存できませんでした"); } }}>管理者からのお知らせ設定を保存</Button></div><div className="border-t pt-4"><label className="block text-sm font-bold">確定シフト訂正依頼の公開範囲<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={correctionVisibility} onChange={e => setCorrectionVisibility(e.target.value as "all" | "private")}><option value="all">全員に表示</option><option value="private">本人と管理者のみ表示</option></select></label><Button className="mt-3 w-full h-11" onClick={async () => { try { setCorrectionVisibility(await saveCorrectionVisibility(correctionVisibility)); toast.success("訂正依頼の公開設定を保存しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "保存できませんでした"); } }}>訂正依頼の公開設定を保存</Button></div></CardContent></Card>
+                <CardContent className="p-6 space-y-4"><label className="block text-sm font-bold">休み希望の公開設定<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={storeMaster.leaveRequestBoardVisibility || "immediate"} onChange={e => setStoreMaster(v => ({...v, leaveRequestBoardVisibility:e.target.value as StoreMaster["leaveRequestBoardVisibility"]}))}><option value="immediate">提出と同時に全員へ公開</option><option value="after_approval">管理者確認後に全員へ公開</option><option value="private">本人と編集者だけに表示</option></select></label><Button className="w-full h-11 font-bold" onClick={() => void handleSaveBoardVisibility(storeMaster.leaveRequestBoardVisibility)}>休み希望の公開設定を保存</Button><div className="border-t pt-4"><label className="block text-sm font-bold">管理者からのお知らせ設定<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={adminNoticeVisibility} onChange={event => setAdminNoticeVisibility(event.target.value as AdminNoticeVisibility)}><option value="all">全員</option><option value="selected">指定従業員</option></select></label><Button className="mt-3 w-full h-11" onClick={async () => { try { setAdminNoticeVisibility(await saveAdminNoticeVisibility(adminNoticeVisibility)); toast.success("お知らせ公開設定を保存しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "保存できませんでした"); } }}>管理者からのお知らせ設定を保存</Button></div><div className="border-t pt-4"><label className="block text-sm font-bold">確定シフト訂正依頼の公開範囲<select className="mt-2 h-11 w-full rounded-xl border bg-white px-3" value={correctionVisibility} onChange={e => setCorrectionVisibility(e.target.value as "all" | "private")}><option value="all">全員に表示</option><option value="private">本人と管理者のみ表示</option></select></label><Button className="mt-3 w-full h-11" onClick={async () => { try { setCorrectionVisibility(await saveCorrectionVisibility(correctionVisibility)); toast.success("訂正依頼の公開設定を保存しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "保存できませんでした"); } }}>訂正依頼の公開設定を保存</Button></div></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "employee" ? (
               <motion.div key="settings-employee" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><SettingsHead title="従業員マスタ" description="従業員の登録、役職、ホームの表示" backLabel="設定へ戻る" onBack={() => setSettingsPage("menu")} /><EmployeeMasterSettings employees={employeeMaster} roles={roles} onSave={handleSaveEmployeeMaster} /><RoleAndHomeSettings roles={roles} layout={homeLayout} onSaveRoles={handleSaveRoles} onSaveLayout={async value => setHomeLayout(await saveHomeLayout(value))} /></motion.div>
@@ -2144,7 +2138,7 @@ export default function App() {
                   { key: "worktime", icon: Clock, title: "勤務時間設定", description: "早番・遅番などの時間と略称" },
                   { key: "autodraft", icon: Wand2, title: "シフト案自動作成マスタ", description: "シフト案を自動で作る条件" },
                   { key: "operations", icon: Repeat, title: "クール作成マスタ", description: "1〜4週間の勤務パターン" },
-                  { key: "special", icon: Palette, title: "帯色マスタ", description: "祝日・年末年始などの帯色と定休日" },
+                  { key: "special", icon: Palette, title: "定休日・帯色マスタ", description: "定休日・祝日・年末年始と帯色" },
                 ].map(item => <button key={item.key} type="button" onClick={() => setSettingsPage(item.key as typeof settingsPage)} className="group flex min-h-24 items-center gap-4 rounded-2xl border-2 border-slate-100 bg-white p-5 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><item.icon className="h-6 w-6" /></span><span><strong className="flex items-center gap-2 text-base text-slate-900">{item.title}<ChevronRight className="h-4 w-4 transition group-hover:translate-x-1" /></strong><small className="mt-1 block leading-relaxed text-slate-500">{item.description}</small></span></button>)}</div>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "worktime" ? (
@@ -2153,7 +2147,7 @@ export default function App() {
               <motion.div key="settings-autodraft" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4"><SettingsHead title="シフト案自動作成マスタ" description="シフト案を自動で作る条件" backLabel="シフトマスタへ戻る" onBack={() => setSettingsPage("shift")} /><AutoDraftSettingsView settings={autoDraftSettings} onChange={value => void updateAutoDraftSettings(value)} onStart={startAutoDraft} /></motion.div>
             ) : activeTab === "admin" && settingsPage === "special" ? (
               <motion.div key="settings-special" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-                <SettingsHead title="カレンダー帯色設定" description="年ごとに変わる日付・店舗固有の定休日" backLabel="設定へ戻る" onBack={() => setSettingsPage("menu")} /><Card><CardContent className="p-6"><SpecialDaySettings rules={specialDayRules} employees={employeeMaster} loading={specialDayLoading} onSave={handleSaveSpecialDayRules} /></CardContent></Card>
+                <SettingsHead title="定休日・帯色マスタ" description="年ごとに変わる日付・店舗固有の定休日" backLabel="設定へ戻る" onBack={() => setSettingsPage("menu")} /><Card><CardContent className="p-6"><SpecialDaySettings rules={specialDayRules} employees={employeeMaster} loading={specialDayLoading} onSave={handleSaveSpecialDayRules} /></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "operations" ? (
               <motion.div key="settings-cycles" className="space-y-4"><SettingsHead title="クール作成マスタ" description="1〜4週間の勤務パターン" backLabel="シフトマスタへ戻る" onBack={() => setSettingsPage("shift")} /><Card><CardContent className="p-6">                      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">

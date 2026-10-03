@@ -1426,7 +1426,7 @@ function saveShiftSpecialDayRules(data) {
 function getShiftCalendarPeriodSettings() {
   try {
     var raw = PropertiesService.getScriptProperties().getProperty("SHIFT_CALENDAR_PERIOD_JSON");
-    var settings = raw ? JSON.parse(raw) : { startDay: 21, endDay: 20 };
+    var settings = raw ? JSON.parse(raw) : { startDay: 1, endDay: 0 };
     return createJsonDataResponse({ success: true, settings: settings });
   } catch (error) {
     return createJsonResponse(false, error.message || "カレンダー期間設定を取得できませんでした。");
