@@ -25,7 +25,7 @@ async function call(action: string, payload: Record<string, unknown> = {}) {
   const response = await fetch(getGasUrl(), { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ action, sessionToken, ...payload }) });
   if (!response.ok) throw new Error(`通信に失敗しました（${response.status}）`);
   const json = await response.json();
-  if (!json.success) throw new Error(json.message || "従業員マスターを処理できませんでした");
+  if (!json.success) throw new Error(json.message || "従業員マスタを処理できませんでした");
   return json;
 }
 

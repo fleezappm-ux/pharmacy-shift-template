@@ -22,7 +22,7 @@ export function EmployeeMasterSettings({ employees, roles, onSave }: { employees
     const duplicateNames = drafts.filter(item => item.active).filter((item, index, items) => items.findIndex(other => other.name.trim() === item.name.trim()) !== index);
     if (duplicateNames.length) return toast.error("同じ名前が登録されています");
     setSaving(true);
-    try { await onSave(drafts.map((item, index) => ({ ...item, displayName: item.name.trim(), displayOrder: index + 1 }))); toast.success("従業員マスターを保存しました"); }
+    try { await onSave(drafts.map((item, index) => ({ ...item, displayName: item.name.trim(), displayOrder: index + 1 }))); toast.success("従業員マスタを保存しました"); }
     finally { setSaving(false); }
   };
   const activeDrafts = drafts.filter(item => item.active);
@@ -34,6 +34,6 @@ export function EmployeeMasterSettings({ employees, roles, onSave }: { employees
       <select className="h-10 rounded-md border bg-white px-3 text-sm" value={item.roleId || roles.find(role => role.name === item.role)?.id || ""} onChange={event => { const role = roles.find(candidate => candidate.id === event.target.value); update(item.id, { roleId: role?.id || "", role: role?.name || "" }); }}><option value="">役職を選択</option>{roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}</select>
       <div className="flex gap-1"><Button variant="outline" size="icon" disabled={index === 0} onClick={() => move(drafts.indexOf(item), -1)}><ArrowUp className="h-4 w-4" /></Button><Button variant="outline" size="icon" disabled={index === activeDrafts.length - 1} onClick={() => move(drafts.indexOf(item), 1)}><ArrowDown className="h-4 w-4" /></Button><Button variant="ghost" size="icon" className="text-red-600" onClick={() => remove(item.id)}><Trash2 className="h-4 w-4" /></Button></div>
     </div>)}</div>
-    <Button className="h-11 w-full font-bold" disabled={saving} onClick={() => void submit()}><Save className="mr-2 h-4 w-4" />{saving ? "保存中…" : "従業員マスターを保存"}</Button>
+    <Button className="h-11 w-full font-bold" disabled={saving} onClick={() => void submit()}><Save className="mr-2 h-4 w-4" />{saving ? "保存中…" : "従業員マスタを保存"}</Button>
   </section>;
 }

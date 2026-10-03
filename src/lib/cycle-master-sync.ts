@@ -13,7 +13,7 @@ async function call(action: string, payload: Record<string, unknown> = {}) {
   const response = await fetch(getGasUrl(), { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ action, sessionToken: getShiftSession()?.token || "", ...payload }) });
   if (!response.ok) throw new Error(`通信に失敗しました（${response.status}）`);
   const json = await response.json();
-  if (!json.success) throw new Error(json.message || "クールマスターを処理できませんでした");
+  if (!json.success) throw new Error(json.message || "クールマスタを処理できませんでした");
   return json;
 }
 export async function fetchCycleMaster(): Promise<CycleMasterData | null> { const json = await call("getShiftCycleMaster"); return json.master || null; }
