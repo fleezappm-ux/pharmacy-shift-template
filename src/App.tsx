@@ -904,9 +904,9 @@ export default function App() {
 
   const [autoDraftRun, setAutoDraftRun] = useState<{ state: "idle" | "running" | "done" | "error"; message: string; at?: string }>({ state: "idle", message: "" });
   const autoDraftRangeLabel = (() => {
-    const base = getCurrentShiftMonth(new Date(), calendarPeriodSettings);
+    const base = addMonths(getCurrentShiftMonth(new Date(), calendarPeriodSettings), 1);
     const first = generateConfiguredDateRange(base.getFullYear(), base.getMonth() + 1, calendarPeriodSettings.startDay, calendarPeriodSettings.endDay);
-    const lastAnchor = addMonths(base, 3);
+    const lastAnchor = addMonths(base, 2);
     const last = generateConfiguredDateRange(lastAnchor.getFullYear(), lastAnchor.getMonth() + 1, calendarPeriodSettings.startDay, calendarPeriodSettings.endDay);
     return `${format(first[0], "M/d")}〜${format(last[last.length - 1], "M/d")}`;
   })();
@@ -915,11 +915,15 @@ export default function App() {
     if (!silent && !window.confirm(`${autoDraftRangeLabel}のシフト案を作成します。確定済み・手動編集済みの勤務は上書きしません。開始しますか？`)) return;
     setAutoDraftRun({ state: "running", message: "シフト案を作成してサーバーに保存しています…終わるまで画面を動かさないでください" });
     try {
-    const baseMonth = getCurrentShiftMonth(new Date(), calendarPeriodSettings);
-    const targetRanges = Array.from({ length: 4 }, (_, offset) => {
+    const baseMonth = addMonths(getCurrentShiftMonth(new Date(), calendarPeriodSettings), 1);
+    const allRanges = Array.from({ length: 3 }, (_, offset) => {
       const anchor = addMonths(baseMonth, offset);
       return generateConfiguredDateRange(anchor.getFullYear(), anchor.getMonth() + 1, calendarPeriodSettings.startDay, calendarPeriodSettings.endDay);
     });
+    // 確定済みの期間は触らない（画面にも案を入れない）
+    const lockedFlags = await Promise.all(allRanges.map(range => fetchShiftPeriodStatus(getDateStr(range[0])).catch(() => false)));
+    const targetRanges = allRanges.filter((_, index) => !lockedFlags[index]);
+    const lockedCount = allRanges.length - targetRanges.length;
     const allDates = targetRanges.flat();
     const mondayOf = (date: Date) => { const result = new Date(date); result.setDate(date.getDate() + (date.getDay() === 0 ? -6 : 1 - date.getDay())); result.setHours(0, 0, 0, 0); return result; };
     const cycleWeekIndex = (date: Date, assignment: { cycleType: number; anchorDate: string }) => {
@@ -947,7 +951,7 @@ export default function App() {
       return { ...employee, shifts };
     });
     setEmployees(generatedEmployees);
-    let skipped = 0;
+    let skipped = lockedCount;
     for (const range of targetRanges) {
       try {
         let tries = 0;
