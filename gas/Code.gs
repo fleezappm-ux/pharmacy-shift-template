@@ -1914,6 +1914,12 @@ function runTemplateReset(data) {
       "SHIFT_BOARD_VISIBILITY_FALLBACK_" + getStoreId(),
       "SHIFT_CORRECTION_VISIBILITY_" + getStoreId()
     ];
+    // 役職・ホームの列分け・お知らせ（本文と公開範囲）も初期仕様へ戻す。
+    businessKeys.push("SHIFT_ROLE_MASTER_JSON", "SHIFT_HOME_LAYOUT_JSON", "SHIFT_ADMIN_NOTICE_VISIBILITY", "SHIFT_DROPDOWN_MASTER_JSON");
+    var noticeIds = [];
+    try { noticeIds = JSON.parse(p.getProperty("SHIFT_ADMIN_NOTICE_IDS") || "[]"); } catch (_) {}
+    (Array.isArray(noticeIds) ? noticeIds : []).forEach(function(id) { businessKeys.push("SHIFT_ADMIN_NOTICE_" + id); });
+    businessKeys.push("SHIFT_ADMIN_NOTICE_IDS");
     businessKeys.forEach(function(key) { p.deleteProperty(key); });
     // ログイン用に操作員1名だけ残し、接続情報・ログインID・パスワードは保持する。
     p.setProperty("SHIFT_EMPLOYEE_MASTER_JSON", JSON.stringify([authorization.operator]));
