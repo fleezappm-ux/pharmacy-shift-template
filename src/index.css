@@ -644,3 +644,8 @@ body { margin:0; background:#f5f7fa; }
 .creation-leave-strip.has-correction{background:#dc2626!important;color:#fff!important;font-weight:900;font-size:15px}
 .leave-request-marker.is-correction{background:#dc2626!important;color:#fff!important;border-radius:6px;padding:1px 5px;font-weight:900;display:inline-block}
 .dashboard-employee-cell.has-leave-request:has(.is-correction){outline:2px solid #dc2626;outline-offset:-2px}
+
+/* 訂正依頼の印は小さく、勤務時間の下に出す（勤務が隠れないように） */
+.leave-request-marker.is-correction{display:block!important;width:fit-content;margin:2px auto 0!important;padding:1px 4px!important;font-size:9px!important;line-height:1.2!important;border-radius:5px}
+.personal-leave-request{grid-column:1/-1;margin-top:4px;padding:5px 8px;border-radius:8px;background:#f5f3ff;color:#6d28d9;font-size:12px;font-weight:800}
+.personal-leave-request.is-correction{background:#dc2626;color:#fff}
