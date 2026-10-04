@@ -15,7 +15,7 @@ export interface ShiftSession {
 
 async function call(action: string, payload: Record<string, unknown> = {}) {
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 12000);
+  const timeoutId = window.setTimeout(() => controller.abort(), 30000);
   try {
     const response = await gasFetch({
       method: "POST",

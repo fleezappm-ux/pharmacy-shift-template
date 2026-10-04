@@ -20,7 +20,7 @@ function release() { active -= 1; waiting.shift()?.(); }
 async function sendWithRetry(init: RequestInit, canRetry: boolean): Promise<Response> {
   const attemptOnce = async (): Promise<Response | null> => { try { return await fetch(getGasUrl(), init); } catch { return null; } };
   let response = await attemptOnce();
-  for (let attempt = 1; canRetry && attempt <= 3 && (!response || response.status === 404 || response.status === 429 || response.status >= 500); attempt += 1) {
+  for (let attempt = 1; canRetry && !init.signal?.aborted && attempt <= 3 && (!response || response.status === 404 || response.status === 429 || response.status >= 500); attempt += 1) {
     await new Promise(resolve => window.setTimeout(resolve, attempt * 1200));
     response = await attemptOnce();
   }
