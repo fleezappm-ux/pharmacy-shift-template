@@ -315,6 +315,7 @@ export default function App() {
   };
   const [dashboardListView, setDashboardListView] = useState(false);
   const [showLeaveManager, setShowLeaveManager] = useState(false);
+  const [correctionPopup, setCorrectionPopup] = useState<{ request: LeaveRequest; shiftText: string } | null>(null);
   const [overviewEditing, setOverviewEditing] = useState(false);
   const [creationHintHidden, setCreationHintHidden] = useState(() => templateStorage.getItem("creation_hint_hidden") === "1");
   const inCreation = isFromAdmin && activeTab === "dashboard" && appSession?.role === "admin";
@@ -2140,6 +2141,7 @@ export default function App() {
                         <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setOverviewCell(null)}>キャンセル</Button><Button type="submit" disabled={isLocked || periodStatusLoading}>変更する</Button></div>
                       </form>}
                     </dialog>
+                    {correctionPopup && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => setCorrectionPopup(null)}><div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={event => event.stopPropagation()}><h3 className="text-lg font-black text-red-700">訂正依頼</h3><p className="mt-2 text-sm font-bold">{correctionPopup.request.employeeName}　{correctionPopup.request.date ? format(new Date(`${correctionPopup.request.date}T00:00:00`), "M/d（E）", { locale: ja }) : ""}</p><div className="mt-3 rounded-xl bg-slate-100 p-3 text-sm"><span className="text-xs font-bold text-slate-500">現在の勤務</span><p className="font-black">{correctionPopup.shiftText}</p></div><div className="mt-2 rounded-xl bg-red-50 p-3 text-sm"><span className="text-xs font-bold text-red-700">依頼内容</span><p className="whitespace-pre-wrap font-bold">{correctionPopup.request.comment || "（コメントなし）"}</p></div><p className="mt-3 text-xs text-slate-600">返事が必要なら「管理者からのお知らせ」で本人を指定して送れます。</p><div className="mt-4 grid grid-cols-2 gap-2"><Button variant="outline" onClick={() => setCorrectionPopup(null)}>閉じる</Button>{appSession.role === "admin" && <Button className="bg-red-600 hover:bg-red-700" onClick={async () => { const target = correctionPopup.request; try { const saved = await updateLeaveRequestStatus(target.id, "対応済み"); setLeaveRequests(prev => prev.map(r => r.id === saved.id ? saved : r)); setHomePendingCorrections(prev => prev.filter(r => r.id !== saved.id)); setCorrectionPopup(null); toast.success("確認しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "更新できませんでした"); } }}>確認した</Button>}</div></div></div>}
                     {isFromAdmin && showLeaveManager && <LeaveRequestManager requests={leaveRequests} loading={leaveRequestLoading} onStatusChange={handleLeaveRequestStatus} onDelete={handleLeaveRequestDelete} />}
                     <div className="dashboard-table-wrap overflow-x-auto" onScroll={event => { const el = event.currentTarget; if (window.innerWidth < 768 && el.scrollTop > 0 && el.getBoundingClientRect().top > 8) el.scrollIntoView({ block: "start" }); }}>
                       <Table className="dashboard-table text-[13px]">
@@ -2190,10 +2192,11 @@ export default function App() {
                                                 ? "text-slate-900"
                                                 : "text-muted-foreground"
                                       }`}>
-                                        <span className="dashboard-shift-full">{shiftText}</span>
-                                        <span className="dashboard-shift-compact">{compactParts[0]}{compactParts[1] && <><br />{compactParts[1]}</>}</span>
-                                        {leaveRequest && <small className={`leave-request-marker ${leaveRequest.type === "訂正依頼" ? "is-correction" : ""}`}>{leaveRequest.type === "訂正依頼" ? "⚠訂正依頼" : leaveRequest.type === "出勤希望" && leaveRequest.desiredWorkStart && leaveRequest.desiredWorkEnd ? `出勤希望 ${leaveRequest.desiredWorkStart}〜${leaveRequest.desiredWorkEnd}` : leaveRequest.type}</small>}
+                                        <span className="dashboard-shift-full">{shiftText || (leaveRequest && s?.shift === "休み" ? "休み" : "")}</span>
+                                        <span className="dashboard-shift-compact">{leaveRequest && !shiftText && s?.shift === "休み" ? "休み" : compactParts[0]}{compactParts[1] && <><br />{compactParts[1]}</>}</span>
+                                        {leaveRequest && leaveRequest.type !== "訂正依頼" && <small className="leave-request-marker">{leaveRequest.type === "出勤希望" && leaveRequest.desiredWorkStart && leaveRequest.desiredWorkEnd ? `出勤希望 ${leaveRequest.desiredWorkStart}〜${leaveRequest.desiredWorkEnd}` : leaveRequest.type}</small>}
                                       </button>
+                                      {leaveRequest && leaveRequest.type === "訂正依頼" && <button type="button" className="correction-chip" onClick={() => setCorrectionPopup({ request: leaveRequest, shiftText: actualShiftText || (s?.shift === "休み" ? "休み" : "なし") })}>⚠訂正</button>}
                                     </TableCell>
                                   );
                                 })}
