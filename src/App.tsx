@@ -2110,7 +2110,7 @@ export default function App() {
                   </CardHeader>
                   <CardContent className="p-0 md:flex-1 md:min-h-0 md:flex md:flex-col">
                     {isFromAdmin && renderCreationPeriod()}
-                    {isFromAdmin && <button type="button" className={`creation-leave-strip ${leaveRequests.some(item => item.status === "申請中" && item.type !== "希望なし" && item.type !== "訂正依頼") ? "has-pending" : ""}`} aria-expanded={showLeaveManager} onClick={() => setShowLeaveManager(value => !value)}>{(() => { const count = leaveRequests.filter(item => item.status === "申請中" && item.type !== "希望なし" && item.type !== "訂正依頼").length; return count ? `対応待ちの申請希望あり（${count}件）` : "対応待ちの希望はありません"; })()} <span aria-hidden="true">{showLeaveManager ? "▲" : "▼"}</span></button>}
+                    {isFromAdmin && <button type="button" className={`creation-leave-strip ${leaveRequests.some(item => item.status === "申請中" && item.type === "訂正依頼") ? "has-correction" : leaveRequests.some(item => item.status === "申請中" && item.type !== "希望なし" && item.type !== "訂正依頼") ? "has-pending" : ""}`} aria-expanded={showLeaveManager} onClick={() => setShowLeaveManager(value => !value)}>{(() => { const corrections = leaveRequests.filter(item => item.status === "申請中" && item.type === "訂正依頼").length; const count = leaveRequests.filter(item => item.status === "申請中" && item.type !== "希望なし" && item.type !== "訂正依頼").length; if (corrections) return `⚠ 訂正依頼があります（${corrections}件）${count ? `／申請希望 ${count}件` : ""}`; return count ? `対応待ちの申請希望あり（${count}件）` : "対応待ちの希望はありません"; })()} <span aria-hidden="true">{showLeaveManager ? "▲" : "▼"}</span></button>}
                     {isFromAdmin && renderSyncFailure()}
                     {!isFromAdmin && <div className="dashboard-overview-toolbar"><ShiftDisplayControl value={shiftDisplayMode} onChange={setShiftDisplayMode} /><Button variant="outline" size="sm" className="dashboard-list-toggle" onClick={() => setDashboardListView(value => !value)}><Grid3X3 className="w-3.5 h-3.5 mr-1.5" />{dashboardListView ? "通常表示" : "一覧表示"}</Button></div>}
                     {!isFromAdmin && <div className="dashboard-mobile-person-jump">
@@ -2192,7 +2192,7 @@ export default function App() {
                                       }`}>
                                         <span className="dashboard-shift-full">{shiftText}</span>
                                         <span className="dashboard-shift-compact">{compactParts[0]}{compactParts[1] && <><br />{compactParts[1]}</>}</span>
-                                        {leaveRequest && <small className="leave-request-marker">{leaveRequest.type}</small>}
+                                        {leaveRequest && <small className={`leave-request-marker ${leaveRequest.type === "訂正依頼" ? "is-correction" : ""}`}>{leaveRequest.type === "訂正依頼" ? "⚠訂正依頼" : leaveRequest.type}</small>}
                                       </button>
                                     </TableCell>
                                   );

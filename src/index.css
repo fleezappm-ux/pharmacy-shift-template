@@ -639,3 +639,8 @@ body { margin:0; background:#f5f7fa; }
 
 /* 確定済みの期間は、見出しを青にして一目で分かるようにする */
 .leave-shift-hero.is-locked{background:linear-gradient(130deg,#0b3d91,#1565d8 60%,#3b8fe8)!important;box-shadow:0 14px 30px rgba(11,61,145,.2)!important}
+
+/* 訂正依頼は目立たせる */
+.creation-leave-strip.has-correction{background:#dc2626!important;color:#fff!important;font-weight:900;font-size:15px}
+.leave-request-marker.is-correction{background:#dc2626!important;color:#fff!important;border-radius:6px;padding:1px 5px;font-weight:900;display:inline-block}
+.dashboard-employee-cell.has-leave-request:has(.is-correction){outline:2px solid #dc2626;outline-offset:-2px}
