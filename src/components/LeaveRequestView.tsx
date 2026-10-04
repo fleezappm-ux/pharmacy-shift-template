@@ -54,14 +54,25 @@ function shiftLabelFor(employee: Employee | undefined, date: string) {
   return shift?.shift === "任意入力" ? shift.customShiftText || "任意入力" : shift?.shift || "―";
 }
 
-// 午前・午後で迷わないよう、24時間表記の一覧から選びます（15分刻み）。
-const TIME_OPTIONS = Array.from({ length: (24 - 5) * 4 }, (_, index) => { const minutes = 5 * 60 + index * 15; return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`; });
+// 午前・午後で迷わないよう、「時」（0〜23）と「分」を別々に選びます。
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => hour);
+const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, index) => index * 5);
 function TimeSelect({ label, value, placeholder, onChange }: { label: string; value: string; placeholder: string; onChange: (value: string) => void }) {
-  const options = value && !TIME_OPTIONS.includes(value) ? [value, ...TIME_OPTIONS] : TIME_OPTIONS;
-  return <select className="w-1/2 rounded border bg-white p-2" aria-label={label} value={value} onChange={event => onChange(event.target.value)}>
-    <option value="">{placeholder}</option>
-    {options.map(option => <option key={option} value={option}>{option.replace(/^0/, "")}</option>)}
-  </select>;
+  const [hourText, minuteText] = value ? value.split(":") : ["", ""];
+  const pad = (n: number | string) => String(n).padStart(2, "0");
+  const update = (hour: string, minute: string) => { if (hour === "") { onChange(""); return; } onChange(`${pad(hour)}:${pad(minute || "0")}`); };
+  const minuteOptions = minuteText && !MINUTE_OPTIONS.includes(Number(minuteText)) ? [Number(minuteText), ...MINUTE_OPTIONS] : MINUTE_OPTIONS;
+  return <div className="flex w-1/2 items-center gap-1" role="group" aria-label={label}>
+    <select className="h-12 w-1/2 rounded border bg-white px-1 text-lg" aria-label={`${label}（時）`} value={hourText === "" ? "" : String(Number(hourText))} onChange={event => update(event.target.value, minuteText || "0")}>
+      <option value="">{placeholder}</option>
+      {HOUR_OPTIONS.map(hour => <option key={hour} value={hour}>{hour}</option>)}
+    </select>
+    <span className="font-bold">:</span>
+    <select className="h-12 w-1/2 rounded border bg-white px-1 text-lg" aria-label={`${label}（分）`} value={minuteText === undefined || minuteText === "" ? "" : String(Number(minuteText))} disabled={hourText === ""} onChange={event => update(hourText, event.target.value)}>
+      {minuteText === "" && <option value="">分</option>}
+      {minuteOptions.map(minute => <option key={minute} value={minute}>{pad(minute)}</option>)}
+    </select>
+  </div>;
 }
 
 export function LeaveRequestView({ employees, dates, requests, remarks, locked, loading, operatorId, isAdmin, onCheckPeriodStatus, onSubmit, onCancel, onSaveWorkTime, onPeriodChange }: Props) {
