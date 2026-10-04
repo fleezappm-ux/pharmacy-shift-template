@@ -128,7 +128,7 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
 
   const selectFor = (date: string) => <select
     value={drafts[date]?.type || ""}
-    disabled={loading || submitting}
+    disabled={submitting}
     onClick={event => event.stopPropagation()}
     onChange={event => updateDraft(date, event.target.value)}
     aria-label={`${format(new Date(`${date}T00:00:00`), "M/d")}の希望`}
@@ -149,7 +149,7 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
     const existing = own ? requestByDate.get(key) : undefined;
     return <td key={employee.id} className={`leave-shift-cell ${own ? "is-own" : ""} ${selected ? "has-draft" : ""}`}>
       {own ? <>
-        <button type="button" className="leave-shift-pick" disabled={loading || submitting} onClick={() => setOpenDate(openDate === key ? null : key)} aria-label={`${format(date, "M/d")}の自分の希望を選ぶ`}>
+        <button type="button" className="leave-shift-pick" disabled={submitting} onClick={() => setOpenDate(openDate === key ? null : key)} aria-label={`${format(date, "M/d")}の自分の希望を選ぶ`}>
           <strong>{shiftLabelFor(employee, key)}</strong>{selected ? <small>{selected}</small> : <span className="leave-shift-click-hint">クリックして希望を選ぶ ›</span>}
         </button>
         <span className="leave-desktop-select">{selectFor(key)}</span><span className="leave-mobile-select">{(openDate === key || selected) && selectFor(key)}</span>
@@ -201,7 +201,7 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
           const remark = remarkFor(key);
           return <div key={key} className={`leave-personal-row ${colorFor(date, key) ? `special-${colorFor(date, key)}` : ""} ${drafts[key] ? "has-draft" : ""}`}>
             <div className="leave-personal-date"><strong>{format(date, "M/d")}</strong><small>{format(date, "E", { locale: ja })}</small></div>
-            <div className="leave-personal-work"><button type="button" disabled={loading || submitting} onClick={() => setOpenDate(openDate === key ? null : key)} aria-label={`${format(date, "M/d")}の自分の希望を選ぶ`}><strong>{shiftLabelFor(operator, key)}</strong>{drafts[key] && <small>{drafts[key].type}</small>}</button><span className="leave-desktop-select">{selectFor(key)}</span><span className="leave-mobile-select">{(openDate === key || drafts[key]) && selectFor(key)}</span>{requestByDate.get(key) && !drafts[key] && <span className="leave-shift-existing">提出済：{requestByDate.get(key)?.type}</span>}</div>
+            <div className="leave-personal-work"><button type="button" disabled={submitting} onClick={() => setOpenDate(openDate === key ? null : key)} aria-label={`${format(date, "M/d")}の自分の希望を選ぶ`}><strong>{shiftLabelFor(operator, key)}</strong>{drafts[key] && <small>{drafts[key].type}</small>}</button><span className="leave-desktop-select">{selectFor(key)}</span><span className="leave-mobile-select">{(openDate === key || drafts[key]) && selectFor(key)}</span>{requestByDate.get(key) && !drafts[key] && <span className="leave-shift-existing">提出済：{requestByDate.get(key)?.type}</span>}</div>
             <small className="leave-personal-remark">{remark?.type || ""}</small>
           </div>;
         })}
