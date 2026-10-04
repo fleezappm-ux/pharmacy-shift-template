@@ -2178,7 +2178,7 @@ export default function App() {
                                   const shiftText = displayShift(actualShiftText, workTimes, shiftDisplayMode);
                                   const compactParts = shiftText.includes("～") ? shiftText.split("～") : [shiftText];
                                   return (
-                                    <TableCell key={emp.id} className={`dashboard-employee-cell py-1 px-1 border-r border-border ${leaveRequest ? "has-leave-request" : ""}`} title={`${actualShiftText}${leaveRequest ? `・${leaveRequest.type}（${leaveRequest.status}）` : ""}`}>
+                                    <TableCell key={emp.id} className={`dashboard-employee-cell py-1 px-1 border-r border-border ${leaveRequest ? "has-leave-request" : ""}`} title={`${actualShiftText}${leaveRequest ? `・${leaveRequest.type}${leaveRequest.desiredWorkStart && leaveRequest.desiredWorkEnd ? ` ${leaveRequest.desiredWorkStart}〜${leaveRequest.desiredWorkEnd}` : ""}（${leaveRequest.status}）` : ""}`}>
                                       <button type="button" disabled={!isFromAdmin || !overviewEditing || isLocked || periodStatusLoading || appSession.role !== "admin"} onClick={() => openOverviewCell(emp, dateStr)} aria-label={`${emp.displayName || emp.name} ${format(date, "M月d日")} ${actualShiftText || (s?.shift === "休み" ? "休み" : "なし")}の勤務を変更`} className={`w-full min-h-9 text-[12px] py-1.5 rounded-sm disabled:cursor-default enabled:cursor-pointer enabled:ring-1 enabled:ring-amber-500 enabled:bg-amber-50 enabled:hover:bg-amber-100 enabled:focus-visible:outline-2 enabled:focus-visible:outline-amber-600 text-center font-bold leading-none ${
                                         s?.shift === "有休" 
                                           ? "bg-red-100 text-red-800 border border-red-200" 
@@ -2192,7 +2192,7 @@ export default function App() {
                                       }`}>
                                         <span className="dashboard-shift-full">{shiftText}</span>
                                         <span className="dashboard-shift-compact">{compactParts[0]}{compactParts[1] && <><br />{compactParts[1]}</>}</span>
-                                        {leaveRequest && <small className={`leave-request-marker ${leaveRequest.type === "訂正依頼" ? "is-correction" : ""}`}>{leaveRequest.type === "訂正依頼" ? "⚠訂正依頼" : leaveRequest.type}</small>}
+                                        {leaveRequest && <small className={`leave-request-marker ${leaveRequest.type === "訂正依頼" ? "is-correction" : ""}`}>{leaveRequest.type === "訂正依頼" ? "⚠訂正依頼" : leaveRequest.type === "出勤希望" && leaveRequest.desiredWorkStart && leaveRequest.desiredWorkEnd ? `出勤希望 ${leaveRequest.desiredWorkStart}〜${leaveRequest.desiredWorkEnd}` : leaveRequest.type}</small>}
                                       </button>
                                     </TableCell>
                                   );
