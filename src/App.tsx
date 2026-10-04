@@ -2441,7 +2441,7 @@ export default function App() {
                         <div className="personal-display-toolbar"><ShiftDisplayControl value={shiftDisplayMode} onChange={setShiftDisplayMode} /></div>
                         {isFromAdmin && <><div className="creation-person-status personal-creation-picker"><select aria-label="全体編集・個人編集の選択" value={emp.id} onChange={event => setActiveTab(event.target.value)}><option value="dashboard">全体編集</option>{dashboardEmployees.map(employee => <option key={employee.id} value={employee.id}>{employee.displayName || employee.name}</option>)}</select>{renderSyncStatus()}</div>{renderAutoSaveNote()}{isLocked && <p className="mx-3 mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">この期間は「確定」されています。解除したいときは、上の選択を「全体編集」に戻して、右上の「確定を解除」を押してください。</p>}{renderSyncFailure()}</>}
                         {!isFromAdmin ? <div className="personal-overview-layout">
-                          <PersonalShiftList employee={emp} dates={dateRange} remarks={displayRemarks} workTimes={workTimes} displayMode={shiftDisplayMode} />
+                          <PersonalShiftList employee={emp} dates={dateRange} remarks={displayRemarks} workTimes={workTimes} displayMode={shiftDisplayMode} requests={leaveRequests} />
                           <aside className="personal-summary-panel">
                             <div><span>出勤日数</span><strong>{attendanceDays}<small>日</small></strong></div>
                             <div><span>合計実働時間</span><strong>{totalWorkHours}<small>時間</small></strong></div>
