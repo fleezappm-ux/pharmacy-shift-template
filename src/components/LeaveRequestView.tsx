@@ -159,7 +159,7 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
   };
 
   return <div className="leave-request-page leave-shift-page space-y-4 pb-5">
-    <header className="leave-shift-hero">
+    <header className={`leave-shift-hero ${locked ? "is-locked" : ""}`}>
       <div className="leave-shift-brand">
         <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" />
         <div><h1>希望シフト受付{isAdmin && <span className="leave-admin-desktop">・管理者用</span>}</h1><span>操作員：{employeeName || "未選択"}</span></div>
