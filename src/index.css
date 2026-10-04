@@ -636,3 +636,6 @@ body { margin:0; background:#f5f7fa; }
 
 @media (max-width:767px){.employee-shift-table tbody tr.shift-row-special-red>td:nth-child(-n+3){background:#fee2e2!important}.employee-shift-table tbody tr.shift-row-special-blue>td:nth-child(-n+3){background:#dbeafe!important}.employee-shift-table tbody tr.shift-row-special-green>td:nth-child(-n+3){background:#dcfce7!important}.employee-shift-table tbody tr.shift-row-special-amber>td:nth-child(-n+3){background:#fef3c7!important}.employee-shift-table tbody tr.shift-row-special-purple>td:nth-child(-n+3){background:#f3e8ff!important}.employee-shift-table tbody tr.shift-row-special-gray>td:nth-child(-n+3){background:#f1f5f9!important}}
 @media (max-width:767px){.dashboard-table-wrap{max-height:calc(100dvh - 150px);overflow:auto!important;-webkit-overflow-scrolling:touch}.dashboard-table thead th{position:sticky!important;top:0!important;z-index:30}}
+
+/* 確定済みの期間は、見出しを青にして一目で分かるようにする */
+.leave-shift-hero.is-locked{background:linear-gradient(130deg,#0b3d91,#1565d8 60%,#3b8fe8)!important;box-shadow:0 14px 30px rgba(11,61,145,.2)!important}
