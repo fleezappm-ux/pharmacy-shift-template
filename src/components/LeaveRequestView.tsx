@@ -54,6 +54,16 @@ function shiftLabelFor(employee: Employee | undefined, date: string) {
   return shift?.shift === "任意入力" ? shift.customShiftText || "任意入力" : shift?.shift || "―";
 }
 
+// 午前・午後で迷わないよう、24時間表記の一覧から選びます（15分刻み）。
+const TIME_OPTIONS = Array.from({ length: (24 - 5) * 4 }, (_, index) => { const minutes = 5 * 60 + index * 15; return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`; });
+function TimeSelect({ label, value, placeholder, onChange }: { label: string; value: string; placeholder: string; onChange: (value: string) => void }) {
+  const options = value && !TIME_OPTIONS.includes(value) ? [value, ...TIME_OPTIONS] : TIME_OPTIONS;
+  return <select className="w-1/2 rounded border bg-white p-2" aria-label={label} value={value} onChange={event => onChange(event.target.value)}>
+    <option value="">{placeholder}</option>
+    {options.map(option => <option key={option} value={option}>{option.replace(/^0/, "")}</option>)}
+  </select>;
+}
+
 export function LeaveRequestView({ employees, dates, requests, remarks, locked, loading, operatorId, isAdmin, onCheckPeriodStatus, onSubmit, onCancel, onSaveWorkTime, onPeriodChange }: Props) {
   const operator = employees.find(item => item.id === operatorId);
   const employeeName = operator?.displayName || operator?.name || "";
@@ -214,7 +224,7 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
             <strong>{format(new Date(`${date}T00:00:00`), "yyyy/M/d（E）", { locale: ja })}</strong>
             <span><b>{draft.type}</b><small>現在のシフト：{draft.shiftLabel}</small></span>
             <button type="button" onClick={() => updateDraft(date, "")} aria-label={`${date}を削除`}><Trash2 className="w-4 h-4" /></button>
-            {draft.type === "出勤希望" && <div className="col-span-full mt-2 w-full"><p className={`text-xs font-bold ${times[date]?.start && times[date]?.end && times[date].start >= times[date].end ? "text-red-700" : "text-amber-700"}`}>{!(times[date]?.start && times[date]?.end) ? "希望時間を入力してください" : times[date].start >= times[date].end ? "⚠ 終わりの時間が始めより前です。直すと提出できます" : "希望時間"}</p><div className="flex gap-2"><input className="w-1/2 rounded border p-2" type="time" aria-label={`${date}の開始時間`} value={times[date]?.start || ""} onChange={event => setTimes(previous => ({ ...previous, [date]: { start: event.target.value, end: previous[date]?.end || "" } }))} /><input className="w-1/2 rounded border p-2" type="time" aria-label={`${date}の終了時間`} value={times[date]?.end || ""} onChange={event => setTimes(previous => ({ ...previous, [date]: { start: previous[date]?.start || "", end: event.target.value } }))} /></div></div>}
+            {draft.type === "出勤希望" && <div className="col-span-full mt-2 w-full"><p className={`text-xs font-bold ${times[date]?.start && times[date]?.end && times[date].start >= times[date].end ? "text-red-700" : "text-amber-700"}`}>{!(times[date]?.start && times[date]?.end) ? "希望時間を入力してください" : times[date].start >= times[date].end ? "⚠ 終わりの時間が始めより前です。直すと提出できます" : "希望時間"}</p><div className="flex gap-2"><TimeSelect label={`${date}の開始時間`} value={times[date]?.start || ""} placeholder="開始" onChange={value => setTimes(previous => ({ ...previous, [date]: { start: value, end: previous[date]?.end || "" } }))} /><TimeSelect label={`${date}の終了時間`} value={times[date]?.end || ""} placeholder="終了" onChange={value => setTimes(previous => ({ ...previous, [date]: { start: previous[date]?.start || "", end: value } }))} /></div></div>}
           </div>)}
         </div>}
         <label className="leave-field-label" htmlFor="leave-note-comment">{needsComment ? "訂正したい内容をコメントに書いてください（必須）" : "コメント（任意）"}</label>
