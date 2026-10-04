@@ -1704,6 +1704,46 @@ function ensureShiftEmployeeIdProperty(settings) {
  * - 全項目が空の行: 既存ページがある場合だけアーカイブ
  * - 変更なし: Notion APIへの書き込みなし
  */
+/** Notionへの書き込み（作成・更新・アーカイブ）を3件ずつ同時に送ります。混雑(429)・一時エラーは間をあけて再試行します。 */
+function runNotionBatch_(apiKey, ops) {
+  var pending = ops.map(function(op, index) {
+    var isCreate = op.url === "https://api.notion.com/v1/pages";
+    return { index: index, request: {
+      url: op.url,
+      method: isCreate ? "post" : "patch",
+      contentType: "application/json",
+      headers: { Authorization: "Bearer " + apiKey, "Notion-Version": "2022-06-28" },
+      payload: JSON.stringify(op.body),
+      muteHttpExceptions: true
+    } };
+  });
+  var CHUNK = 3;
+  var attempt = 0;
+  while (pending.length) {
+    var retry = [];
+    var lastError = "";
+    for (var start = 0; start < pending.length; start += CHUNK) {
+      var chunk = pending.slice(start, start + CHUNK);
+      var responses = UrlFetchApp.fetchAll(chunk.map(function(item) { return item.request; }));
+      responses.forEach(function(response, k) {
+        var code = response.getResponseCode();
+        if (code >= 200 && code < 300) return;
+        if (code === 429 || code >= 500) { retry.push(chunk[k]); return; }
+        var message = response.getContentText();
+        try { message = JSON.parse(message).message || message; } catch (_) {}
+        lastError = "Notion API Error: " + message;
+      });
+      if (lastError) throw new Error(lastError);
+      Utilities.sleep(150);
+    }
+    if (!retry.length) break;
+    attempt++;
+    if (attempt > 5) throw new Error("Notionが混み合っていて保存を完了できませんでした。少し待ってからもう一度お試しください。");
+    Utilities.sleep(1500 * attempt);
+    pending = retry;
+  }
+}
+
 function saveShiftMonth(data) {
   var lock = shiftLockHandle_();
   try {
@@ -1772,6 +1812,7 @@ function saveShiftMonth(data) {
     var cleared = 0;
     var unchanged = 0;
     var seen = {};
+    var notionOps = [];
 
     incomingRows.forEach(function(rawRow) {
       var employeeName = sanitizeText(rawRow["社員名"], 100);
@@ -1797,9 +1838,8 @@ function saveShiftMonth(data) {
       // 空欄は新規ページを作らず、既存ページだけをアーカイブします。
       if (!hasContent) {
         matches.forEach(function(match) {
-          requestNotion(settings.apiKey, "https://api.notion.com/v1/pages/" + match.page.id, "patch", { archived: true });
+          notionOps.push({ url: "https://api.notion.com/v1/pages/" + match.page.id, body: { archived: true } });
           cleared++;
-          Utilities.sleep(350);
         });
         if (!matches.length) unchanged++;
         return;
@@ -1820,9 +1860,8 @@ function saveShiftMonth(data) {
       };
 
       if (!matches.length) {
-        createNotionPage(settings.apiKey, settings.databaseId, properties);
+        notionOps.push({ url: "https://api.notion.com/v1/pages", body: { parent: { database_id: settings.databaseId }, properties: properties } });
         created++;
-        Utilities.sleep(350);
         return;
       }
 
@@ -1836,21 +1875,20 @@ function saveShiftMonth(data) {
         String(current["全体補足種別"] || "") !== globalRemarkType ||
         String(current["全体補足内容"] || "") !== globalRemarkText;
       if (isChanged) {
-        updateNotionPage(settings.apiKey, matches[0].page.id, properties);
+        notionOps.push({ url: "https://api.notion.com/v1/pages/" + matches[0].page.id, body: { properties: properties } });
         updated++;
-        Utilities.sleep(350);
       } else {
         unchanged++;
       }
 
       // 過去の不具合等で同じ社員・日付が重複していた場合は1件へ整理します。
       for (var i = 1; i < matches.length; i++) {
-        requestNotion(settings.apiKey, "https://api.notion.com/v1/pages/" + matches[i].page.id, "patch", { archived: true });
+        notionOps.push({ url: "https://api.notion.com/v1/pages/" + matches[i].page.id, body: { archived: true } });
         cleared++;
-        Utilities.sleep(350);
       }
     });
 
+    runNotionBatch_(settings.apiKey, notionOps);
     appendShiftAudit(data, "月次シフト保存", periodStart + "〜" + periodEnd, null, { created: created, updated: updated, cleared: cleared, unchanged: unchanged });
     return createJsonDataResponse({
       success: true,
