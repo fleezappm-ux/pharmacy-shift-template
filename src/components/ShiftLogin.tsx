@@ -14,10 +14,15 @@ export function ShiftLogin({ employees, onLogin }: { employees: EmployeeMasterIt
   // 前回の端末内の名簿は、サーバーから取れなかった時だけの予備にします（初期化後の古い名前を出さないため）。
   const [operatorOptions, setOperatorOptions] = useState<ShiftLoginEmployee[]>([]);
   const [listState, setListState] = useState<"loading" | "ready" | "failed">("loading");
-  useEffect(() => { fetchShiftLoginEmployees().then(items => {
-    setOperatorOptions(items.filter(item => !/^従業員[A-EＡ-Ｅ]$/.test(item.displayName || item.name)));
-    setListState("ready");
-  }).catch(() => { setOperatorOptions(employees); setListState("failed"); }); }, []);
+  const loadOperators = () => {
+    setListState("loading");
+    fetchShiftLoginEmployees().then(items => {
+      setOperatorOptions(items.filter(item => !/^従業員[A-EＡ-Ｅ]$/.test(item.displayName || item.name)));
+      setListState("ready");
+    }).catch(() => { setOperatorOptions(employees); setListState("failed"); });
+  };
+  useEffect(() => { loadOperators(); // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [loading, setLoading] = useState(false);
   const submit = async () => {
     if (!loginId.trim() || !password || !operatorId) return toast.error("ID・パスワード・操作員を入力してください");
@@ -43,7 +48,8 @@ export function ShiftLogin({ employees, onLogin }: { employees: EmployeeMasterIt
         {operatorOptions.filter(item => item.active).map(item => <option key={item.id} value={item.id}>{item.displayName || item.name}</option>)}
       </select>
       {listState === "loading" && <p className="mt-2 text-xs text-slate-500">名前の一覧を読み込み中…</p>}
-      {listState !== "loading" && operatorOptions.filter(item => item.active).length === 0 && <p className="mt-2 text-xs font-bold text-red-600">従業員マスタが未設定です。管理者へ確認してください。</p>}
+      {listState === "failed" && operatorOptions.filter(item => item.active).length === 0 && <div className="mt-2 rounded-lg bg-red-50 p-3 text-xs font-bold text-red-700">名前の一覧を読み込めませんでした（通信が混んでいます）。<button type="button" className="ml-2 rounded-lg border border-red-300 bg-white px-3 py-1 text-red-700" onClick={loadOperators}>もう一度読み込む</button></div>}
+      {listState === "ready" && operatorOptions.filter(item => item.active).length === 0 && <p className="mt-2 text-xs font-bold text-red-600">従業員マスタが未設定です。管理者へ確認してください。</p>}
       <Button className="mt-6 h-12 w-full rounded-xl font-bold" disabled={loading} onClick={() => void submit()}><LogIn className="mr-2 h-4 w-4" />{loading ? "確認中…" : "ログイン"}</Button>
       <p className="mt-4 text-center text-[11px] text-slate-400">ID・パスワードを忘れた場合は管理者へ確認してください。</p>
     </section>
