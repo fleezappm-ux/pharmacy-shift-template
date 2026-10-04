@@ -214,12 +214,13 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
             <strong>{format(new Date(`${date}T00:00:00`), "yyyy/M/d（E）", { locale: ja })}</strong>
             <span><b>{draft.type}</b><small>現在のシフト：{draft.shiftLabel}</small></span>
             <button type="button" onClick={() => updateDraft(date, "")} aria-label={`${date}を削除`}><Trash2 className="w-4 h-4" /></button>
-            {draft.type === "出勤希望" && <div className="col-span-full mt-2 w-full"><p className="text-xs font-bold text-amber-700">{times[date]?.start && times[date]?.end ? "希望時間" : "希望時間を入力してください"}</p><div className="flex gap-2"><input className="w-1/2 rounded border p-2" type="time" aria-label={`${date}の開始時間`} value={times[date]?.start || ""} onChange={event => setTimes(previous => ({ ...previous, [date]: { start: event.target.value, end: previous[date]?.end || "" } }))} /><input className="w-1/2 rounded border p-2" type="time" aria-label={`${date}の終了時間`} value={times[date]?.end || ""} onChange={event => setTimes(previous => ({ ...previous, [date]: { start: previous[date]?.start || "", end: event.target.value } }))} /></div></div>}
+            {draft.type === "出勤希望" && <div className="col-span-full mt-2 w-full"><p className={`text-xs font-bold ${times[date]?.start && times[date]?.end && times[date].start >= times[date].end ? "text-red-700" : "text-amber-700"}`}>{!(times[date]?.start && times[date]?.end) ? "希望時間を入力してください" : times[date].start >= times[date].end ? "⚠ 終わりの時間が始めより前です。直すと提出できます" : "希望時間"}</p><div className="flex gap-2"><input className="w-1/2 rounded border p-2" type="time" aria-label={`${date}の開始時間`} value={times[date]?.start || ""} onChange={event => setTimes(previous => ({ ...previous, [date]: { start: event.target.value, end: previous[date]?.end || "" } }))} /><input className="w-1/2 rounded border p-2" type="time" aria-label={`${date}の終了時間`} value={times[date]?.end || ""} onChange={event => setTimes(previous => ({ ...previous, [date]: { start: previous[date]?.start || "", end: event.target.value } }))} /></div></div>}
           </div>)}
         </div>}
         <label className="leave-field-label" htmlFor="leave-note-comment">{needsComment ? "訂正したい内容をコメントに書いてください（必須）" : "コメント（任意）"}</label>
         <textarea id="leave-note-comment" value={comment} onChange={event => setComment(event.target.value)} placeholder="まとめて伝えたいことがあれば入力してください" rows={3} />
         {error && <p role="alert" className="leave-submit-error">{error}</p>}
+        {hasInvalidTime && <p role="alert" className="leave-submit-error">提出できません：出勤希望の時間を確認してください（終わりの時間は始めより後にします）</p>}
         <Button className="w-full h-12 font-bold" disabled={!draftEntries.length || loading || submitting || (needsComment && !comment.trim()) || hasInvalidTime} onClick={() => void submitNote()}><Send className="w-4 h-4 mr-2" />{submitting ? "提出中…" : "このノートを提出"}</Button>
       </section>
       <section className="leave-request-card">
