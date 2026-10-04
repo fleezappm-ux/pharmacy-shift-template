@@ -15,6 +15,7 @@ export function AutoDraftSettings({ settings, onChange, onStart, run, rangeLabel
     {!settings.enabled && <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">現在、シフト案の自動作成は停止しています。作成済みのシフト案は削除されません。</p>}
     {run && run.state !== "idle" && <div role="status" className={`rounded-xl border-2 p-4 text-sm font-bold leading-6 ${run.state === "running" ? "border-amber-400 bg-amber-100 text-amber-950" : run.state === "done" ? "border-emerald-400 bg-emerald-50 text-emerald-900" : "border-red-400 bg-red-50 text-red-800"}`}>{run.state === "running" ? "⏳ " : run.state === "done" ? "✓ " : "⚠ "}{run.message}{run.at && <span className="block text-xs font-normal">{run.at}</span>}{run.state === "error" && <Button className="mt-2 block" variant="outline" size="sm" onClick={() => void onStart()}>もう一度やってみる</Button>}</div>}
     {settings.enabled && !settings.started && <Button className="h-12 w-full font-bold" disabled={run?.state === "running"} onClick={() => void onStart()}><Play className="mr-2 h-4 w-4" />シフト案の自動作成を開始する</Button>}
+    {settings.enabled && settings.started && <Button variant="outline" className="h-12 w-full font-bold" disabled={run?.state === "running"} onClick={() => void onStart()}><Play className="mr-2 h-4 w-4" />{run?.state === "running" ? "作成中…" : "シフト案を作り足す（足りない分だけ作ります）"}</Button>}
     {settings.started && <div className="rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-800">自動作成：稼働中{settings.lastRunAt ? `　最終作成 ${new Date(settings.lastRunAt).toLocaleString("ja-JP")}` : ""}</div>}
   </section>;
 }
