@@ -38,6 +38,8 @@ jobs:
       - run: npm run build
         env:
           VITE_SHIFT_GAS_URL: ${{ secrets.VITE_SHIFT_GAS_URL }}
+          # リポジトリ名を変えて複製しても、公開サイトが真っ白にならないように、公開先の名前から自動で決める
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist

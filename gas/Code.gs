@@ -758,6 +758,8 @@ function checkShiftSetup() {
   ["NOTION_API_KEY", "NOTION_SHIFT_DATABASE_ID", "NOTION_SHIFT_REQUEST_DATABASE_ID", "NOTION_STORE_DATABASE_ID", "STORE_ID", "SHIFT_API_KEY"].forEach(function(key) {
     mark(!!p.getProperty(key), key + "（スクリプトプロパティ）", p.getProperty(key) ? "" : "未設定です");
   });
+  var keyValue = p.getProperty("SHIFT_API_KEY") || "";
+  if (keyValue) mark(keyValue.length >= 10 && !/^\d+$/.test(keyValue) && !/^[a-zA-Z]+$/.test(keyValue), "SHIFT_API_KEY（強さ）", "10文字以上で、英字と数字をまぜてください（短い・数字だけ・英字だけは、推測されやすいためNG）");
   mark(!!p.getProperty("SHIFT_ADMIN_PASSWORD_HASH"), "管理者ログイン", p.getProperty("SHIFT_ADMIN_PASSWORD_HASH") ? "" : "configureShiftAdmin() を実行してください");
   mark(!!p.getProperty("SHIFT_EMPLOYEE_PASSWORD_HASH"), "従業員ログイン", p.getProperty("SHIFT_EMPLOYEE_PASSWORD_HASH") ? "" : "configureShiftEmployeeLogin() を実行してください");
   mark(!!p.getProperty("SHIFT_EMPLOYEE_MASTER_JSON"), "最初の操作員", p.getProperty("SHIFT_EMPLOYEE_MASTER_JSON") ? "" : "initializeShiftOperator() を実行してください");
