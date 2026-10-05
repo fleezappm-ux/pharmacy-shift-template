@@ -32,7 +32,7 @@
 | `NOTION_SHIFT_REQUEST_DATABASE_ID` | シフト希望届のID |
 | `NOTION_STORE_DATABASE_ID` | 店舗設定DBのID |
 | `STORE_ID` | 店ごとの名前。例 `STORE-AOI-01` |
-| `SHIFT_API_KEY` | **管理者用の接続キー**。長いランダムな文字列（12文字以上、英数字まぜる）。自分で決めて控える |
+| `SHIFT_API_KEY` | **管理者用の接続キー**。長いランダムな文字列（10文字以上、英字と数字をまぜる）。自分で決めて控える |
 | `SHIFT_ADMIN_LOGIN_ID` | 管理者のログインID |
 | `SHIFT_ADMIN_SETUP_PASSWORD` | 管理者のパスワード |
 | `SHIFT_EMPLOYEE_LOGIN_ID` | 従業員みんなで使うログインID |
