@@ -1986,6 +1986,7 @@ export default function App() {
         </div>
       </aside>
 
+      {appSession?.role === "admin" && !getManagementApiKey() && activeTab !== "admin" && <div role="status" className="fixed inset-x-3 top-3 z-[60] rounded-xl bg-amber-400 px-4 py-3 text-sm font-bold text-slate-900 shadow-xl"><p>最初に1回だけ、管理者用の接続キーを入れてください。入れるまで、シフトは保存できません。</p><button type="button" className="mt-2 rounded-lg bg-white px-3 py-1 text-sm font-black text-slate-900" onClick={() => { setActiveTab("admin"); setSettingsPage("other"); }}>接続キーを入れる</button></div>}
       {appSession?.role === "admin" && pendingStatus.count > 0 && pendingStatus.lastError && <div role="alert" className="fixed inset-x-3 top-3 z-[70] rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white shadow-xl"><p>⚠ Notionへの反映が終わっていません（{pendingStatus.count}件）。内容はサーバーに保存済みで、画面には表示されます。自動で再試行しています。</p><p className="mt-1 text-xs font-normal">{pendingStatus.lastError}</p><button type="button" disabled={pendingStatus.flushing} className="mt-2 rounded-lg bg-white px-3 py-1 text-sm font-black text-red-700 disabled:opacity-60" onClick={() => { void flushPendingNow(); }}>{pendingStatus.flushing ? "反映中…" : "今すぐ再試行"}</button></div>}
 
       {/* Mobile bottom bar (PCはサイドバーのまま) */}
