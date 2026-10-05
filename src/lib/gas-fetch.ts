@@ -18,14 +18,26 @@ async function acquire() {
 function release() { active -= 1; waiting.shift()?.(); }
 
 async function sendWithRetry(init: RequestInit, canRetry: boolean): Promise<Response> {
-  // 「読み込み」は25秒返事がなければ打ち切って、やり直す（固まった通信が枠を占領し続けないように）
+  // 「読み込み」は25秒返事がなければ打ち切って（その前の7秒で、もう1本を並走させる）、やり直す（固まった通信が枠を占領し続けないように）
   const attemptOnce = async (): Promise<Response | null> => {
     const timer = new AbortController();
     const timerId = canRetry ? window.setTimeout(() => timer.abort(), 25000) : undefined;
     const outer = init.signal;
     const onOuterAbort = () => timer.abort();
     outer?.addEventListener("abort", onOuterAbort);
-    try { return await fetch(getGasUrl(), { ...init, signal: canRetry ? timer.signal : init.signal }); }
+    try {
+      if (!canRetry) return await fetch(getGasUrl(), { ...init, signal: init.signal });
+      // 読み込みは、7秒たっても返事がなければ同じ読み込みをもう1本送り、先に返った方を使う
+      // （Google側がたまに十数秒止まるのを避けるため。読み込みは何度送っても害がない）
+      const run = () => fetch(getGasUrl(), { ...init, signal: timer.signal }).catch(() => null);
+      return await new Promise<Response | null>(resolve => {
+        let pending = 1; let done = false;
+        const finish = (r: Response | null) => { pending -= 1; if (r && !done) { done = true; resolve(r); } else if (pending === 0 && !done) resolve(null); };
+        const first = run();
+        const hedgeId = window.setTimeout(() => { pending += 1; void run().then(finish); }, 7000);
+        void first.then(r => { window.clearTimeout(hedgeId); finish(r); });
+      });
+    }
     catch { return null; }
     finally { if (timerId !== undefined) window.clearTimeout(timerId); outer?.removeEventListener("abort", onOuterAbort); }
   };
