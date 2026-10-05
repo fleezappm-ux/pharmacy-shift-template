@@ -36,7 +36,7 @@ function dispatchShiftAction_(data) {
     // 公開ログイン操作以外は、ルーティング時に必ずセッションを検証する。
     // 各関数内の本人・接続キー・管理者チェックも引き続き適用する。
     var publicActions = ["loginShift", "getShiftLoginEmployees", "getShiftResetEpoch"];
-    var adminActions = ["previewTemplateReset", "getTemplateResetStatus", "runTemplateReset", "clearTemplateShiftRemarks", "saveShiftEmployeeMaster", "saveShiftRoleMaster", "saveShiftHomeLayout", "saveShiftAdminNotice", "deleteShiftAdminNotice", "saveShiftAdminNoticeVisibility", "saveShiftWorkTimeMaster", "saveShiftCycleMaster", "saveShiftAutoDraftSettings", "saveShiftStoreBoardVisibility", "saveShiftCorrectionVisibility", "updateShiftLeaveRequestStatus", "deleteShiftLeaveRequest", "saveShiftSpecialDayRules", "saveShiftCalendarPeriodSettings", "saveShiftPeriodStatus", "saveShiftStoreSettings", "checkShiftApiKey", "saveShiftMonth"];
+    var adminActions = ["previewTemplateReset", "getTemplateResetStatus", "runTemplateReset", "clearTemplateShiftRemarks", "saveShiftEmployeeMaster", "saveShiftRoleMaster", "saveShiftHomeLayout", "saveShiftAdminNotice", "deleteShiftAdminNotice", "saveShiftAdminNoticeVisibility", "saveShiftWorkTimeMaster", "saveShiftCycleMaster", "saveShiftAutoDraftSettings", "saveShiftStoreBoardVisibility", "saveShiftCorrectionVisibility", "updateShiftLeaveRequestStatus", "deleteShiftLeaveRequest", "saveShiftSpecialDayRules", "saveShiftCalendarPeriodSettings", "saveShiftPeriodStatus", "saveShiftStoreSettings", "checkShiftApiKey", "saveShiftMonth", "flushShiftPending"];
     if (publicActions.indexOf(data.action) < 0) requireShiftSession(data.sessionToken, adminActions.indexOf(data.action) >= 0 ? "admin" : null);
     if (data.action === "previewTemplateReset") return previewTemplateReset(data);
     if (data.action === "getTemplateResetStatus") return getTemplateResetStatus(data);
@@ -86,6 +86,8 @@ function dispatchShiftAction_(data) {
     if (data.action === "getShiftPeriodStatus") return getShiftPeriodStatus(data);
     if (data.action === "saveShiftPeriodStatus") return saveShiftPeriodStatus(data);
     if (data.action === "saveShiftMonth") return saveShiftMonth(data);
+    if (data.action === "flushShiftPending") return flushShiftPending(data);
+    if (data.action === "getShiftPendingStatus") return getShiftPendingStatus(data);
   return createJsonResponse(false, "未対応のシフト操作です。");
 }
 
@@ -587,7 +589,7 @@ function getShifts(data) {
       obj.id = page.id;
       return obj;
     });
-    return createJsonDataResponse({ success: true, shifts: shifts });
+    return createJsonDataResponse({ success: true, shifts: overlayShiftPending_(shifts) });
   } catch (error) {
     console.error(error);
     return createJsonResponse(false, error.message || "シフトの取得エラーが発生しました。");
@@ -1798,43 +1800,8 @@ function runNotionBatch_(apiKey, ops) {
   }
 }
 
-function saveShiftMonth(data) {
-  var timingStart = Date.now();
-  var timing = {};
-  var lock = shiftLockHandle_();
-  try {
-    verifyShiftApiKey(data.shiftApiKey);
-    if (!lock.tryLock(30000)) throw new Error("別の保存処理を実行中です。少し待ってから再度お試しください。");
-    timing.lockMs = Date.now() - timingStart;
-
-    // 確定済みの期間はサーバー側でも保存を拒否します（画面の制限をすり抜けた場合の保険）。
-    // 画面から送られた期間ではなく、保存する行の日付範囲（行が無ければ期間）と重なる確定済み期間があれば拒否します。
-    var lockPeriodStart = sanitizeDateValue(data.periodStart);
-    var lockPeriodEnd = sanitizeDateValue(data.periodEnd);
-    var lockRangeStart = lockPeriodStart || "", lockRangeEnd = lockPeriodEnd || lockPeriodStart || "";
-    var lockRowDates = (Array.isArray(data.shifts) ? data.shifts : []).map(function(row) { return row ? String(row["日付"] || "") : ""; }).filter(function(value) { return /^\d{4}-\d{2}-\d{2}$/.test(value); }).sort();
-    if (lockRowDates.length) { lockRangeStart = lockRowDates[0]; lockRangeEnd = lockRowDates[lockRowDates.length - 1]; }
-    if (lockRangeStart) {
-      var lockStatuses = {};
-      try { lockStatuses = JSON.parse(PropertiesService.getScriptProperties().getProperty("SHIFT_PERIOD_STATUSES_JSON") || "{}"); } catch (_) { lockStatuses = {}; }
-      Object.keys(lockStatuses).forEach(function(startKey) {
-        var status = lockStatuses[startKey];
-        if (!status || !status.locked || !/^\d{4}-\d{2}-\d{2}$/.test(startKey)) return;
-        var endKey = /^\d{4}-\d{2}-\d{2}$/.test(String(status.periodEnd || "")) ? String(status.periodEnd) : deriveShiftPeriodEnd_(startKey);
-        if (startKey <= lockRangeEnd && endKey >= lockRangeStart) throw new Error("この期間は確定済みのため保存できません。先に「確定を解除」してください。");
-      });
-    }
-
-    var settings = getShiftManagementSettings();
-    var updatedBy = sanitizeText(data.updatedBy, 100).trim();
-    if (!updatedBy) throw new Error("保存者名が指定されていません。");
-    ensureShiftSchema_(settings);
-    var periodStart = sanitizeDateValue(data.periodStart);
-    var periodEnd = sanitizeDateValue(data.periodEnd);
-    var incomingRows = Array.isArray(data.shifts) ? data.shifts : [];
-    if (!periodStart || !periodEnd || periodStart > periodEnd) throw new Error("保存期間が正しくありません。");
-    if (incomingRows.length > 500) throw new Error("一度に保存できる件数は500件までです。");
-
+/** 行をNotionへ書き込む本体（保存・溜まった分の反映の両方で使う）。 */
+function applyShiftRowsToNotion_(settings, incomingRows, periodStart, periodEnd, updatedBy, partial, timing, timingStart) {
     // 対象期間を最初に1回だけ読み込み、社員名＋日付で索引化します。
     // 変更分だけが送られてきたとき（partial）は、その日付の行だけをNotionから読む（期間全体を読むより速い）。
     var queryFilter = {
@@ -1843,7 +1810,7 @@ function saveShiftMonth(data) {
         { property: "日付", date: { on_or_before: periodEnd } }
       ]
     };
-    if (data.partial === true && incomingRows.length > 0 && incomingRows.length <= 60) {
+    if (partial === true && incomingRows.length > 0 && incomingRows.length <= 60) {
       var distinctDates = {};
       incomingRows.forEach(function(row) { distinctDates[sanitizeDateValue(row["日付"])] = true; });
       var dateList = Object.keys(distinctDates).filter(function(value) { return value; });
@@ -1922,7 +1889,7 @@ function saveShiftMonth(data) {
         "備考": createRichTextProperty(note),
         "全体補足種別": createRichTextProperty(globalRemarkType),
         "全体補足内容": createRichTextProperty(globalRemarkText),
-        "最終更新者氏名": createRichTextProperty(updatedBy)
+        "最終更新者氏名": createRichTextProperty(rawRow._u ? sanitizeText(rawRow._u, 100) : updatedBy)
       };
 
       if (!matches.length) {
@@ -1956,7 +1923,167 @@ function saveShiftMonth(data) {
 
     timing.diffMs = Date.now() - timingStart;
     runNotionBatch_(settings.apiKey, notionOps);
+    return { created: created, updated: updated, cleared: cleared, unchanged: unchanged };
+}
+
+var SHIFT_PENDING_KEY_ = "SHIFT_PENDING_JSON";
+
+/** Notionへの反映待ちの行（サーバー側の控え）。Notionへの書き込みを裏に回すため、ここに先に保存します。 */
+function readShiftPending_() {
+  try {
+    var o = JSON.parse(PropertiesService.getScriptProperties().getProperty(SHIFT_PENDING_KEY_) || "null");
+    if (o && o.rows && typeof o.rows === "object") return o;
+  } catch (_) {}
+  return { rows: {}, lastError: "", lastErrorAt: "" };
+}
+function writeShiftPending_(state) {
+  var p = PropertiesService.getScriptProperties();
+  if (!Object.keys(state.rows).length) { p.deleteProperty(SHIFT_PENDING_KEY_); return true; }
+  var json = JSON.stringify(state);
+  if (json.length > 8000) return false;
+  p.setProperty(SHIFT_PENDING_KEY_, json);
+  return true;
+}
+function shiftPendingRowKey_(row) { return (String(row["従業員ID"] || "") || String(row["社員名"] || "")) + "|" + String(row["日付"] || ""); }
+function normalizeShiftRow_(rawRow, periodStart, periodEnd, updatedBy) {
+  var employeeName = sanitizeText(rawRow["社員名"], 100);
+  var dateValue = sanitizeDateValue(rawRow["日付"]);
+  if (!employeeName || !dateValue || dateValue < periodStart || dateValue > periodEnd) throw new Error("月次シフト内に不正な社員名または日付があります。");
+  return {
+    "社員名": employeeName, "従業員ID": sanitizeText(rawRow["従業員ID"], 100), "日付": dateValue,
+    "シフト内容": sanitizeText(rawRow["シフト内容"], 200), "休憩時間": sanitizeText(rawRow["休憩時間"], 50), "実働時間": sanitizeText(rawRow["実働時間"], 50),
+    "備考": sanitizeText(rawRow["備考"], 500), "全体補足種別": sanitizeText(rawRow["全体補足種別"], 100), "全体補足内容": sanitizeText(rawRow["全体補足内容"], 500),
+    _u: updatedBy
+  };
+}
+/** 反映待ちの行を、Notionから読んだ一覧に重ねる（別の端末にも、保存した内容がすぐ見えるように）。 */
+function overlayShiftPending_(shifts) {
+  var state = readShiftPending_();
+  var keys = Object.keys(state.rows);
+  if (!keys.length) return shifts;
+  var drop = {};
+  keys.forEach(function(k) { var r = state.rows[k]; drop[k] = true; drop[String(r["社員名"]) + "|" + String(r["日付"])] = true; });
+  var kept = shifts.filter(function(sh) {
+    var d = sh["日付"] && sh["日付"].start ? String(sh["日付"].start).slice(0, 10) : "";
+    var name = String(sh["社員名"] || ""), id = String(sh["従業員ID"] || "");
+    return !(d && (drop[(id || name) + "|" + d] || drop[name + "|" + d]));
+  });
+  keys.forEach(function(k) {
+    var r = state.rows[k];
+    if (!(r["シフト内容"] || r["備考"] || r["全体補足種別"] || r["全体補足内容"])) return;
+    kept.push({ id: "pending-" + k, "社員名": r["社員名"], "従業員ID": r["従業員ID"], "日付": { start: r["日付"] }, "シフト内容": r["シフト内容"], "休憩時間": r["休憩時間"], "実働時間": r["実働時間"], "備考": r["備考"], "全体補足種別": r["全体補足種別"], "全体補足内容": r["全体補足内容"], "最終更新者氏名": r._u });
+  });
+  return kept;
+}
+/** 反映待ちの状態（件数・いちばん古い時刻・直近のエラー）。画面の警告表示に使う。 */
+function getShiftPendingStatus(data) {
+  var state = readShiftPending_();
+  var keys = Object.keys(state.rows);
+  var oldest = "";
+  keys.forEach(function(k) { var q = state.rows[k]._q || ""; if (q && (!oldest || q < oldest)) oldest = q; });
+  return createJsonDataResponse({ success: true, count: keys.length, oldestAt: oldest, lastError: state.lastError || "", lastErrorAt: state.lastErrorAt || "" });
+}
+/** 溜まっている行を、Notionへ書き込む。失敗したら溜めたまま残し、エラーを記録する。 */
+function flushShiftPending(data) {
+  var timingStart = Date.now();
+  var timing = {};
+  var lock = shiftLockHandle_();
+  try {
+    verifyShiftApiKey(data.shiftApiKey);
+    if (!lock.tryLock(30000)) throw new Error("別の保存処理を実行中です。少し待ってから再度お試しください。");
+    var state = readShiftPending_();
+    var keys = Object.keys(state.rows);
+    if (!keys.length) return createJsonDataResponse({ success: true, written: 0, pending: 0 });
+    try {
+      var settings = getShiftManagementSettings();
+      ensureShiftSchema_(settings);
+      var rows = keys.map(function(k) { return state.rows[k]; });
+      var dates = rows.map(function(r) { return r["日付"]; }).sort();
+      var applied = applyShiftRowsToNotion_(settings, rows, dates[0], dates[dates.length - 1], "", true, timing, timingStart);
+      PropertiesService.getScriptProperties().deleteProperty(SHIFT_PENDING_KEY_);
+      appendShiftAudit(data, "月次シフト保存(反映)", dates[0] + "〜" + dates[dates.length - 1], null, applied);
+      return createJsonDataResponse({ success: true, written: keys.length, pending: 0, created: applied.created, updated: applied.updated, cleared: applied.cleared, timing: timing });
+    } catch (error) {
+      state.lastError = String(error && error.message || error).slice(0, 200);
+      state.lastErrorAt = new Date().toISOString();
+      writeShiftPending_(state);
+      throw error;
+    }
+  } catch (error) {
+    console.error(error);
+    return createJsonResponse(false, error.message || "Notionへの反映に失敗しました。");
+  } finally {
+    try { lock.releaseLock(); } catch (ignore) {}
+  }
+}
+
+function saveShiftMonth(data) {
+  var timingStart = Date.now();
+  var timing = {};
+  var lock = shiftLockHandle_();
+  try {
+    verifyShiftApiKey(data.shiftApiKey);
+    if (!lock.tryLock(30000)) throw new Error("別の保存処理を実行中です。少し待ってから再度お試しください。");
+    timing.lockMs = Date.now() - timingStart;
+
+    // 確定済みの期間はサーバー側でも保存を拒否します（画面の制限をすり抜けた場合の保険）。
+    // 画面から送られた期間ではなく、保存する行の日付範囲（行が無ければ期間）と重なる確定済み期間があれば拒否します。
+    var lockPeriodStart = sanitizeDateValue(data.periodStart);
+    var lockPeriodEnd = sanitizeDateValue(data.periodEnd);
+    var lockRangeStart = lockPeriodStart || "", lockRangeEnd = lockPeriodEnd || lockPeriodStart || "";
+    var lockRowDates = (Array.isArray(data.shifts) ? data.shifts : []).map(function(row) { return row ? String(row["日付"] || "") : ""; }).filter(function(value) { return /^\d{4}-\d{2}-\d{2}$/.test(value); }).sort();
+    if (lockRowDates.length) { lockRangeStart = lockRowDates[0]; lockRangeEnd = lockRowDates[lockRowDates.length - 1]; }
+    if (lockRangeStart) {
+      var lockStatuses = {};
+      try { lockStatuses = JSON.parse(PropertiesService.getScriptProperties().getProperty("SHIFT_PERIOD_STATUSES_JSON") || "{}"); } catch (_) { lockStatuses = {}; }
+      Object.keys(lockStatuses).forEach(function(startKey) {
+        var status = lockStatuses[startKey];
+        if (!status || !status.locked || !/^\d{4}-\d{2}-\d{2}$/.test(startKey)) return;
+        var endKey = /^\d{4}-\d{2}-\d{2}$/.test(String(status.periodEnd || "")) ? String(status.periodEnd) : deriveShiftPeriodEnd_(startKey);
+        if (startKey <= lockRangeEnd && endKey >= lockRangeStart) throw new Error("この期間は確定済みのため保存できません。先に「確定を解除」してください。");
+      });
+    }
+
+    var settings = getShiftManagementSettings();
+    var updatedBy = sanitizeText(data.updatedBy, 100).trim();
+    if (!updatedBy) throw new Error("保存者名が指定されていません。");
+    ensureShiftSchema_(settings);
+    var periodStart = sanitizeDateValue(data.periodStart);
+    var periodEnd = sanitizeDateValue(data.periodEnd);
+    var incomingRows = Array.isArray(data.shifts) ? data.shifts : [];
+    if (!periodStart || !periodEnd || periodStart > periodEnd) throw new Error("保存期間が正しくありません。");
+    if (incomingRows.length > 500) throw new Error("一度に保存できる件数は500件までです。");
+
+    // 反映待ちの行が残っているときは、新しい保存分と合わせてNotionへ書く（古い内容で上書きしないため）。
+    var pendingState = readShiftPending_();
+    var pendingKeys = Object.keys(pendingState.rows);
+    var normalizedIncoming = incomingRows.map(function(row) { var n = normalizeShiftRow_(row, periodStart, periodEnd, updatedBy); n._q = new Date().toISOString(); return n; });
+    var seenKeys = {};
+    normalizedIncoming.forEach(function(row) { var k = shiftPendingRowKey_(row); if (seenKeys[k]) throw new Error("同じ社員・日付のシフトが重複しています。"); seenKeys[k] = true; });
+    if (data.defer === true && normalizedIncoming.length > 0) {
+      // 先にサーバー内の控えへ保存して、すぐ返事をする。Notionへの書き込みは、このあとの「反映」で行う。
+      normalizedIncoming.forEach(function(row) { pendingState.rows[shiftPendingRowKey_(row)] = row; });
+      if (writeShiftPending_(pendingState)) {
+        timing.totalMs = Date.now() - timingStart;
+        return createJsonDataResponse({ success: true, queued: true, pending: Object.keys(pendingState.rows).length, timing: timing, message: "保存しました（Notionへ反映中）。" });
+      }
+      normalizedIncoming.forEach(function(row) { delete pendingState.rows[shiftPendingRowKey_(row)]; });
+    }
+    if (pendingKeys.length) {
+      var mergedRows = {};
+      pendingKeys.forEach(function(k) { mergedRows[k] = pendingState.rows[k]; });
+      normalizedIncoming.forEach(function(row) { mergedRows[shiftPendingRowKey_(row)] = row; });
+      incomingRows = Object.keys(mergedRows).map(function(k) { return mergedRows[k]; });
+      var mergedDates = incomingRows.map(function(r) { return r["日付"]; }).sort();
+      periodStart = mergedDates[0] < periodStart ? mergedDates[0] : periodStart;
+      periodEnd = mergedDates[mergedDates.length - 1] > periodEnd ? mergedDates[mergedDates.length - 1] : periodEnd;
+      data.partial = true;
+    }
+
+    var applied = applyShiftRowsToNotion_(settings, incomingRows, periodStart, periodEnd, updatedBy, data.partial === true, timing, timingStart);
+    var created = applied.created, updated = applied.updated, cleared = applied.cleared, unchanged = applied.unchanged;
     timing.writeMs = Date.now() - timingStart;
+    if (pendingKeys.length) PropertiesService.getScriptProperties().deleteProperty(SHIFT_PENDING_KEY_);
     appendShiftAudit(data, "月次シフト保存", periodStart + "〜" + periodEnd, null, { created: created, updated: updated, cleared: cleared, unchanged: unchanged });
     timing.totalMs = Date.now() - timingStart;
     return createJsonDataResponse({
@@ -2178,7 +2305,7 @@ function runTemplateReset(data) {
       "SHIFT_CYCLE_MASTER_JSON", "SHIFT_AUTO_DRAFT_SETTINGS_JSON", "SHIFT_SPECIAL_DAY_RULES_JSON",
       "SHIFT_WORK_TIME_MASTER_" + getStoreId(),
       "SHIFT_CALENDAR_PERIOD_JSON", "SHIFT_PERIOD_STATUSES_JSON", "SHIFT_PAID_LEAVE_BALANCES_JSON",
-      "SHIFT_PAID_LEAVE_LEDGER_JSON", "SHIFT_AUDIT_LOG_JSON",
+      "SHIFT_PAID_LEAVE_LEDGER_JSON", "SHIFT_AUDIT_LOG_JSON", "SHIFT_PENDING_JSON",
       "SHIFT_BOARD_VISIBILITY_FALLBACK_" + getStoreId(),
       "SHIFT_CORRECTION_VISIBILITY_" + getStoreId(),
       "SHIFT_STORE_SETTINGS_JSON"
