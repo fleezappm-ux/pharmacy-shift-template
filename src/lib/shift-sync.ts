@@ -180,6 +180,25 @@ export async function fetchShiftsFromServer(existingEmployees: Employee[], throw
  * 表示中の1か月分を、ブラウザからGASへ1リクエストで送ります。
  * 空欄も含めて送るため、Notion側にある既存シフトの削除も反映できます。
  */
+// 前回までに保存できた内容（社員ID|日付 → 内容の署名）。これと比べて、変わったマスだけを送ります。
+// サーバーの内容を読み込めた後でだけ使い（読み込めていないときは今までどおり全部を送る）、
+// 変更が無ければ通信しません。
+let savedBaseline: Map<string, string> | null = null;
+const rowKey = (employeeId: string, date: string) => `${employeeId}|${date}`;
+// 勤務内容が空のマスは「何も無い」と同じ扱いにします（サーバーも空のマスは記録しないため）。
+const rowSignature = (name: string, shiftContent: string, breakTime: string, workTime: string) =>
+  shiftContent ? [name, shiftContent, breakTime, workTime].join("\u0001") : "";
+
+export function seedSavedBaseline(employees: Employee[] | null) {
+  if (!employees) { savedBaseline = null; return; }
+  const next = new Map<string, string>();
+  employees.forEach(employee => employee.shifts.forEach(shift => {
+    const signature = rowSignature(employee.name, buildShiftContent(shift.shift, shift.customShiftText), shift.breakTime || "", shift.workTime || "");
+    if (signature) next.set(rowKey(employee.id, shift.date.slice(0, 10)), signature);
+  }));
+  savedBaseline = next;
+}
+
 export async function saveMonthToServer(
   employees: Employee[],
   _globalRemarks: GlobalRemark[],
@@ -217,7 +236,15 @@ export async function saveMonthToServer(
     return rows;
   });
 
-  const json = await callGas("saveShiftMonth", { periodStart, periodEnd, updatedBy: updatedBy || "", shifts });
+  const signatureOf = (row: (typeof shifts)[number]) => rowSignature(String(row["社員名"]), String(row["シフト内容"]), String(row["休憩時間"]), String(row["実働時間"]));
+  const changed = savedBaseline ? shifts.filter(row => signatureOf(row) !== (savedBaseline!.get(rowKey(String(row["従業員ID"]), String(row["日付"]))) ?? "")) : shifts;
+  if (savedBaseline && changed.length === 0) return { created: 0, updated: 0, cleared: 0 };
+  const json = await callGas("saveShiftMonth", { periodStart, periodEnd, updatedBy: updatedBy || "", shifts: changed, ...(savedBaseline ? { partial: true } : {}) });
+  if (savedBaseline) shifts.forEach(row => {
+    const key = rowKey(String(row["従業員ID"]), String(row["日付"]));
+    const signature = signatureOf(row);
+    if (signature) savedBaseline!.set(key, signature); else savedBaseline!.delete(key);
+  });
   return {
     created: Number(json.created || 0),
     updated: Number(json.updated || 0),
