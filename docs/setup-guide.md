@@ -51,7 +51,7 @@
 
 ## 3. 公開サイトをつなぐ
 
-- ☐ 3-1. このリポジトリを自分のGitHubに**複製（Fork）**する
+- ☐ 3-1. このリポジトリを自分のGitHubに**複製（Fork）**する。複製したら、Actions タブを開き、「ワークフローを有効にする（I understand my workflows, go ahead and enable them）」を押す（押さないと、自動公開も見張り役も動きません）。リポジトリ名は自由に変えて大丈夫です
 - ☐ 3-2. 複製したリポジトリの Settings → Secrets and variables → Actions → New repository secret
   名前 `VITE_SHIFT_GAS_URL`、値は 2-7 のURL
 - ☐ 3-3. Settings → Pages → Source を「GitHub Actions」にする
