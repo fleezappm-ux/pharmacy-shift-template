@@ -82,7 +82,12 @@ function flushBuffer() {
   flushTimer = undefined;
   const items = buffer;
   buffer = [];
-  for (let i = 0; i < items.length; i += BATCH_SIZE) void sendBatch(items.slice(i, i + BATCH_SIZE));
+  // 時間のかかる読み込み（Notionから取るもの）は単独で送り、軽いものの足を引っ張らないようにする
+  const isHeavy = (item: Pending) => /"action"\s*:\s*"getShifts"/.test(String(item.init.body));
+  const heavy = items.filter(isHeavy);
+  const light = items.filter(item => !isHeavy(item));
+  heavy.forEach(item => { sendSingle(item.init).then(item.resolve, item.reject); });
+  for (let i = 0; i < light.length; i += BATCH_SIZE) void sendBatch(light.slice(i, i + BATCH_SIZE));
 }
 
 function queueRead(init: RequestInit): Promise<Response> {
