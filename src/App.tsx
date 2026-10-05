@@ -293,6 +293,7 @@ export default function App() {
   const [leaveRequestLoading, setLeaveRequestLoading] = useState(false);
   const [homeBoardRequests, setHomeBoardRequests] = useState<LeaveRequest[]>([]);
   const [homePendingCorrections, setHomePendingCorrections] = useState<LeaveRequest[]>([]);
+  const homeEarlierCache = useRef<{ key: string; items: LeaveRequest[] } | null>(null);
   const [boardPeriods, setBoardPeriods] = useState<BoardPeriod[]>([]);
   const [boardAnchor, setBoardAnchor] = useState(() => getCurrentShiftMonth(new Date(), calendarPeriodSettings));
   useEffect(() => { setBoardAnchor(getCurrentShiftMonth(new Date(), calendarPeriodSettings)); }, [calendarPeriodSettings.startDay, calendarPeriodSettings.endDay]);
@@ -478,16 +479,24 @@ export default function App() {
     let cancelled = false;
     const range = generateConfiguredDateRange(homeBoardMonth.getFullYear(), homeBoardMonth.getMonth() + 1, calendarPeriodSettings.startDay, calendarPeriodSettings.endDay);
     const requestsFor = (start: Date, end: Date) => fetchLeaveRequests(getDateStr(start), getDateStr(end));
+    // 保存待ちの申請（tmp-）があるうちは取り直さない（サーバーに届く前の状態で上書きしないため）。
+    if (leaveRequests.some(item => item.id.startsWith("tmp-"))) return;
+    const earlierKey = `${getDateStr(range[0])}|${calendarPeriodSettings.startDay}|${calendarPeriodSettings.endDay}`;
     const load = async () => {
-      const current = await requestsFor(range[0], range[range.length - 1]);
+      // 今の期間と過去2期間を同時に取る（前は順番待ちで遅かった）。過去分は期間が同じ間は使い回す。
+      const currentPromise = requestsFor(range[0], range[range.length - 1]);
+      const earlierPromise: Promise<LeaveRequest[]> = homeEarlierCache.current?.key === earlierKey
+        ? Promise.resolve(homeEarlierCache.current.items)
+        : Promise.all([-2, -1].map(offset => {
+          const anchor = addMonths(homeBoardMonth, offset);
+          const dates = generateConfiguredDateRange(anchor.getFullYear(), anchor.getMonth() + 1, calendarPeriodSettings.startDay, calendarPeriodSettings.endDay);
+          return requestsFor(dates[0], dates[dates.length - 1]);
+        })).then(list => { const items = list.flat(); homeEarlierCache.current = { key: earlierKey, items }; return items; });
+      const current = await currentPromise;
       if (cancelled) return;
       setHomeBoardRequests(current);
-      const earlier = await Promise.all([-2, -1].map(offset => {
-        const anchor = addMonths(homeBoardMonth, offset);
-        const dates = generateConfiguredDateRange(anchor.getFullYear(), anchor.getMonth() + 1, calendarPeriodSettings.startDay, calendarPeriodSettings.endDay);
-        return requestsFor(dates[0], dates[dates.length - 1]);
-      }));
-      if (!cancelled) setHomePendingCorrections([...earlier.flat(), ...current].filter(item => item.type === "訂正依頼" && item.status === "申請中"));
+      const earlier = await earlierPromise;
+      if (!cancelled) setHomePendingCorrections([...earlier, ...current].filter(item => item.type === "訂正依頼" && item.status === "申請中"));
     };
     void load().catch(error => { console.error("ホームのお知らせ取得に失敗しました", error); if (!cancelled) { setHomeBoardRequests([]); setHomePendingCorrections([]); } });
     return () => { cancelled = true; };
@@ -822,6 +831,7 @@ export default function App() {
   const handleLeaveRequestStatus = async (request: LeaveRequest, status: LeaveRequestStatus, rejectionReason = "") => {
     // 押した瞬間に画面へ反映し、サーバー保存は裏で行う（失敗したら元に戻す）。
     const apply = (saved: LeaveRequest) => {
+      if (homeEarlierCache.current) homeEarlierCache.current = { ...homeEarlierCache.current, items: homeEarlierCache.current.items.map(item => item.id === saved.id ? saved : item) };
       setLeaveRequests(prev => prev.map(item => item.id === saved.id ? saved : item));
       setBoardPeriods(prev => prev.map(period => ({ ...period, requests: period.requests.map(item => item.id === saved.id ? saved : item) })));
       setHomeBoardRequests(prev => prev.map(item => item.id === saved.id ? saved : item));
@@ -850,6 +860,7 @@ export default function App() {
       setLeaveRequests(prev => prev.filter(item => item.id !== request.id));
       setBoardPeriods(prev => prev.map(period => ({ ...period, requests: period.requests.filter(item => item.id !== request.id) })));
       setHomeBoardRequests(prev => prev.filter(item => item.id !== request.id));
+      if (homeEarlierCache.current) homeEarlierCache.current = { ...homeEarlierCache.current, items: homeEarlierCache.current.items.filter(item => item.id !== request.id) };
       toast.success("申請とお知らせを削除しました");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "申請を削除できませんでした");
