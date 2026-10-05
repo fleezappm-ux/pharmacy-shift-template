@@ -398,7 +398,10 @@ function readShiftBoardVisibilityValue() {
   var p = PropertiesService.getScriptProperties();
   var apiKey = p.getProperty("NOTION_API_KEY");
   var storeDbId = p.getProperty("NOTION_STORE_DATABASE_ID");
-  var fallback = p.getProperty("SHIFT_BOARD_VISIBILITY_FALLBACK_" + getStoreId()) || "immediate";
+  var stored = p.getProperty("SHIFT_BOARD_VISIBILITY_FALLBACK_" + getStoreId());
+  // 保存時にここへも書いているので、あればNotionへ問い合わせず（約0.7秒の節約）これを使う。
+  if (stored) return stored;
+  var fallback = "immediate";
   if (!apiKey || !storeDbId) return fallback;
   var rows = queryNotionDatabase(apiKey, storeDbId, {
     filter: { property: "店舗ID", rich_text: { equals: getStoreId() } },
@@ -583,16 +586,30 @@ function getShiftManagementSettings() {
 
 
 /** シフト管理DBの全レコードを返します。 */
+/** シフト一覧の短時間キャッシュ（Notionから毎回読むと約2秒かかるため）。書き込み・初期化のたびに破棄する。 */
+function shiftsCacheKey_() { return "SHIFTS_" + (PropertiesService.getScriptProperties().getProperty("SHIFT_RESET_EPOCH") || "0"); }
+function readShiftsCache_() {
+  try { var raw = CacheService.getScriptCache().get(shiftsCacheKey_()); return raw ? JSON.parse(raw) : null; } catch (_) { return null; }
+}
+function writeShiftsCache_(shifts) {
+  try { var json = JSON.stringify(shifts); if (json.length < 90000) CacheService.getScriptCache().put(shiftsCacheKey_(), json, 120); } catch (_) {}
+}
+function invalidateShiftsCache_() { try { CacheService.getScriptCache().remove(shiftsCacheKey_()); } catch (_) {} }
+
 function getShifts(data) {
   try {
     // doPostでログインセッションを確認済み。保存・削除系では接続キーも必須にする。
-    var settings = getShiftManagementSettings();
-    var pages = queryNotionDatabase(settings.apiKey, settings.databaseId, { page_size: 100 });
-    var shifts = pages.map(function(page) {
-      var obj = flattenStatusProperties(page.properties || {});
-      obj.id = page.id;
-      return obj;
-    });
+    var shifts = readShiftsCache_();
+    if (!shifts) {
+      var settings = getShiftManagementSettings();
+      var pages = queryNotionDatabase(settings.apiKey, settings.databaseId, { page_size: 100 });
+      shifts = pages.map(function(page) {
+        var obj = flattenStatusProperties(page.properties || {});
+        obj.id = page.id;
+        return obj;
+      });
+      writeShiftsCache_(shifts);
+    }
     return createJsonDataResponse({ success: true, shifts: overlayShiftPending_(shifts) });
   } catch (error) {
     console.error(error);
@@ -2004,6 +2021,7 @@ function flushShiftPending(data) {
       var rows = keys.map(function(k) { return state.rows[k]; });
       var dates = rows.map(function(r) { return r["日付"]; }).sort();
       var applied = applyShiftRowsToNotion_(settings, rows, dates[0], dates[dates.length - 1], "", true, timing, timingStart);
+      invalidateShiftsCache_();
       PropertiesService.getScriptProperties().deleteProperty(SHIFT_PENDING_KEY_);
       appendShiftAudit(data, "月次シフト保存(反映)", dates[0] + "〜" + dates[dates.length - 1], null, applied);
       return createJsonDataResponse({ success: true, written: keys.length, pending: 0, created: applied.created, updated: applied.updated, cleared: applied.cleared, timing: timing });
@@ -2087,6 +2105,7 @@ function saveShiftMonth(data) {
     var applied = applyShiftRowsToNotion_(settings, incomingRows, periodStart, periodEnd, updatedBy, data.partial === true, timing, timingStart);
     var created = applied.created, updated = applied.updated, cleared = applied.cleared, unchanged = applied.unchanged;
     timing.writeMs = Date.now() - timingStart;
+    invalidateShiftsCache_();
     if (pendingKeys.length) PropertiesService.getScriptProperties().deleteProperty(SHIFT_PENDING_KEY_);
     appendShiftAudit(data, "月次シフト保存", periodStart + "〜" + periodEnd, null, { created: created, updated: updated, cleared: cleared, unchanged: unchanged });
     timing.totalMs = Date.now() - timingStart;
@@ -2122,7 +2141,9 @@ function getShiftCorrectionVisibility(data) {
   try {
     requireShiftSession(data.sessionToken);
     var p = PropertiesService.getScriptProperties();
-    var fallback = p.getProperty("SHIFT_CORRECTION_VISIBILITY_" + getStoreId()) || "all";
+    var storedVisibility = p.getProperty("SHIFT_CORRECTION_VISIBILITY_" + getStoreId());
+    if (storedVisibility === "all" || storedVisibility === "private") return createJsonDataResponse({ success: true, visibility: storedVisibility });
+    var fallback = storedVisibility || "all";
     var apiKey = p.getProperty("NOTION_API_KEY"), dbId = p.getProperty("NOTION_STORE_DATABASE_ID");
     if (!apiKey || !dbId) return createJsonDataResponse({ success: true, visibility: fallback });
     var rows = queryNotionDatabase(apiKey, dbId, { filter: { property: "店舗ID", rich_text: { equals: getStoreId() } }, page_size: 1 });
@@ -2210,6 +2231,7 @@ function clearTemplateShiftRemarks(data) {
         "全体補足内容": createRichTextProperty("")
       });
     });
+    invalidateShiftsCache_();
     p.deleteProperty("SHIFT_DROPDOWN_MASTER_JSON");
     return createJsonDataResponse({ success: true, cleared: Math.min(targets.length, 25), remaining: Math.max(0, targets.length - 25) });
   } catch (error) { return createJsonResponse(false, error.message || "古い備考を削除できませんでした。"); }
@@ -2270,6 +2292,7 @@ function retryTemplateResetNotion(operation) {
 
 function runTemplateReset(data) {
   var lock = shiftLockHandle_();
+  invalidateShiftsCache_();
   var p, authorization, archived = 0, checkpointed = false;
   try {
     if (!lock.tryLock(10000)) throw new Error("別の処理中です。少し待って再試行してください。");
