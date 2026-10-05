@@ -407,10 +407,15 @@ function readShiftBoardVisibilityValue() {
     filter: { property: "店舗ID", rich_text: { equals: getStoreId() } },
     page_size: 1
   });
-  if (!rows.length) return fallback;
-  var obj = statusPageToObject(rows[0]);
-  var label = obj["休み希望公開設定"] || "";
-  return label ? shiftBoardVisibilityLabelToValue(label) : fallback;
+  var resolved = fallback;
+  if (rows.length) {
+    var obj = statusPageToObject(rows[0]);
+    var label = obj["休み希望公開設定"] || "";
+    if (label) resolved = shiftBoardVisibilityLabelToValue(label);
+  }
+  // 次からNotionへ問い合わせなくて済むよう、ここへ控えておく（保存時にも更新される）。
+  p.setProperty("SHIFT_BOARD_VISIBILITY_FALLBACK_" + getStoreId(), resolved);
+  return resolved;
 }
 
 function getShiftStoreBoardVisibility(data) {
@@ -2148,7 +2153,9 @@ function getShiftCorrectionVisibility(data) {
     if (!apiKey || !dbId) return createJsonDataResponse({ success: true, visibility: fallback });
     var rows = queryNotionDatabase(apiKey, dbId, { filter: { property: "店舗ID", rich_text: { equals: getStoreId() } }, page_size: 1 });
     var label = rows.length ? statusPageToObject(rows[0])["訂正依頼公開設定"] : "";
-    return createJsonDataResponse({ success: true, visibility: label === "全員に表示" ? "all" : label === "本人と管理者のみ" ? "private" : fallback });
+    var resolvedVisibility = label === "全員に表示" ? "all" : label === "本人と管理者のみ" ? "private" : (fallback === "private" ? "private" : "all");
+    p.setProperty("SHIFT_CORRECTION_VISIBILITY_" + getStoreId(), resolvedVisibility);
+    return createJsonDataResponse({ success: true, visibility: resolvedVisibility });
   } catch (error) { return createJsonResponse(false, error.message || "公開設定を取得できませんでした。"); }
 }
 
