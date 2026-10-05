@@ -749,6 +749,32 @@ function shiftAuthHash(value, salt) {
 
 
 
+/** 導入の自己診断：GASエディタでこの関数を実行すると、設定の抜けとNotionへのつながりを「実行ログ」に一覧で出します。値（キー・パスワード）は表示しません。何度実行しても安全です。 */
+function checkShiftSetup() {
+  var p = PropertiesService.getScriptProperties();
+  var lines = [];
+  var ng = 0;
+  function mark(ok, label, note) { if (!ok) ng++; lines.push((ok ? "OK   " : "NG   ") + label + (note ? "  … " + note : "")); }
+  ["NOTION_API_KEY", "NOTION_SHIFT_DATABASE_ID", "NOTION_SHIFT_REQUEST_DATABASE_ID", "NOTION_STORE_DATABASE_ID", "STORE_ID", "SHIFT_API_KEY"].forEach(function(key) {
+    mark(!!p.getProperty(key), key + "（スクリプトプロパティ）", p.getProperty(key) ? "" : "未設定です");
+  });
+  mark(!!p.getProperty("SHIFT_ADMIN_PASSWORD_HASH"), "管理者ログイン", p.getProperty("SHIFT_ADMIN_PASSWORD_HASH") ? "" : "configureShiftAdmin() を実行してください");
+  mark(!!p.getProperty("SHIFT_EMPLOYEE_PASSWORD_HASH"), "従業員ログイン", p.getProperty("SHIFT_EMPLOYEE_PASSWORD_HASH") ? "" : "configureShiftEmployeeLogin() を実行してください");
+  mark(!!p.getProperty("SHIFT_EMPLOYEE_MASTER_JSON"), "最初の操作員", p.getProperty("SHIFT_EMPLOYEE_MASTER_JSON") ? "" : "initializeShiftOperator() を実行してください");
+  var apiKey = p.getProperty("NOTION_API_KEY");
+  if (apiKey) {
+    [["NOTION_SHIFT_DATABASE_ID", "シフト管理DB"], ["NOTION_SHIFT_REQUEST_DATABASE_ID", "シフト希望届"], ["NOTION_STORE_DATABASE_ID", "店舗設定DB"]].forEach(function(pair) {
+      var id = p.getProperty(pair[0]);
+      if (!id) return;
+      try { requestNotion(apiKey, "https://api.notion.com/v1/databases/" + id, "get", null); mark(true, pair[1] + " にNotionからつながる"); }
+      catch (e) { mark(false, pair[1] + " にNotionからつながる", "つながりません。インテグレーションをこのDBに追加したか、IDが合っているか確認してください"); }
+    });
+  }
+  var summary = (ng === 0 ? "【すべてOK】導入の設定は整っています。" : "【要確認 " + ng + "件】NGの行を直して、もう一度実行してください。") + "\n" + lines.join("\n");
+  Logger.log(summary);
+  return summary;
+}
+
 function configureShiftAdmin() {
   var p = PropertiesService.getScriptProperties();
   var loginId = p.getProperty("SHIFT_ADMIN_LOGIN_ID");
