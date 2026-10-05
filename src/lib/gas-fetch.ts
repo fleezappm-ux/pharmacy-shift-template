@@ -38,17 +38,73 @@ async function sendWithRetry(init: RequestInit, canRetry: boolean): Promise<Resp
   return response;
 }
 
+// 「読み込み」は30ミリ秒ほどためて、まとめて1回の通信で送る（画面を開いた直後の20回以上の通信が数回になる）。
+// まとめ送りが失敗したとき（古いGASなど）は、1件ずつ送る方法に自動で戻る。
+const BATCH_WINDOW_MS = 30;
+const BATCH_SIZE = 8;
+type Pending = { init: RequestInit; resolve: (response: Response) => void; reject: (error: unknown) => void };
+let buffer: Pending[] = [];
+let flushTimer: number | undefined;
+
+async function sendSingle(init: RequestInit): Promise<Response> {
+  await acquire();
+  try { return await sendWithRetry(init, true); } finally { release(); }
+}
+
+function abortError() { return new DOMException("The operation was aborted.", "AbortError"); }
+
+async function sendBatch(items: Pending[]) {
+  const live = items.filter(item => {
+    if (item.init.signal?.aborted) { item.reject(abortError()); return false; }
+    return true;
+  });
+  if (live.length === 0) return;
+  if (live.length === 1) { sendSingle(live[0].init).then(live[0].resolve, live[0].reject); return; }
+  let results: unknown[] | null = null;
+  try {
+    const calls = live.map(item => JSON.parse(String(item.init.body)));
+    const init: RequestInit = { method: "POST", headers: live[0].init.headers, body: JSON.stringify({ action: "batchShift", calls }) };
+    await acquire();
+    let response: Response;
+    try { response = await sendWithRetry(init, true); } finally { release(); }
+    const json = await response.json();
+    if (json && json.success === true && Array.isArray(json.results) && json.results.length === live.length) results = json.results;
+  } catch { results = null; }
+  if (!results) {
+    // 1件ずつの方法に戻す
+    live.forEach(item => { sendSingle(item.init).then(item.resolve, item.reject); });
+    return;
+  }
+  live.forEach((item, index) => item.resolve(new Response(JSON.stringify(results![index]), { status: 200, headers: { "content-type": "application/json" } })));
+}
+
+function flushBuffer() {
+  flushTimer = undefined;
+  const items = buffer;
+  buffer = [];
+  for (let i = 0; i < items.length; i += BATCH_SIZE) void sendBatch(items.slice(i, i + BATCH_SIZE));
+}
+
+function queueRead(init: RequestInit): Promise<Response> {
+  return new Promise<Response>((resolve, reject) => {
+    buffer.push({ init, resolve, reject });
+    if (flushTimer === undefined) flushTimer = window.setTimeout(flushBuffer, BATCH_WINDOW_MS);
+  });
+}
+
 export function gasFetch(init: RequestInit): Promise<Response> {
   const body = typeof init.body === "string" ? init.body : "";
   const isRead = /"action"\s*:\s*"get/.test(body);
-  const run = async () => {
-    await acquire();
-    try { return await sendWithRetry(init, isRead); } finally { release(); }
-  };
-  if (!isRead) return run();
+  if (!isRead) {
+    const run = async () => {
+      await acquire();
+      try { return await sendWithRetry(init, false); } finally { release(); }
+    };
+    return run();
+  }
   let shared = inflight.get(body);
   if (!shared) {
-    shared = run().finally(() => { inflight.delete(body); });
+    shared = queueRead(init).finally(() => { inflight.delete(body); });
     inflight.set(body, shared);
   }
   return shared.then(response => response.clone());
