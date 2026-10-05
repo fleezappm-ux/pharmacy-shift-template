@@ -1114,7 +1114,7 @@ function getShiftCycleMaster(data) {
     var master = null;
     try { master = raw ? JSON.parse(raw) : null; } catch (_) { master = null; }
     return createJsonDataResponse({ success: true, master: master });
-  } catch (error) { return createJsonResponse(false, error.message || "クールマスターを取得できませんでした。"); }
+  } catch (error) { return createJsonResponse(false, error.message || "勤務パターンマスターを取得できませんでした。"); }
 }
 
 
@@ -1123,16 +1123,16 @@ function saveShiftCycleMaster(data) {
   try {
     requireShiftSession(data.sessionToken, "admin");
     var master = data.master;
-    if (!master || typeof master !== "object") throw new Error("クールマスターが正しくありません。");
+    if (!master || typeof master !== "object") throw new Error("勤務パターンマスターが正しくありません。");
     var names = master.names || {};
     var lengths = master.lengths || {};
     var patterns = master.patterns || {};
     var ids = Object.keys(names).slice(0, 30);
-    if (!ids.length) throw new Error("クールは最低1件必要です。");
+    if (!ids.length) throw new Error("勤務パターンは最低1件必要です。");
     var safe = { names: {}, lengths: {}, patterns: {}, assignments: {} };
     ids.forEach(function(id) {
       var length = Math.max(1, Math.min(4, Number(lengths[id]) || 1));
-      safe.names[id] = sanitizeText(names[id], 100).trim() || ("クール" + id);
+      safe.names[id] = sanitizeText(names[id], 100).trim() || ("パターン" + id);
       safe.lengths[id] = length;
       var pattern = Array.isArray(patterns[id]) ? patterns[id].slice(0, 7) : [];
       safe.patterns[id] = pattern.map(function(day) {
@@ -1155,10 +1155,10 @@ function saveShiftCycleMaster(data) {
     return withShiftLock_(function() {
       var beforeRaw = PropertiesService.getScriptProperties().getProperty("SHIFT_CYCLE_MASTER_JSON") || "";
       safeSetProperty_("SHIFT_CYCLE_MASTER_JSON", JSON.stringify(safe));
-      appendShiftAudit(data, "クールマスター保存", "SHIFT_CYCLE_MASTER", beforeRaw, safe);
+      appendShiftAudit(data, "勤務パターンマスター保存", "SHIFT_CYCLE_MASTER", beforeRaw, safe);
       return createJsonDataResponse({ success: true, master: safe });
     });
-  } catch (error) { return createJsonResponse(false, error.message || "クールマスターを保存できませんでした。"); }
+  } catch (error) { return createJsonResponse(false, error.message || "勤務パターンマスターを保存できませんでした。"); }
 }
 
 
