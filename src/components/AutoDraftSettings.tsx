@@ -7,8 +7,8 @@ export function AutoDraftSettings({ settings, onChange, onStart, run, rangeLabel
     <div className="flex items-center justify-between gap-4"><div><h2 className="flex items-center gap-2 font-black"><CalendarClock className="h-5 w-5 text-blue-600" />シフト案自動作成</h2><p className="mt-1 text-xs text-slate-500">次の期間から3期間分のシフト案を維持します。</p></div><Button variant={settings.enabled ? "default" : "outline"} onClick={() => onChange({ ...settings, enabled: !settings.enabled, started: settings.enabled ? false : settings.started })}><Power className="mr-2 h-4 w-4" />{settings.enabled ? "ON" : "OFF"}</Button></div>
     {rangeLabel && <div className="rounded-xl border-2 border-blue-300 bg-blue-50 p-4 text-sm font-bold text-blue-900">対象期間：<span className="text-lg font-black">{rangeLabel}</span><span className="mt-1 block text-xs font-normal text-blue-800">今の期間は対象外です。確定済みの期間は飛ばします。</span></div>}
     <div className="rounded-xl bg-slate-50 p-4 text-sm leading-7 text-slate-700"><strong className="block text-slate-900">作成ルール</strong>
-      <p>各従業員のクールを前月から継続します。週間の基準勤務扱いは、勤務時間にかかわらず5日です。</p>
-      <p>帯色だけでは勤務を変えません。定休日・特殊日の「休みにする」設定はシフト案の作成時とクール適用時に反映します。クールの週の進み方は変わりません。</p>
+      <p>各従業員の勤務パターンを前月から継続します。週間の基準勤務扱いは、勤務時間にかかわらず5日です。</p>
+      <p>帯色だけでは勤務を変えません。定休日・特殊日の「休みにする」設定はシフト案の作成時と勤務パターン適用時に反映します。勤務パターンの週の進み方は変わりません。</p>
       <p>確定済みシフトと手動変更済みの勤務は上書きしません。</p>
     </div>
     <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">✓ 切り替えると、その場で自動的に保存されます（保存ボタンはありません）</p>

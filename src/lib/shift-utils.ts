@@ -2,7 +2,7 @@
 import { ShiftType } from "../types";
 import { CyclePatterns } from "../constants";
 
-/** cyclePatterns（管理画面で編集可能なクール内容）から、指定した曜日・週の予定シフトを返します。 */
+/** cyclePatterns（管理画面で編集可能な勤務パターン内容）から、指定した曜日・週の予定シフトを返します。 */
 export function resolveCycleShift(
   patterns: CyclePatterns,
   cycleType: number,
