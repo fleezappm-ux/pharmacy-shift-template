@@ -40,7 +40,7 @@ function dispatchShiftAction_(data) {
     // 公開ログイン操作以外は、ルーティング時に必ずセッションを検証する。
     // 各関数内の本人・接続キー・管理者チェックも引き続き適用する。
     var publicActions = ["loginShift", "getShiftLoginEmployees", "getShiftResetEpoch"];
-    var adminActions = ["previewTemplateReset", "getTemplateResetStatus", "runTemplateReset", "clearTemplateShiftRemarks", "saveShiftEmployeeMaster", "saveShiftRoleMaster", "saveShiftHomeLayout", "saveShiftAdminNotice", "deleteShiftAdminNotice", "saveShiftAdminNoticeVisibility", "saveShiftWorkTimeMaster", "saveShiftCycleMaster", "saveShiftAutoDraftSettings", "saveShiftStoreBoardVisibility", "saveShiftCorrectionVisibility", "updateShiftLeaveRequestStatus", "deleteShiftLeaveRequest", "saveShiftSpecialDayRules", "saveShiftCalendarPeriodSettings", "saveShiftPeriodStatus", "saveShiftStoreSettings", "checkShiftApiKey", "saveShiftMonth", "flushShiftPending"];
+    var adminActions = ["previewTemplateReset", "getTemplateResetStatus", "runTemplateReset", "clearTemplateShiftRemarks", "saveShiftEmployeeMaster", "saveShiftRoleMaster", "saveShiftHomeLayout", "saveShiftAdminNotice", "deleteShiftAdminNotice", "saveShiftAdminNoticeVisibility", "saveShiftWorkTimeMaster", "saveShiftCycleMaster", "saveShiftAutoDraftSettings", "saveShiftStoreBoardVisibility", "saveShiftCorrectionVisibility", "updateShiftLeaveRequestStatus", "deleteShiftLeaveRequest", "saveShiftSpecialDayRules", "saveShiftCalendarPeriodSettings", "saveShiftPeriodStatus", "saveShiftStoreSettings", "checkShiftApiKey", "saveShiftMonth", "flushShiftPending", "getShiftErrorLog", "clearShiftErrorLog"];
     if (publicActions.indexOf(data.action) < 0) requireShiftSession(data.sessionToken, adminActions.indexOf(data.action) >= 0 ? "admin" : null);
     if (data.action === "previewTemplateReset") return previewTemplateReset(data);
     if (data.action === "getTemplateResetStatus") return getTemplateResetStatus(data);
@@ -92,6 +92,9 @@ function dispatchShiftAction_(data) {
     if (data.action === "saveShiftMonth") return saveShiftMonth(data);
     if (data.action === "flushShiftPending") return flushShiftPending(data);
     if (data.action === "getShiftPendingStatus") return getShiftPendingStatus(data);
+    if (data.action === "logShiftClientError") return logShiftClientError(data);
+    if (data.action === "getShiftErrorLog") return getShiftErrorLog(data);
+    if (data.action === "clearShiftErrorLog") return clearShiftErrorLog(data);
   return createJsonResponse(false, "未対応のシフト操作です。");
 }
 
@@ -745,6 +748,32 @@ function shiftAuthHash(value, salt) {
 }
 
 
+
+/** 導入の自己診断：GASエディタでこの関数を実行すると、設定の抜けとNotionへのつながりを「実行ログ」に一覧で出します。値（キー・パスワード）は表示しません。何度実行しても安全です。 */
+function checkShiftSetup() {
+  var p = PropertiesService.getScriptProperties();
+  var lines = [];
+  var ng = 0;
+  function mark(ok, label, note) { if (!ok) ng++; lines.push((ok ? "OK   " : "NG   ") + label + (note ? "  … " + note : "")); }
+  ["NOTION_API_KEY", "NOTION_SHIFT_DATABASE_ID", "NOTION_SHIFT_REQUEST_DATABASE_ID", "NOTION_STORE_DATABASE_ID", "STORE_ID", "SHIFT_API_KEY"].forEach(function(key) {
+    mark(!!p.getProperty(key), key + "（スクリプトプロパティ）", p.getProperty(key) ? "" : "未設定です");
+  });
+  mark(!!p.getProperty("SHIFT_ADMIN_PASSWORD_HASH"), "管理者ログイン", p.getProperty("SHIFT_ADMIN_PASSWORD_HASH") ? "" : "configureShiftAdmin() を実行してください");
+  mark(!!p.getProperty("SHIFT_EMPLOYEE_PASSWORD_HASH"), "従業員ログイン", p.getProperty("SHIFT_EMPLOYEE_PASSWORD_HASH") ? "" : "configureShiftEmployeeLogin() を実行してください");
+  mark(!!p.getProperty("SHIFT_EMPLOYEE_MASTER_JSON"), "最初の操作員", p.getProperty("SHIFT_EMPLOYEE_MASTER_JSON") ? "" : "initializeShiftOperator() を実行してください");
+  var apiKey = p.getProperty("NOTION_API_KEY");
+  if (apiKey) {
+    [["NOTION_SHIFT_DATABASE_ID", "シフト管理DB"], ["NOTION_SHIFT_REQUEST_DATABASE_ID", "シフト希望届"], ["NOTION_STORE_DATABASE_ID", "店舗設定DB"]].forEach(function(pair) {
+      var id = p.getProperty(pair[0]);
+      if (!id) return;
+      try { requestNotion(apiKey, "https://api.notion.com/v1/databases/" + id, "get", null); mark(true, pair[1] + " にNotionからつながる"); }
+      catch (e) { mark(false, pair[1] + " にNotionからつながる", "つながりません。インテグレーションをこのDBに追加したか、IDが合っているか確認してください"); }
+    });
+  }
+  var summary = (ng === 0 ? "【すべてOK】導入の設定は整っています。" : "【要確認 " + ng + "件】NGの行を直して、もう一度実行してください。") + "\n" + lines.join("\n");
+  Logger.log(summary);
+  return summary;
+}
 
 function configureShiftAdmin() {
   var p = PropertiesService.getScriptProperties();
@@ -2009,6 +2038,44 @@ function getShiftPendingStatus(data) {
   keys.forEach(function(k) { var q = state.rows[k]._q || ""; if (q && (!oldest || q < oldest)) oldest = q; });
   return createJsonDataResponse({ success: true, count: keys.length, oldestAt: oldest, lastError: state.lastError || "", lastErrorAt: state.lastErrorAt || "" });
 }
+// ---------- エラー記録（画面で起きたエラーを、管理者が設定で見られるようにする） ----------
+var SHIFT_ERROR_LOG_KEY_ = "SHIFT_ERROR_LOG_JSON";
+function readShiftErrorLog_() {
+  try { var list = JSON.parse(PropertiesService.getScriptProperties().getProperty(SHIFT_ERROR_LOG_KEY_) || "[]"); return Array.isArray(list) ? list : []; }
+  catch (e) { return []; }
+}
+/** 画面側で起きたエラーを1件記録する（同じ内容は回数だけ増やす。直近15件、容量は約7KBまで）。記録に失敗しても画面には影響させない。 */
+function logShiftClientError(data) {
+  try {
+    var session = requireShiftSession(data.sessionToken);
+    var msg = sanitizeText(data.message, 300) || "(内容なし)";
+    var where = sanitizeText(data.where, 160);
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(3000)) return createJsonDataResponse({ success: true, skipped: true });
+    try {
+      var list = readShiftErrorLog_();
+      var now = new Date().toISOString();
+      var hit = null;
+      for (var i = 0; i < list.length; i++) { if (list[i].m === msg && list[i].w === where) { hit = list[i]; break; } }
+      if (hit) { hit.n = (hit.n || 1) + 1; hit.t = now; }
+      else list.push({ t: now, m: msg, w: where, n: 1, who: String((session && (session.employeeName || session.role)) || "").slice(0, 40) });
+      list.sort(function(a, b) { return a.t < b.t ? 1 : -1; });
+      list = list.slice(0, 15);
+      while (list.length > 1 && JSON.stringify(list).length > 7000) list.pop();
+      PropertiesService.getScriptProperties().setProperty(SHIFT_ERROR_LOG_KEY_, JSON.stringify(list));
+    } finally { lock.releaseLock(); }
+    return createJsonDataResponse({ success: true });
+  } catch (error) { return createJsonResponse(false, error.message || "記録できませんでした。"); }
+}
+function getShiftErrorLog(data) {
+  try { return createJsonDataResponse({ success: true, errors: readShiftErrorLog_() }); }
+  catch (error) { return createJsonResponse(false, error.message || "取得できませんでした。"); }
+}
+function clearShiftErrorLog(data) {
+  try { verifyShiftApiKey(data.shiftApiKey); PropertiesService.getScriptProperties().deleteProperty(SHIFT_ERROR_LOG_KEY_); return createJsonDataResponse({ success: true }); }
+  catch (error) { return createJsonResponse(false, error.message || "消去できませんでした。"); }
+}
+
 /** 溜まっている行を、Notionへ書き込む。失敗したら溜めたまま残し、エラーを記録する。 */
 function flushShiftPending(data) {
   var timingStart = Date.now();
@@ -2339,7 +2406,7 @@ function runTemplateReset(data) {
       "SHIFT_CYCLE_MASTER_JSON", "SHIFT_AUTO_DRAFT_SETTINGS_JSON", "SHIFT_SPECIAL_DAY_RULES_JSON",
       "SHIFT_WORK_TIME_MASTER_" + getStoreId(),
       "SHIFT_CALENDAR_PERIOD_JSON", "SHIFT_PERIOD_STATUSES_JSON", "SHIFT_PAID_LEAVE_BALANCES_JSON",
-      "SHIFT_PAID_LEAVE_LEDGER_JSON", "SHIFT_AUDIT_LOG_JSON", "SHIFT_PENDING_JSON",
+      "SHIFT_PAID_LEAVE_LEDGER_JSON", "SHIFT_AUDIT_LOG_JSON", "SHIFT_PENDING_JSON", "SHIFT_ERROR_LOG_JSON",
       "SHIFT_BOARD_VISIBILITY_FALLBACK_" + getStoreId(),
       "SHIFT_CORRECTION_VISIBILITY_" + getStoreId(),
       "SHIFT_STORE_SETTINGS_JSON"

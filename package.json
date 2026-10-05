@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test:worktime": "node tests/work-time-master.cjs && node tests/pending-queue.cjs 2>/dev/null && node --import tsx tests/work-time-options.ts",
+    "test:worktime": "node tests/work-time-master.cjs && node tests/pending-queue.cjs 2>/dev/null && node tests/error-log.cjs && node --import tsx tests/work-time-options.ts",
     "test:reset": "node tests/template-reset.cjs"
   },
   "dependencies": {

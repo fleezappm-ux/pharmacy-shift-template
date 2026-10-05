@@ -1,6 +1,7 @@
 import { AdminNotice, AdminNoticeVisibility, fetchAdminNotices, fetchAdminNoticeVisibility, saveAdminNoticeVisibility, createAdminNotice, removeAdminNotice } from "./lib/admin-notice-sync";
 import { templateStorage } from "./lib/template-storage";
 import { TemplateResetSettings, RESET_PENDING_KEY } from "./components/TemplateResetSettings";
+import { ErrorLogPanel } from "./components/ErrorLogPanel";
 import { ShiftToolGuide, type EmployeeGuideSection } from "./components/ShiftToolGuide";
 import { useState, useEffect, useRef } from "react";
 import { syncResetEpoch } from "./lib/reset-epoch";
@@ -2373,6 +2374,8 @@ export default function App() {
                         {(apiKeyCheck || apiKeyVerified) && <p role="status" className={`rounded-lg px-3 py-2 text-xs font-bold ${(apiKeyCheck ? apiKeyCheck.ok : apiKeyVerified) ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{apiKeyCheck ? (apiKeyCheck.ok ? "✓ " : "× ") + apiKeyCheck.message : "✓ この端末は接続確認ずみです"}</p>}
                         <p className="text-[11px] text-slate-500">従業員は共通の従業員ID・パスワードでログイン後、自分の名前を選んで希望を提出します。</p>
                       </div>
+                      <div className="pt-6 border-t border-slate-100"><ErrorLogPanel /></div>
+
                       <div className="pt-6 border-t border-slate-100">
                         <div className="flex items-center justify-between gap-4">
                           <div>
