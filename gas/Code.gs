@@ -3,6 +3,36 @@ function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
     if (!data || !data.action) throw new Error("actionが必要です。");
+    // 読み込みを1回の通信にまとめる（画面を開いた直後に何十回も通信すると遅いため）
+    if (data.action === "batchShift") return runShiftBatch_(data);
+    return dispatchShiftAction_(data);
+  } catch (error) {
+    return createJsonResponse(false, error.message || "処理に失敗しました。");
+  }
+}
+
+/** 「読み込み(get…)」だけを、まとめて実行します。1件ごとにログイン確認も行い、結果は同じ順番で返します。 */
+function runShiftBatch_(data) {
+  var calls = data.calls;
+  if (!Array.isArray(calls) || !calls.length || calls.length > 20) throw new Error("まとめて実行できる件数は1〜20件です。");
+  var results = [];
+  for (var i = 0; i < calls.length; i += 1) {
+    var out;
+    try {
+      var sub = calls[i];
+      if (!sub || typeof sub.action !== "string" || sub.action.indexOf("get") !== 0) throw new Error("読み込み以外はまとめて実行できません。");
+      out = JSON.parse(dispatchShiftAction_(sub).getContent());
+    } catch (error) {
+      out = { success: false, message: error.message || "処理に失敗しました。" };
+    }
+    results.push(out);
+  }
+  return createJsonDataResponse({ success: true, results: results });
+}
+
+/** 1件の操作を実行します（doPostとバッチの共通部分）。 */
+function dispatchShiftAction_(data) {
+  if (!data || !data.action) throw new Error("actionが必要です。");
     // 公開ログイン操作以外は、ルーティング時に必ずセッションを検証する。
     // 各関数内の本人・接続キー・管理者チェックも引き続き適用する。
     var publicActions = ["loginShift", "getShiftLoginEmployees", "getShiftResetEpoch"];
@@ -56,10 +86,7 @@ function doPost(e) {
     if (data.action === "getShiftPeriodStatus") return getShiftPeriodStatus(data);
     if (data.action === "saveShiftPeriodStatus") return saveShiftPeriodStatus(data);
     if (data.action === "saveShiftMonth") return saveShiftMonth(data);
-    return createJsonResponse(false, "未対応のシフト操作です。");
-  } catch (error) {
-    return createJsonResponse(false, error.message || "処理に失敗しました。");
-  }
+  return createJsonResponse(false, "未対応のシフト操作です。");
 }
 
 
