@@ -785,20 +785,27 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, appSession?.token]);
 
+  const leaveSubmitQueue = useRef<Promise<unknown>>(Promise.resolve());
   const handleLeaveRequestSubmit = async (input: { employeeId: string; employeeName: string; date: string; periodStart: string; periodEnd: string; type: LeaveRequestType; comment: string; commentVisibility: CommentVisibility; desiredWorkStart?: string; desiredWorkEnd?: string }) => {
     if (!input.periodStart || !input.periodEnd) throw new Error("対象期間がありません");
-    setLeaveRequestLoading(true);
-    try {
-      const saved = await submitLeaveRequest(input);
-      if (dateRange.length && input.periodStart === getDateStr(dateRange[0])) {
-        setLeaveRequests(prev => [...prev.filter(item => item.id !== saved.id && !(item.employeeName === saved.employeeName && item.date === saved.date && (item.type === "訂正依頼") === (saved.type === "訂正依頼"))), saved]);
+    // 押した瞬間に画面へ反映し、送信は裏で順番に行う（失敗したら元に戻して知らせる）。
+    const now = new Date().toISOString();
+    const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const temp = { id: tempId, employeeId: input.employeeId, employeeName: input.employeeName, date: input.date, periodStart: input.periodStart, periodEnd: input.periodEnd, type: input.type, comment: input.comment, commentVisibility: input.commentVisibility, status: "申請中", submittedAt: now, updatedAt: now, desiredWorkStart: input.desiredWorkStart, desiredWorkEnd: input.desiredWorkEnd } as LeaveRequest;
+    const inView = () => dateRange.length > 0 && input.periodStart === getDateStr(dateRange[0]);
+    const sameSlot = (item: LeaveRequest) => item.employeeName === input.employeeName && item.date === input.date && (item.type === "訂正依頼") === (input.type === "訂正依頼");
+    if (inView()) setLeaveRequests(prev => [...prev.filter(item => !sameSlot(item)), temp]);
+    toast.success(input.type === "訂正依頼" ? "訂正依頼を提出しました" : "希望を提出しました");
+    leaveSubmitQueue.current = leaveSubmitQueue.current.then(async () => {
+      try {
+        const saved = await submitLeaveRequest(input);
+        setLeaveRequests(prev => prev.map(item => item.id === tempId ? saved : item));
+      } catch (error) {
+        setLeaveRequests(prev => prev.filter(item => item.id !== tempId));
+        toast.error(`${input.date} の提出に失敗しました。もう一度提出してください（${error instanceof Error ? error.message : ""}）`);
       }
-      toast.success(input.type === "訂正依頼" ? "訂正依頼を提出しました" : "希望を提出しました");
-      return saved;
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "希望を提出できませんでした");
-      throw error;
-    } finally { setLeaveRequestLoading(false); }
+    });
+    return temp;
   };
 
   const handleLeaveRequestCancel = async (id: string) => {
@@ -813,26 +820,27 @@ export default function App() {
   };
 
   const handleLeaveRequestStatus = async (request: LeaveRequest, status: LeaveRequestStatus, rejectionReason = "") => {
-    setLeaveRequestLoading(true);
-    try {
-      const saved = await updateLeaveRequestStatus(request.id, status, rejectionReason);
+    // 押した瞬間に画面へ反映し、サーバー保存は裏で行う（失敗したら元に戻す）。
+    const apply = (saved: LeaveRequest) => {
       setLeaveRequests(prev => prev.map(item => item.id === saved.id ? saved : item));
       setBoardPeriods(prev => prev.map(period => ({ ...period, requests: period.requests.map(item => item.id === saved.id ? saved : item) })));
       setHomeBoardRequests(prev => prev.map(item => item.id === saved.id ? saved : item));
-      let note = "";
-      if (status === "承認" && request.status !== "承認" && request.date) {
-        const shift: ShiftType | null = request.type === "有給希望" ? "有休" : request.type === "休み希望" ? "休み" : null;
-        if (shift) {
-          const target = request.employeeId ? employees.find(item => item.id === request.employeeId) : employees.find(item => (item.displayName || item.name) === request.employeeName || item.name === request.employeeName);
-          if (target && dateRange.some(date => getDateStr(date) === request.date)) { handleShiftChange(target.id, request.date, shift); note = "（シフト表にも反映しました）"; }
-          else note = "（シフト表には反映されていません。シフト作成で手動入力してください）";
-        }
+    };
+    apply({ ...request, status, rejectionReason: status === "却下" ? rejectionReason : "", updatedAt: new Date().toISOString() } as LeaveRequest);
+    let note = "";
+    if (status === "承認" && request.status !== "承認" && request.date) {
+      const shift: ShiftType | null = request.type === "有給希望" ? "有休" : request.type === "休み希望" ? "休み" : null;
+      if (shift) {
+        const target = request.employeeId ? employees.find(item => item.id === request.employeeId) : employees.find(item => (item.displayName || item.name) === request.employeeName || item.name === request.employeeName);
+        if (target && dateRange.some(date => getDateStr(date) === request.date)) { handleShiftChange(target.id, request.date, shift); note = "（シフト表にも反映しました）"; }
+        else note = "（シフト表には反映されていません。シフト作成で手動入力してください）";
       }
-      toast.success(status === "申請中" ? "申請中に戻しました" : status === "承認" ? `承認しました${note}` : "却下しました");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "状態を更新できませんでした");
-      throw error;
-    } finally { setLeaveRequestLoading(false); }
+    }
+    toast.success(status === "申請中" ? "申請中に戻しました" : status === "承認" ? `承認しました${note}` : "却下しました");
+    void updateLeaveRequestStatus(request.id, status, rejectionReason).then(apply).catch(error => {
+      apply(request);
+      toast.error(`${request.employeeName}さんの状態を保存できなかったので元に戻しました（${error instanceof Error ? error.message : ""}）`);
+    });
   };
 
   const handleLeaveRequestDelete = async (request: LeaveRequest) => {
@@ -2047,7 +2055,7 @@ export default function App() {
             ) : activeTab === "requests" ? (
               <LeaveRequestView employees={dashboardEmployees} dates={dateRange} remarks={displayRemarks} requests={leaveRequests} locked={isLocked} loading={leaveRequestLoading || periodStatusLoading} operatorId={appSession.employeeId || ""} isAdmin={appSession.role === "admin"} onSubmit={handleLeaveRequestSubmit} onCancel={handleLeaveRequestCancel} onSaveWorkTime={async (id, start, end) => { const saved = await updateLeaveRequestWorkTime(id, start, end); setLeaveRequests(prev => prev.map(item => item.id === id ? saved : item)); }} onPeriodChange={async direction => { if (appSession.role === "admin" && (syncState === "dirty" || syncState === "saving")) { try { await saveCurrentMonth(); } catch { return; } } setCurrentMonth(prev => addMonths(prev, direction)); }} />
             ) : activeTab === "board" ? (
-              <BulletinBoard onBack={goBack} notices={adminNotices} employees={employeeMaster} defaultNoticeVisibility={adminNoticeVisibility} onCreateNotice={async (text, visibility, ids) => { try { const notice = await createAdminNotice(text, visibility, ids); setAdminNotices(items => [notice, ...items]); toast.success("お知らせを公開しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "公開できませんでした"); throw error; } }} onDeleteNotice={async id => { if (!window.confirm("このお知らせを削除しますか？")) return; try { await removeAdminNotice(id); setAdminNotices(items => items.filter(item => item.id !== id)); } catch (error) { toast.error(error instanceof Error ? error.message : "削除できませんでした"); } }} periods={boardPeriods} isEditor={appSession.role === "admin"} visibility={storeMaster.leaveRequestBoardVisibility || "immediate"} correctionVisibility={correctionVisibility} operatorName={operatorName} operatorId={appSession.employeeId} onShiftPeriod={direction => setBoardAnchor(prev => addMonths(prev, direction))} onResolve={async item => { const saved = await updateLeaveRequestStatus(item.id, "対応済み"); setBoardPeriods(prev => prev.map(period => ({ ...period, requests: period.requests.map(request => request.id === saved.id ? saved : request) }))); setHomeBoardRequests(prev => prev.map(request => request.id === saved.id ? saved : request)); setHomePendingCorrections(prev => prev.filter(request => request.id !== saved.id)); }} />
+              <BulletinBoard onBack={goBack} notices={adminNotices} employees={employeeMaster} defaultNoticeVisibility={adminNoticeVisibility} onCreateNotice={async (text, visibility, ids) => { const tempId = `tmp-${Date.now()}`; setAdminNotices(items => [{ id: tempId, text, visibility, employeeIds: ids, createdAt: new Date().toISOString() }, ...items]); toast.success("お知らせを公開しました"); void createAdminNotice(text, visibility, ids).then(notice => setAdminNotices(items => items.map(item => item.id === tempId ? notice : item))).catch(error => { setAdminNotices(items => items.filter(item => item.id !== tempId)); toast.error(`お知らせを公開できませんでした：${error instanceof Error ? error.message : ""}`); }); }} onDeleteNotice={async id => { if (!window.confirm("このお知らせを削除しますか？")) return; try { await removeAdminNotice(id); setAdminNotices(items => items.filter(item => item.id !== id)); } catch (error) { toast.error(error instanceof Error ? error.message : "削除できませんでした"); } }} periods={boardPeriods} isEditor={appSession.role === "admin"} visibility={storeMaster.leaveRequestBoardVisibility || "immediate"} correctionVisibility={correctionVisibility} operatorName={operatorName} operatorId={appSession.employeeId} onShiftPeriod={direction => setBoardAnchor(prev => addMonths(prev, direction))} onResolve={async item => { const saved = await updateLeaveRequestStatus(item.id, "対応済み"); setBoardPeriods(prev => prev.map(period => ({ ...period, requests: period.requests.map(request => request.id === saved.id ? saved : request) }))); setHomeBoardRequests(prev => prev.map(request => request.id === saved.id ? saved : request)); setHomePendingCorrections(prev => prev.filter(request => request.id !== saved.id)); }} />
             ) : activeTab === "mypage" ? (
               <MyPage employee={operatorEmployee} requests={leaveRequests} locked={isLocked} initialBalance={paidLeaveBalance} onSaveBalance={async balance => { const saved = await savePaidLeaveBalance(balance); setPaidLeaveBalance(saved); }} onCancel={handleLeaveRequestCancel} onSaveWorkTime={async (id, start, end) => { const saved = await updateLeaveRequestWorkTime(id, start, end); setLeaveRequests(prev => prev.map(item => item.id === id ? saved : item)); }} onEdit={() => setActiveTab("requests")} />
             ) : activeTab === "dashboard" && dashboardEmployees.length === 0 ? (
