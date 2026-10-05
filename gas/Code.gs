@@ -1358,7 +1358,7 @@ function assertShiftLeavePeriod_(periodStart) {
 
 
 
-function syncShiftLeaveRequestToNotion(request) {
+function syncShiftLeaveRequestToNotion(request, isNew) {
   var p = PropertiesService.getScriptProperties();
   var apiKey = p.getProperty("NOTION_API_KEY");
   var databaseId = p.getProperty("NOTION_SHIFT_REQUEST_DATABASE_ID");
@@ -1377,7 +1377,8 @@ function syncShiftLeaveRequestToNotion(request) {
   properties["希望開始時間"] = createRichTextProperty(request.desiredWorkStart || "");
   properties["希望終了時間"] = createRichTextProperty(request.desiredWorkEnd || "");
   properties["却下理由"] = createRichTextProperty(request.rejectionReason || "");
-  var existing = queryNotionDatabase(apiKey, databaseId, { filter: { property: "申請ID", rich_text: { equals: request.id } }, page_size: 1 });
+  // 新しく作った申請（isNew）には、Notion側にまだ記録が無いので、探す手間（1回の通信）を省いて作るだけにする。
+  var existing = isNew ? [] : queryNotionDatabase(apiKey, databaseId, { filter: { property: "申請ID", rich_text: { equals: request.id } }, page_size: 1 });
   if (existing.length) updateNotionPage(apiKey, existing[0].id, properties); else createNotionPage(apiKey, databaseId, properties);
 }
 
@@ -1473,6 +1474,7 @@ function saveShiftLeaveRequest(data) {
     } else {
       requests = requests.filter(function(item) { return !(isSameLeaveRequestOwner_(item) && item.type === "希望なし" && item.status === "申請中"); });
     }
+    var isNewRequest = false;
     var existing = requests.find(function(item) { return (item.employeeId === employeeId || (!item.employeeId && item.employeeName === employeeName)) && item.date === dateValue && (item.type === "訂正依頼") === (type === "訂正依頼") && item.status !== "取消"; });
     if (existing) {
       existing.type = type;
@@ -1484,11 +1486,12 @@ function saveShiftLeaveRequest(data) {
       existing.status = "申請中";
       existing.updatedAt = now;
     } else {
+      isNewRequest = true;
       existing = { id: Utilities.getUuid(), employeeId: employeeId, employeeName: employeeName, date: dateValue, periodStart: periodStart, periodEnd: periodEnd, type: type, comment: comment, commentVisibility: commentVisibility, status: "申請中", submittedAt: now, updatedAt: now, desiredWorkStart: desiredStart, desiredWorkEnd: desiredEnd };
       requests.push(existing);
     }
     writeShiftLeaveRequestStore(periodStart, requests);
-    syncShiftLeaveRequestToNotion(existing);
+    syncShiftLeaveRequestToNotion(existing, isNewRequest);
     appendShiftAudit({ sessionToken: data.employeeToken }, "休み希望提出", existing.id, null, existing);
     return createJsonDataResponse({ success: true, request: existing });
   } catch (error) {
@@ -1796,10 +1799,13 @@ function runNotionBatch_(apiKey, ops) {
 }
 
 function saveShiftMonth(data) {
+  var timingStart = Date.now();
+  var timing = {};
   var lock = shiftLockHandle_();
   try {
     verifyShiftApiKey(data.shiftApiKey);
     if (!lock.tryLock(30000)) throw new Error("別の保存処理を実行中です。少し待ってから再度お試しください。");
+    timing.lockMs = Date.now() - timingStart;
 
     // 確定済みの期間はサーバー側でも保存を拒否します（画面の制限をすり抜けた場合の保険）。
     // 画面から送られた期間ではなく、保存する行の日付範囲（行が無ければ期間）と重なる確定済み期間があれば拒否します。
@@ -1830,15 +1836,26 @@ function saveShiftMonth(data) {
     if (incomingRows.length > 500) throw new Error("一度に保存できる件数は500件までです。");
 
     // 対象期間を最初に1回だけ読み込み、社員名＋日付で索引化します。
+    // 変更分だけが送られてきたとき（partial）は、その日付の行だけをNotionから読む（期間全体を読むより速い）。
+    var queryFilter = {
+      and: [
+        { property: "日付", date: { on_or_after: periodStart } },
+        { property: "日付", date: { on_or_before: periodEnd } }
+      ]
+    };
+    if (data.partial === true && incomingRows.length > 0 && incomingRows.length <= 60) {
+      var distinctDates = {};
+      incomingRows.forEach(function(row) { distinctDates[sanitizeDateValue(row["日付"])] = true; });
+      var dateList = Object.keys(distinctDates).filter(function(value) { return value; });
+      if (dateList.length > 0 && dateList.length <= 30) {
+        queryFilter = { or: dateList.map(function(value) { return { property: "日付", date: { equals: value } }; }) };
+      }
+    }
     var existingPages = queryNotionDatabase(settings.apiKey, settings.databaseId, {
-      filter: {
-        and: [
-          { property: "日付", date: { on_or_after: periodStart } },
-          { property: "日付", date: { on_or_before: periodEnd } }
-        ]
-      },
+      filter: queryFilter,
       page_size: 100
     });
+    timing.queryMs = Date.now() - timingStart;
     var existingByKey = {};
     existingPages.forEach(function(page) {
       var flat = flattenStatusProperties(page.properties || {});
@@ -1937,9 +1954,13 @@ function saveShiftMonth(data) {
       }
     });
 
+    timing.diffMs = Date.now() - timingStart;
     runNotionBatch_(settings.apiKey, notionOps);
+    timing.writeMs = Date.now() - timingStart;
     appendShiftAudit(data, "月次シフト保存", periodStart + "〜" + periodEnd, null, { created: created, updated: updated, cleared: cleared, unchanged: unchanged });
+    timing.totalMs = Date.now() - timingStart;
     return createJsonDataResponse({
+      timing: timing,
       success: true,
       message: "月次シフトを保存しました。",
       created: created,

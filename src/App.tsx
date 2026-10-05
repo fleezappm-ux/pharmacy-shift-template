@@ -62,7 +62,7 @@ import {
 import { AutoDraftSettings, CommentVisibility, Employee, DayShift, ShiftType, GlobalRemark, LeaveRequest, LeaveRequestStatus, LeaveRequestType, PaidLeaveBalance, SpecialDayRule } from "./types";
 import { DEFAULT_CYCLE_PATTERNS, CyclePatterns } from "./constants";
 import { calculateTimes, generateConfiguredDateRange, normalizeShiftInput, finalizeShiftText, resolveCycleShift } from "./lib/shift-utils";
-import { fetchShiftsFromServer, saveMonthToServer, fetchShiftPeriodStatus, saveShiftPeriodStatus } from "./lib/shift-sync";
+import { fetchShiftsFromServer, saveMonthToServer, fetchShiftPeriodStatus, saveShiftPeriodStatus, seedSavedBaseline } from "./lib/shift-sync";
 import { chooseOutputFolder, getRememberedFolderName, saveBufferToRememberedFolder } from "./lib/output-destination";
 import { HomeView, sortEmployeesForDisplay } from "./components/HomeView";
 import { LeaveRequestView } from "./components/LeaveRequestView";
@@ -572,6 +572,8 @@ export default function App() {
         // どちらか一方の取得に失敗しても、もう一方は使えるようにします（従業員は端末の古い記憶に頼らない）。
         const [merged, fetchedMaster] = await Promise.all([fetchShiftsFromServer(employees, true), fetchEmployeeMaster().catch(error => { console.error("従業員マスタ取得", error); return null; })]);
         if (cancelled) return;
+        // サーバーの内容を読み込めたときだけ「前回保存した内容」として覚え、以後は変更したマスだけを保存する
+        seedSavedBaseline(merged ? merged.employees : null);
         const master = fetchedMaster ?? employeeMaster;
         if (fetchedMaster) {
           templateStorage.setItem(EMPLOYEE_MASTER_CACHE_KEY, JSON.stringify(fetchedMaster));
@@ -1085,7 +1087,7 @@ export default function App() {
 
   useEffect(() => {
     if (appSession?.role !== "admin" || !initialSyncComplete || periodStatusLoading || isLocked || syncState !== "dirty") return;
-    const timer = window.setTimeout(() => { void saveCurrentMonth().catch(() => {}); }, 1000);
+    const timer = window.setTimeout(() => { void saveCurrentMonth().catch(() => {}); }, 400);
     return () => window.clearTimeout(timer);
   }, [employees, globalRemarks, currentMonthKey, syncState, initialSyncComplete, periodStatusLoading, isLocked, appSession?.role]);
 
