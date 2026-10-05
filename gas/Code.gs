@@ -1364,11 +1364,15 @@ function syncShiftLeaveRequestToNotion(request) {
   var databaseId = p.getProperty("NOTION_SHIFT_REQUEST_DATABASE_ID");
   if (!apiKey || !databaseId || !request) return;
   var databaseUrl = "https://api.notion.com/v1/databases/" + databaseId;
-  var database = requestNotion(apiKey, databaseUrl, "get", null);
+  var schemaOk = p.getProperty("SHIFT_REQUEST_SCHEMA_OK") === databaseId;
+  var database = schemaOk ? { properties: {} } : requestNotion(apiKey, databaseUrl, "get", null);
   var additions = {};
   var schema = { "申請ID": { rich_text: {} }, "従業員ID": { rich_text: {} }, "氏名": { rich_text: {} }, "希望日": { date: {} }, "対象期間開始": { date: {} }, "対象期間終了": { date: {} }, "希望区分": { select: {} }, "コメント": { rich_text: {} }, "公開範囲": { select: {} }, "状態": { select: {} }, "提出日時": { date: {} }, "更新日時": { date: {} }, "希望開始時間": { rich_text: {} }, "希望終了時間": { rich_text: {} }, "却下理由": { rich_text: {} } };
-  Object.keys(schema).forEach(function(name) { if (!database.properties || !database.properties[name]) additions[name] = schema[name]; });
-  if (Object.keys(additions).length) requestNotion(apiKey, databaseUrl, "patch", { properties: additions });
+  if (!schemaOk) {
+    Object.keys(schema).forEach(function(name) { if (!database.properties || !database.properties[name]) additions[name] = schema[name]; });
+    if (Object.keys(additions).length) requestNotion(apiKey, databaseUrl, "patch", { properties: additions });
+    p.setProperty("SHIFT_REQUEST_SCHEMA_OK", databaseId);
+  }
   var properties = { "記録名": createTitleProperty((request.date || request.periodStart) + " " + request.employeeName + " " + request.type), "申請ID": createRichTextProperty(request.id), "従業員ID": createRichTextProperty(request.employeeId || ""), "氏名": createRichTextProperty(request.employeeName), "希望日": request.date ? { date: { start: request.date } } : { date: null }, "対象期間開始": { date: { start: request.periodStart } }, "対象期間終了": { date: { start: request.periodEnd } }, "希望区分": { select: { name: request.type } }, "コメント": createRichTextProperty(request.comment || ""), "公開範囲": { select: { name: request.commentVisibility === "editors" ? "編集者のみ" : "全員" } }, "状態": { select: { name: request.status } }, "提出日時": { date: { start: request.submittedAt } }, "更新日時": { date: { start: request.updatedAt } } };
   properties["希望開始時間"] = createRichTextProperty(request.desiredWorkStart || "");
   properties["希望終了時間"] = createRichTextProperty(request.desiredWorkEnd || "");
@@ -1450,6 +1454,14 @@ function saveShiftLeaveRequest(data) {
     if (type === "訂正依頼") {
       if (!comment.trim()) throw new Error("訂正内容をコメントに入力してください。");
       if (!readShiftPeriodStatusForCorrection(periodStart)) throw new Error("確定シフトの期間だけ訂正依頼を提出できます。");
+    } else if (type !== "希望なし" && readShiftPeriodStatusForCorrection(periodStart)) {
+      throw new Error("この期間は確定済みです。変更したいときは「訂正依頼」を選んでください。");
+    }
+    var desiredStart = "", desiredEnd = "";
+    if (type === "出勤希望" && (input.desiredWorkStart || input.desiredWorkEnd)) {
+      desiredStart = sanitizeText(input.desiredWorkStart || "", 5);
+      desiredEnd = sanitizeText(input.desiredWorkEnd || "", 5);
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(desiredStart) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(desiredEnd) || desiredStart >= desiredEnd) throw new Error("希望時間を正しく入力してください。");
     }
 
     var requests = readShiftLeaveRequestStore(periodStart);
@@ -1464,15 +1476,15 @@ function saveShiftLeaveRequest(data) {
     var existing = requests.find(function(item) { return (item.employeeId === employeeId || (!item.employeeId && item.employeeName === employeeName)) && item.date === dateValue && (item.type === "訂正依頼") === (type === "訂正依頼") && item.status !== "取消"; });
     if (existing) {
       existing.type = type;
-      existing.desiredWorkStart = "";
-      existing.desiredWorkEnd = "";
+      existing.desiredWorkStart = desiredStart;
+      existing.desiredWorkEnd = desiredEnd;
       existing.rejectionReason = "";
       existing.comment = comment;
       existing.commentVisibility = commentVisibility;
       existing.status = "申請中";
       existing.updatedAt = now;
     } else {
-      existing = { id: Utilities.getUuid(), employeeId: employeeId, employeeName: employeeName, date: dateValue, periodStart: periodStart, periodEnd: periodEnd, type: type, comment: comment, commentVisibility: commentVisibility, status: "申請中", submittedAt: now, updatedAt: now };
+      existing = { id: Utilities.getUuid(), employeeId: employeeId, employeeName: employeeName, date: dateValue, periodStart: periodStart, periodEnd: periodEnd, type: type, comment: comment, commentVisibility: commentVisibility, status: "申請中", submittedAt: now, updatedAt: now, desiredWorkStart: desiredStart, desiredWorkEnd: desiredEnd };
       requests.push(existing);
     }
     writeShiftLeaveRequestStore(periodStart, requests);
@@ -1690,6 +1702,18 @@ function saveShiftCalendarPeriodSettings(data) {
 
 
 
+/** シフトDBの必要な列があるかの確認は、最初の1回だけ行います（毎回Notionへ問い合わせると保存が遅くなるため）。 */
+function ensureShiftSchema_(settings) {
+  var p = PropertiesService.getScriptProperties();
+  if (p.getProperty("SHIFT_SCHEMA_OK") === settings.databaseId) return;
+  ensureShiftEditorProperty(settings);
+  ensureShiftGlobalRemarkProperties(settings);
+  ensureShiftEmployeeIdProperty(settings);
+  p.setProperty("SHIFT_SCHEMA_OK", settings.databaseId);
+}
+
+
+
 /** シフトDBに監査用の最終更新者プロパティがなければ追加します。 */
 function ensureShiftEditorProperty(settings) {
   var databaseUrl = "https://api.notion.com/v1/databases/" + settings.databaseId;
@@ -1798,9 +1822,7 @@ function saveShiftMonth(data) {
     var settings = getShiftManagementSettings();
     var updatedBy = sanitizeText(data.updatedBy, 100).trim();
     if (!updatedBy) throw new Error("保存者名が指定されていません。");
-    ensureShiftEditorProperty(settings);
-    ensureShiftGlobalRemarkProperties(settings);
-    ensureShiftEmployeeIdProperty(settings);
+    ensureShiftSchema_(settings);
     var periodStart = sanitizeDateValue(data.periodStart);
     var periodEnd = sanitizeDateValue(data.periodEnd);
     var incomingRows = Array.isArray(data.shifts) ? data.shifts : [];

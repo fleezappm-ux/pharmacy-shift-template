@@ -33,6 +33,8 @@ export async function submitLeaveRequest(input: {
   type: LeaveRequestType;
   comment: string;
   commentVisibility: CommentVisibility;
+  desiredWorkStart?: string;
+  desiredWorkEnd?: string;
 }): Promise<LeaveRequest> {
   const json = await request("saveShiftLeaveRequest", { employeeToken: getEmployeeToken(), request: input });
   return json.request as LeaveRequest;

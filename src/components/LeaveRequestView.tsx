@@ -27,8 +27,7 @@ interface Props {
   loading: boolean;
   operatorId: string;
   isAdmin: boolean;
-  onCheckPeriodStatus: (periodStart: string) => Promise<boolean>;
-  onSubmit: (input: { employeeId: string; employeeName: string; date: string; periodStart: string; periodEnd: string; type: LeaveRequestType; comment: string; commentVisibility: CommentVisibility }) => Promise<LeaveRequest>;
+  onSubmit: (input: { employeeId: string; employeeName: string; date: string; periodStart: string; periodEnd: string; type: LeaveRequestType; comment: string; commentVisibility: CommentVisibility; desiredWorkStart?: string; desiredWorkEnd?: string }) => Promise<LeaveRequest>;
   onCancel: (id: string) => Promise<void>;
   onSaveWorkTime: (id: string, start: string, end: string) => Promise<void>;
   onPeriodChange: (direction: number) => Promise<void>;
@@ -54,7 +53,7 @@ function shiftLabelFor(employee: Employee | undefined, date: string) {
   return shift?.shift === "任意入力" ? shift.customShiftText || "任意入力" : shift?.shift || "―";
 }
 
-export function LeaveRequestView({ employees, dates, requests, remarks, locked, loading, operatorId, isAdmin, onCheckPeriodStatus, onSubmit, onCancel, onSaveWorkTime, onPeriodChange }: Props) {
+export function LeaveRequestView({ employees, dates, requests, remarks, locked, loading, operatorId, isAdmin, onSubmit, onCancel, onSaveWorkTime, onPeriodChange }: Props) {
   const operator = employees.find(item => item.id === operatorId);
   const employeeName = operator?.displayName || operator?.name || "";
   const noteKey = `shift-leave-note-v2-${operatorId}`;
@@ -102,20 +101,13 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
     setSubmitting(true);
     setError("");
     try {
-      // Drafts can span periods. Check each period again before sending anything.
-      const statusByPeriod = new Map<string, boolean>();
-      for (const [, draft] of draftEntries) {
-        if (!statusByPeriod.has(draft.periodStart)) statusByPeriod.set(draft.periodStart, await onCheckPeriodStatus(draft.periodStart));
-      }
-      if (draftEntries.some(([, draft]) => statusByPeriod.get(draft.periodStart) !== (draft.type === "訂正依頼"))) {
-        setError("シフトの確定状態が変わりました。該当日の希望を選び直してください。");
-        return;
-      }
       const summary = draftEntries.map(([date, draft]) => `${format(new Date(`${date}T00:00:00`), "M/d（E）", { locale: ja })}　${draft.type}`).join("\n");
       if (!window.confirm(`以下の希望を提出します。よろしいですか？\n\n${summary}`)) return;
       for (const [date, draft] of draftEntries) {
-        const saved = await onSubmit({ employeeId: operatorId, employeeName, date, periodStart: draft.periodStart, periodEnd: draft.periodEnd, type: draft.type, comment, commentVisibility: "all" });
-        if (draft.type === "出勤希望") await onSaveWorkTime(saved.id, times[date].start, times[date].end);
+        const wantsTime = draft.type === "出勤希望";
+        const saved = await onSubmit({ employeeId: operatorId, employeeName, date, periodStart: draft.periodStart, periodEnd: draft.periodEnd, type: draft.type, comment, commentVisibility: "all", ...(wantsTime ? { desiredWorkStart: times[date].start, desiredWorkEnd: times[date].end } : {}) });
+        // 古いGASでは提出と同時に時間を保存できないので、そのときだけ時間を別に保存する
+        if (wantsTime && saved.desiredWorkStart !== times[date].start) await onSaveWorkTime(saved.id, times[date].start, times[date].end);
         setDrafts(previous => { const next = { ...previous }; delete next[date]; return next; });
         setTimes(previous => { const next = { ...previous }; delete next[date]; return next; });
       }
