@@ -16,8 +16,11 @@ function runShiftBatch_(data) {
   var calls = data.calls;
   if (!Array.isArray(calls) || !calls.length || calls.length > 20) throw new Error("まとめて実行できる件数は1〜20件です。");
   var results = [];
+  var timings = [];
+  var batchStart = Date.now();
   for (var i = 0; i < calls.length; i += 1) {
     var out;
+    var callStart = Date.now();
     try {
       var sub = calls[i];
       if (!sub || typeof sub.action !== "string" || sub.action.indexOf("get") !== 0) throw new Error("読み込み以外はまとめて実行できません。");
@@ -26,8 +29,9 @@ function runShiftBatch_(data) {
       out = { success: false, message: error.message || "処理に失敗しました。" };
     }
     results.push(out);
+    timings.push((calls[i] && calls[i].action || "?") + ":" + (Date.now() - callStart));
   }
-  return createJsonDataResponse({ success: true, results: results });
+  return createJsonDataResponse({ success: true, results: results, timing: { totalMs: Date.now() - batchStart, calls: timings } });
 }
 
 /** 1件の操作を実行します（doPostとバッチの共通部分）。 */
