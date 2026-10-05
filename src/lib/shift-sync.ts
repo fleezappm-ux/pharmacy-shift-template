@@ -239,7 +239,9 @@ export async function saveMonthToServer(
   const signatureOf = (row: (typeof shifts)[number]) => rowSignature(String(row["社員名"]), String(row["シフト内容"]), String(row["休憩時間"]), String(row["実働時間"]));
   const changed = savedBaseline ? shifts.filter(row => signatureOf(row) !== (savedBaseline!.get(rowKey(String(row["従業員ID"]), String(row["日付"]))) ?? "")) : shifts;
   if (savedBaseline && changed.length === 0) return { created: 0, updated: 0, cleared: 0 };
-  const json = await callGas("saveShiftMonth", { periodStart, periodEnd, updatedBy: updatedBy || "", shifts: changed, ...(savedBaseline ? { partial: true } : {}) });
+  // 変更分だけの保存は「サーバーの控えに保存→すぐ返事」にして、Notionへの書き込みは裏で行う（速くするため）。
+  const json = await callGas("saveShiftMonth", { periodStart, periodEnd, updatedBy: updatedBy || "", shifts: changed, ...(savedBaseline ? { partial: true, defer: true } : {}) });
+  if (json.queued) { notePendingQueued(Number(json.pending || 0)); }
   if (savedBaseline) shifts.forEach(row => {
     const key = rowKey(String(row["従業員ID"]), String(row["日付"]));
     const signature = signatureOf(row);
@@ -250,4 +252,59 @@ export async function saveMonthToServer(
     updated: Number(json.updated || 0),
     cleared: Number(json.cleared || 0)
   };
+}
+
+
+// ===== Notionへの反映待ち（裏書き込み）の管理 =====
+// 保存すると、サーバーはまず自分の控えに内容を保存して返事をし、Notionへの書き込みはこの「反映」で行います。
+// 反映に失敗したら控えは残り、画面に警告を出して自動で再試行します（他の端末で開いたときも同じ警告が出ます）。
+export interface PendingStatus { count: number; flushing: boolean; lastError: string; oldestAt: string }
+let pendingStatus: PendingStatus = { count: 0, flushing: false, lastError: "", oldestAt: "" };
+const pendingListeners = new Set<(status: PendingStatus) => void>();
+let flushTimer: number | undefined;
+let retryStep = 0;
+const RETRY_DELAYS = [4000, 10000, 20000, 40000, 60000];
+
+function setPending(patch: Partial<PendingStatus>) {
+  pendingStatus = { ...pendingStatus, ...patch };
+  pendingListeners.forEach(listener => listener(pendingStatus));
+}
+export function subscribePending(listener: (status: PendingStatus) => void): () => void {
+  pendingListeners.add(listener);
+  listener(pendingStatus);
+  return () => { pendingListeners.delete(listener); };
+}
+function notePendingQueued(count: number) {
+  setPending({ count: Math.max(count, 1) });
+  scheduleFlush(1500);
+}
+export function scheduleFlush(delayMs: number) {
+  if (!hasShiftApiKey()) return;
+  if (flushTimer !== undefined) window.clearTimeout(flushTimer);
+  flushTimer = window.setTimeout(() => { flushTimer = undefined; void flushPendingNow(); }, delayMs);
+}
+export async function flushPendingNow(): Promise<boolean> {
+  if (pendingStatus.flushing || !hasShiftApiKey()) return false;
+  setPending({ flushing: true });
+  try {
+    const json = await callGas("flushShiftPending");
+    retryStep = 0;
+    setPending({ count: Number(json.pending || 0), flushing: false, lastError: "", oldestAt: "" });
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Notionへ反映できませんでした";
+    setPending({ flushing: false, lastError: message, count: Math.max(pendingStatus.count, 1) });
+    scheduleFlush(RETRY_DELAYS[Math.min(retryStep, RETRY_DELAYS.length - 1)]);
+    retryStep += 1;
+    return false;
+  }
+}
+/** 開いたときに、サーバーに反映待ちが残っていないか確認する（残っていれば反映する）。 */
+export async function checkPendingOnServer(): Promise<void> {
+  try {
+    const json = await callGas("getShiftPendingStatus", {}, false);
+    const count = Number(json.count || 0);
+    setPending({ count, lastError: String(json.lastError || ""), oldestAt: String(json.oldestAt || "") });
+    if (count > 0) scheduleFlush(300);
+  } catch { /* 古いGASなどでは何もしない */ }
 }
