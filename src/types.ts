@@ -92,3 +92,11 @@ export interface AutoDraftSettings {
   horizonMonths: number;
   lastRunAt?: string;
 }
+
+/** 人数・連勤・個人ごとの条件（シフト表の警告に使う）。曜日は 0=日〜6=土。0人・0日は「チェックしない」。 */
+export interface StaffingRules {
+  minTotal: number[];
+  roleMins: { roleId: string; min: number[] }[];
+  maxConsecutive: number;
+  people: Record<string, { maxPerWeek: number; ngWeekdays: number[] }>;
+}
