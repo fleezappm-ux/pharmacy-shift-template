@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { StaffingRules } from "../types";
+import { PersonRule, StaffingRules } from "../types";
 import { SaveStatus } from "./SaveStatus";
 import { useUnsavedGuard } from "../lib/unsaved";
 
@@ -16,8 +16,8 @@ export function StaffingRulesSettings({ rules, employees, roles, saving, onSave 
   const setDay = (list: number[], day: number, value: string) => { const next = [...list]; next[day] = Math.max(0, Math.min(99, Math.floor(Number(value) || 0))); return next; };
   const roleMin = (roleId: string) => draft.roleMins.find(item => item.roleId === roleId)?.min || [0, 0, 0, 0, 0, 0, 0];
   const setRoleDay = (roleId: string, day: number, value: string) => setDraft(d => ({ ...d, roleMins: [...d.roleMins.filter(item => item.roleId !== roleId), { roleId, min: setDay(roleMin(roleId), day, value) }] }));
-  const person = (id: string) => draft.people[id] || { maxPerWeek: 0, ngWeekdays: [] };
-  const setPerson = (id: string, value: { maxPerWeek: number; ngWeekdays: number[] }) => setDraft(d => ({ ...d, people: { ...d.people, [id]: value } }));
+  const person = (id: string): PersonRule => draft.people[id] || { maxPerWeek: 0, ngWeekdays: [] };
+  const setPerson = (id: string, value: PersonRule) => setDraft(d => ({ ...d, people: { ...d.people, [id]: value } }));
   const dayRow = (list: number[], onChange: (day: number, value: string) => void, label: string) => <div className="grid grid-cols-7 gap-1">{WEEK.map((name, day) => <label key={day} className="flex min-w-0 flex-col items-center gap-1 text-xs font-bold text-slate-600">{name}<input aria-label={`${label}${name}曜`} type="number" inputMode="numeric" min={0} max={99} className={num + " !w-full min-w-0 px-1"} value={list[day] || 0} onChange={event => onChange(day, event.target.value)} /></label>)}</div>;
   const activeEmployees = employees.filter(item => item.active !== false);
   return <div className="space-y-5">
@@ -43,7 +43,7 @@ export function StaffingRulesSettings({ rules, employees, roles, saving, onSave 
         <strong className="text-sm">{emp.displayName || emp.name}</strong>
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-bold text-slate-600">
           <label className="flex items-center gap-1">週の出勤は最大<input aria-label={`${emp.displayName || emp.name}の週の最大日数`} type="number" inputMode="numeric" min={0} max={7} className={num} value={p.maxPerWeek} onChange={event => setPerson(emp.id, { ...p, maxPerWeek: Math.max(0, Math.min(7, Math.floor(Number(event.target.value) || 0))) })} />日（0＝制限なし）</label>
-          <span className="flex items-center gap-2">入れない曜日：{WEEK.map((name, day) => <label key={day} className="flex items-center gap-0.5"><input type="checkbox" aria-label={`${emp.displayName || emp.name}は${name}曜に入れない`} checked={p.ngWeekdays.includes(day)} onChange={event => setPerson(emp.id, { ...p, ngWeekdays: event.target.checked ? [...p.ngWeekdays, day].sort() : p.ngWeekdays.filter(item => item !== day) })} />{name}</label>)}</span>
+          <span className="flex items-center gap-2">毎週決まった休み：{WEEK.map((name, day) => <label key={day} className="flex items-center gap-0.5"><input type="checkbox" aria-label={`${emp.displayName || emp.name}は${name}曜に入れない`} checked={p.ngWeekdays.includes(day)} onChange={event => setPerson(emp.id, { ...p, ngWeekdays: event.target.checked ? [...p.ngWeekdays, day].sort() : p.ngWeekdays.filter(item => item !== day) })} />{name}</label>)}</span>
         </div></div>; })}</div>
     </section>
     <SaveStatus dirty={dirty} saving={saving} />

@@ -1831,7 +1831,10 @@ function normalizeShiftStaffingRules_(input) {
     var maxPerWeek = Math.floor(Number(item.maxPerWeek));
     if (!isFinite(maxPerWeek) || maxPerWeek < 0 || maxPerWeek > 7) maxPerWeek = 0;
     var ng = (Array.isArray(item.ngWeekdays) ? item.ngWeekdays : []).map(Number).filter(function(d, i, list) { return d >= 0 && d <= 6 && Math.floor(d) === d && list.indexOf(d) === i; });
-    if (cleanId && (maxPerWeek || ng.length)) { people[cleanId] = { maxPerWeek: maxPerWeek, ngWeekdays: ng }; count++; }
+    var weeklyDays = Math.floor(Number(item.weeklyDays));
+    if (!isFinite(weeklyDays) || weeklyDays < 0 || weeklyDays > 7) weeklyDays = 0;
+    var shiftPref = ["early", "late", "any"].indexOf(item.shiftPref) >= 0 ? item.shiftPref : "";
+    if (cleanId && (maxPerWeek || ng.length || weeklyDays || (shiftPref && shiftPref !== "any"))) { people[cleanId] = { maxPerWeek: maxPerWeek, ngWeekdays: ng, weeklyDays: weeklyDays, shiftPref: shiftPref || "any" }; count++; }
   });
   var hours = [];
   for (var h = 0; h < 7; h++) {

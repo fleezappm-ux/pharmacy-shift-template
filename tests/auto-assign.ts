@@ -30,7 +30,7 @@ const leave: LeaveRequest[] = [{ id: "l", employeeId: "a", employeeName: "a", da
 emps = [mk("a", "ph"), mk("b", "ph", [], {}), mk("c", "st")];
 r = run(emps, { ...base, roleMins: [{ roleId: "ph", min: [0, 1, 0, 0, 0, 0, 0] }], people: { b: { maxPerWeek: 0, ngWeekdays: [1] } } }, leave);
 assert.ok(!r.changes.some(c => c.date === iso(5)), "休み希望の日は入れない");
-assert.ok(r.unresolved.some(u => u.date === iso(5) && /薬剤師があと1人/.test(u.message) && /休み希望/.test(u.message) && /入れない設定/.test(u.message)));
+assert.ok(r.unresolved.some(u => u.date === iso(5) && /薬剤師があと1人/.test(u.message) && /休み希望/.test(u.message) && /毎週月曜は休み/.test(u.message)));
 assert.ok(r.changes.some(c => c.date === iso(12) && c.employeeId === "a"), "10/12(月)はaが入る");
 
 // 連勤の上限：aだけで毎日必要・上限2 → 3日目以降は足りないと報告

@@ -42,8 +42,11 @@ export function describeRules(opts: { rules: StaffingRules; roleNames: Record<st
   lines.push(rules.maxConsecutive > 0 ? `続けて出勤するのは最大${rules.maxConsecutive}日までにします。` : "連勤の制限はありません。");
   Object.entries(rules.people).forEach(([id, p]) => {
     const parts = [] as string[];
-    if (p.ngWeekdays.length) parts.push(`${daysText(p.ngWeekdays)}曜は入れない`);
-    if (p.maxPerWeek > 0) parts.push(`週${p.maxPerWeek}日まで`);
+    if (p.weeklyDays) parts.push(`週${p.weeklyDays}日勤務`);
+    if (p.ngWeekdays.length) parts.push(`毎週${daysText(p.ngWeekdays)}曜は休み`);
+    if (p.maxPerWeek > 0 && p.maxPerWeek !== p.weeklyDays) parts.push(`週${p.maxPerWeek}日まで`);
+    if (p.shiftPref === "early") parts.push("早番がいい");
+    if (p.shiftPref === "late") parts.push("遅番がいい");
     if (parts.length) lines.push(`${personNames[id] || "（退職した人）"}さんは、${parts.join("・")}。`);
   });
   lines.push(leaveCount > 0 ? `休み希望・有給希望（${leaveCount}件）は、必ず守ります。` : "この期間の休み希望はありません。");

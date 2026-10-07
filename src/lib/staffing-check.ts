@@ -99,7 +99,8 @@ export function checkStaffing(opts: { dates: Date[]; employees: Employee[]; rule
         out.list.push(`${nameOf(emp)}さん ${label(date)} 入れない曜日に出勤`);
       }
     });
-    if (person.maxPerWeek > 0) {
+    const weeklyCap = [person.maxPerWeek, person.weeklyDays || 0].filter(n => n > 0).reduce((a, b) => Math.min(a, b), 99);
+    if (weeklyCap < 99) {
       // 週は日曜はじまりで数える
       const weeks = new Map<string, number[]>();
       dates.forEach((date, i) => {
@@ -110,9 +111,9 @@ export function checkStaffing(opts: { dates: Date[]; employees: Employee[]; rule
       });
       weeks.forEach(indexes => {
         const worked = indexes.filter(i => workOn(emp, keys[i]));
-        if (worked.length > person.maxPerWeek) {
-          worked.forEach(i => addCell(emp.id, keys[i], `週${person.maxPerWeek}日までの設定です`));
-          out.list.push(`${nameOf(emp)}さん ${label(dates[indexes[0]])}の週に${worked.length}日出勤（上限${person.maxPerWeek}日）`);
+        if (worked.length > weeklyCap) {
+          worked.forEach(i => addCell(emp.id, keys[i], `週${weeklyCap}日までの設定です`));
+          out.list.push(`${nameOf(emp)}さん ${label(dates[indexes[0]])}の週に${worked.length}日出勤（上限${weeklyCap}日）`);
         }
       });
     }
