@@ -66,3 +66,15 @@ const days = (emps: Employee[], id: string, pred: (d: Date) => boolean) => emps.
   assert.ok(Math.max(...wk) - Math.min(...wk) <= 1, "土日の担当が公平: " + wk);
 }
 console.log("auto-assign shops ok");
+
+// ③ 遅番の翌日に早番を入れない（11時間あける）
+{
+  const mkE = (id: string, shifts: Record<string, string>): Employee => ({ id, name: id, roleId: "a", shifts: [...hist, ...plan].map(d => ({ date: iso(d), shift: shifts[iso(d)] ?? (d < start ? (d.getDay() % 2 ? "7:00～16:00" : "12:00～21:00") : ""), breakTime: "", workTime: "", comment: "" })) });
+  const emps = [mkE("x", { [iso(start)]: "12:00～21:00" }), mkE("y", {})];
+  const rules: StaffingRules = { minTotal: [0, 1, 1, 1, 1, 1, 0], roleMins: [], maxConsecutive: 0, people: {} };
+  const r = run(emps, rules);
+  const after = apply(emps, r.changes);
+  const x = after[0].shifts.find(s => s.date === iso(addDays(start, 1)))!.shift;
+  assert.ok(!x.startsWith("7:"), "遅番の翌日にxは早番にならない: " + x);
+}
+console.log("rest interval ok");

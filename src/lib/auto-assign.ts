@@ -144,12 +144,26 @@ export function buildAutoAssign(input: AssignInput): AssignResult {
   const kindCount = (key: string) => { const c: Record<ShiftKind, number> = { early: 0, mid: 0, late: 0 }; employees.forEach(e => { if (state.get(e.id)!.get(key) === "work") { const t = textAt(e, key); if (t) c[kindOf(t, median)]++; } }); return c; };
   const periodKind = (emp: Employee, kind: ShiftKind) => keys.filter(k => state.get(emp.id)!.get(k) === "work" && kindOf(textAt(emp, k), median) === kind).length;
   /** その日・その人に合う勤務時間を選ぶ：希望（早番/遅番）→ その日に足りない種類 → いつもの割合に近づける */
+  const MIN_REST = 11 * 60;
+  const rangeOf = (text: string) => parseShiftRange({ date: "", shift: text, breakTime: "", workTime: "", comment: "" });
+  /** 前の日の終わり／次の日の始まりとの間が11時間以上あくか（遅番の翌日に早番を入れない）。読めないときは問題なし */
+  const restOk = (emp: Employee, key: string, text: string) => {
+    const me = rangeOf(text); if (!me) return true;
+    const prev = working(emp, rel(key, -1)) ? rangeOf(textAt(emp, rel(key, -1))) : null;
+    const next = working(emp, rel(key, 1)) ? rangeOf(textAt(emp, rel(key, 1))) : null;
+    if (prev && me[0] + 1440 - prev[1] < MIN_REST) return false;
+    if (next && next[0] + 1440 - me[1] < MIN_REST) return false;
+    return true;
+  };
   const pickShift = (emp: Employee, key: string): string => {
     const list = shiftList(emp);
     if (list.length === 1) return list[0].text;
     const pref = personRule(emp.id)?.shiftPref;
     let pool = list;
     if (pref === "early" || pref === "late") { const only = list.filter(s => s.kind === pref); if (only.length) pool = only; }
+    const rested = pool.filter(s => restOk(emp, key, s.text));
+    if (rested.length) pool = rested;
+    else { const any = list.filter(s => restOk(emp, key, s.text)); if (any.length) pool = any; }
     if (pool.length === 1) return pool[0].text;
     const day = kindCount(key);
     const score = (s: { text: string; share: number; kind: ShiftKind }) => day[s.kind] * 10 + (periodKind(emp, s.kind) + 1) / Math.max(s.share, 0.05);

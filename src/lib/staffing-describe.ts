@@ -49,6 +49,7 @@ export function describeRules(opts: { rules: StaffingRules; roleNames: Record<st
     if (p.shiftPref === "late") parts.push("遅番がいい");
     if (parts.length) lines.push(`${personNames[id] || "（退職した人）"}さんは、${parts.join("・")}。`);
   });
+  lines.push("遅番の翌日に早番を入れないよう、前の勤務から11時間はあけます。");
   lines.push(leaveCount > 0 ? `休み希望・有給希望（${leaveCount}件）は、必ず守ります。` : "この期間の休み希望はありません。");
   lines.push("今入っている勤務・有休は変えません。足りない日にだけ、出勤が少ない人から順に入れます。");
   return lines;

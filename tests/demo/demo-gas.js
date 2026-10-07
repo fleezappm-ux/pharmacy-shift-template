@@ -14,10 +14,15 @@
   var rows = {};
   var iso = function (d) { return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); };
   var put = function (id, name, date, text) { rows[id + "|" + date] = { id: id + "-" + date, "従業員ID": id, "社員名": name, "日付": { start: date }, "シフト内容": text, "休憩時間": text === "休み" ? "" : (/～1[0-3]:|～9:/.test(text) ? "" : "1:00"), "実働時間": "", "備考": "" }; };
-  for (var d = new Date(2026, 8, 1); d <= new Date(2026, 11, 31); d.setDate(d.getDate() + 1)) {
-    var wd = d.getDay(), key = iso(d), weekday = wd >= 1 && wd <= 5;
-    if (weekday) { put("e1", "山田", key, "9:00～18:00"); put("e4", "高橋", key, "9:00～13:00"); }
-    if (weekday && d < new Date(2026, 8, 12)) { put("e2", "佐藤", key, "9:00～18:00"); put("e3", "鈴木", key, "10:00～19:00"); put("e5", "田中", key, "13:00～18:00"); }
+  // 9月までは「いつもの並び」が入っている（山田：月〜金・佐藤：火〜金＋隔週土・鈴木：遅番 月水金土・高橋：月〜水の午前・田中：木〜土の午後）。10月以降は山田と高橋だけ入っている。
+  for (var d = new Date(2026, 6, 1); d <= new Date(2026, 11, 31); d.setDate(d.getDate() + 1)) {
+    var wd = d.getDay(), key = iso(d), past = d < new Date(2026, 9, 1), wk = Math.floor((d.getTime() - new Date(2026, 6, 1).getTime()) / 864e5 / 7);
+    if (wd >= 1 && wd <= 5) put("e1", "山田", key, "9:00～18:00");
+    if (wd >= 1 && wd <= 3) put("e4", "高橋", key, "9:00～13:00");
+    if (!past) continue;
+    if (wd >= 2 && wd <= 5 || (wd === 6 && wk % 2 === 0)) put("e2", "佐藤", key, "9:00～18:00");
+    if (wd === 1 || wd === 3 || wd === 5 || (wd === 6 && wk % 2 === 1)) put("e3", "鈴木", key, "10:00～19:00");
+    if (wd >= 4 && wd <= 6) put("e5", "田中", key, "13:00～18:00");
   }
   var rules = { minTotal: [0, 0, 0, 0, 0, 0, 0], roleMins: [], maxConsecutive: 0, people: {}, hours: [null, null, null, null, null, null, null], alwaysRoles: [] };
   var workTimes = { revision: "r1", items: [
