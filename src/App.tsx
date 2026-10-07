@@ -75,7 +75,8 @@ import { fetchSpecialDayRules, saveSpecialDayRules } from "./lib/special-day-syn
 import { fetchStaffingRules, saveStaffingRules, EMPTY_STAFFING_RULES } from "./lib/staffing-sync";
 import { checkStaffing, hasAnyStaffingRule } from "./lib/staffing-check";
 import { StaffingRulesSettings } from "./components/StaffingRulesSettings";
-import { AutoAssignDialog, AutoPlan } from "./components/AutoAssignDialog";
+import { AutoPlan } from "./components/AutoAssignDialog";
+import { ShiftWizard } from "./components/ShiftWizard";
 import { buildAutoAssign } from "./lib/auto-assign";
 import { buildDisplayRemarks, colorForRemark, DEFAULT_SPECIAL_DAY_RULES, withDefaultSpecialDayRules, shouldRestOnDate } from "./lib/special-day-utils";
 import { CalendarPeriodSettings, fetchCalendarPeriodSettings, saveCalendarPeriodSettings } from "./lib/calendar-period-sync";
@@ -309,7 +310,7 @@ export default function App() {
   const [specialDayLoading, setSpecialDayLoading] = useState(false);
   const [staffingRules, setStaffingRules] = useState<StaffingRules>(EMPTY_STAFFING_RULES);
   const [staffingSaving, setStaffingSaving] = useState(false);
-  const [autoPlan, setAutoPlan] = useState<AutoPlan | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [autoUndo, setAutoUndo] = useState<{ count: number; cells: { employeeId: string; date: string; prev?: DayShift }[] } | null>(null);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [managementApiKey, setManagementApiKey] = useState(() => getManagementApiKey());
@@ -1182,16 +1183,20 @@ export default function App() {
     setOverviewCell(null);
   };
 
-  const openAutoPlan = () => {
+  const makeAutoPlan = (rules: StaffingRules): AutoPlan => {
     const roleNames = Object.fromEntries(roles.map(role => [role.id, role.name]));
-    const result = buildAutoAssign({ dates: dateRange, employees: dashboardEmployees, rules: staffingRules, specialDayRules, leaveRequests, roleNames, defaultShift: visibleWorkTimes[0] || "9:00～18:00" });
-    const count = (list: Employee[]) => checkStaffing({ dates: dateRange, employees: list, rules: staffingRules, roleNames, specialDayRules }).list.length;
-    const applied = dashboardEmployees.map(emp => ({ ...emp, shifts: emp.shifts.map(item => { const change = result.changes.find(c => c.employeeId === emp.id && item.date.startsWith(c.date)); return change ? { ...item, shift: change.shift } : item; }) }));
-    const added = dashboardEmployees.map(emp => { const extra = result.changes.filter(c => c.employeeId === emp.id && !emp.shifts.some(item => item.date.startsWith(c.date))).map(c => ({ date: c.date, shift: c.shift, breakTime: "", workTime: "", comment: "" })); return extra.length ? { ...applied.find(a => a.id === emp.id)!, shifts: [...applied.find(a => a.id === emp.id)!.shifts, ...extra] } : applied.find(a => a.id === emp.id)!; });
-    setAutoPlan({ result, before: count(dashboardEmployees), after: count(added), names: Object.fromEntries(dashboardEmployees.map(emp => [emp.id, emp.displayName || emp.name])), labels: Object.fromEntries(dateRange.map(d => [getDateStr(d), format(d, "M/d（E）", { locale: ja })])) });
+    const result = buildAutoAssign({ dates: dateRange, employees: dashboardEmployees, rules, specialDayRules, leaveRequests, roleNames, defaultShift: visibleWorkTimes[0] || "9:00～18:00" });
+    const count = (list: Employee[]) => checkStaffing({ dates: dateRange, employees: list, rules, roleNames, specialDayRules }).list.length;
+    const applied = dashboardEmployees.map(emp => {
+      const mine = result.changes.filter(change => change.employeeId === emp.id);
+      const shifts = emp.shifts.map(item => { const change = mine.find(c => item.date.startsWith(c.date)); return change ? { ...item, shift: change.shift } : item; });
+      const extra = mine.filter(c => !emp.shifts.some(item => item.date.startsWith(c.date))).map(c => ({ date: c.date, shift: c.shift, breakTime: "", workTime: "", comment: "" }));
+      return { ...emp, shifts: [...shifts, ...extra] };
+    });
+    return { result, before: count(dashboardEmployees), after: count(applied), names: Object.fromEntries(dashboardEmployees.map(emp => [emp.id, emp.displayName || emp.name])), labels: Object.fromEntries(dateRange.map(d => [getDateStr(d), format(d, "M/d（E）", { locale: ja })])) };
   };
-  const applyAutoPlan = () => {
-    if (!autoPlan || isLocked || periodStatusLoading || appSession?.role !== "admin") return;
+  const applyAutoPlan = (autoPlan: AutoPlan, rules: StaffingRules, saveRules: boolean) => {
+    if (isLocked || periodStatusLoading || appSession?.role !== "admin") return;
     const changes = autoPlan.result.changes;
     const cells = changes.map(change => ({ employeeId: change.employeeId, date: change.date, prev: employees.find(emp => emp.id === change.employeeId)?.shifts.find(item => item.date === change.date) }));
     setEmployees(previous => previous.map(employee => {
@@ -1206,8 +1211,9 @@ export default function App() {
       return { ...employee, shifts };
     }));
     setAutoUndo({ count: changes.length, cells });
-    setAutoPlan(null);
+    setWizardOpen(false);
     toast.success(`${changes.length}か所に出勤を入れました。自動で保存されます`);
+    if (saveRules) void handleSaveStaffingRules(rules);
   };
   const undoAutoPlan = () => {
     if (!autoUndo || isLocked) return;
@@ -2246,10 +2252,10 @@ export default function App() {
                     {correctionPopup && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => setCorrectionPopup(null)}><div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={event => event.stopPropagation()}><h3 className="text-lg font-black text-red-700">訂正依頼</h3><p className="mt-2 text-sm font-bold">{correctionPopup.request.employeeName}　{correctionPopup.request.date ? format(new Date(`${correctionPopup.request.date}T00:00:00`), "M/d（E）", { locale: ja }) : ""}</p><div className="mt-3 rounded-xl bg-slate-100 p-3 text-sm"><span className="text-xs font-bold text-slate-500">現在の勤務</span><p className="font-black">{correctionPopup.shiftText}</p></div><div className="mt-2 rounded-xl bg-red-50 p-3 text-sm"><span className="text-xs font-bold text-red-700">依頼内容</span><p className="whitespace-pre-wrap font-bold">{correctionPopup.request.comment || "（コメントなし）"}</p></div><p className="mt-3 text-xs text-slate-600">返事が必要なら「管理者からのお知らせ」で本人を指定して送れます。</p><div className="mt-4 grid grid-cols-2 gap-2"><Button variant="outline" onClick={() => setCorrectionPopup(null)}>閉じる</Button>{appSession.role === "admin" && <Button className="bg-red-600 hover:bg-red-700" onClick={async () => { const target = correctionPopup.request; try { const saved = await updateLeaveRequestStatus(target.id, "対応済み"); setLeaveRequests(prev => prev.map(r => r.id === saved.id ? saved : r)); setHomePendingCorrections(prev => prev.filter(r => r.id !== saved.id)); setCorrectionPopup(null); toast.success("確認しました"); } catch (error) { toast.error(error instanceof Error ? error.message : "更新できませんでした"); } }}>確認した</Button>}</div></div></div>}
                     {isFromAdmin && showLeaveManager && <LeaveRequestManager requests={leaveRequests} loading={leaveRequestLoading} onStatusChange={handleLeaveRequestStatus} onDelete={handleLeaveRequestDelete} />}
                     {inCreation && overviewEditing && !isLocked && <div className="rounded-xl border-2 border-blue-200 bg-blue-50 p-3" data-auto-assign-bar>
-                      <div className="flex flex-wrap items-center gap-2"><Button type="button" className="h-11 font-bold" disabled={periodStatusLoading} onClick={openAutoPlan}><Wand2 className="mr-2 h-4 w-4" />ルールで足りない日を埋める</Button>{autoUndo && <Button type="button" variant="outline" className="h-11 font-bold" onClick={undoAutoPlan} data-auto-assign-undo>さっき入れた{autoUndo.count}か所を元に戻す</Button>}</div>
-                      <p className="mt-2 text-xs leading-6 text-blue-900">決めた最低人数・連勤・休み希望のルールで、足りない日に出勤を足す案を作ります。案を見てから使うかどうか選べます。今入っている勤務は変えません。</p>
+                      <div className="flex flex-wrap items-center gap-2"><Button type="button" className="h-11 font-bold" disabled={periodStatusLoading} onClick={() => setWizardOpen(true)} data-wizard-open><Wand2 className="mr-2 h-4 w-4" />質問に答えてシフト案を作る</Button>{autoUndo && <Button type="button" variant="outline" className="h-11 font-bold" onClick={undoAutoPlan} data-auto-assign-undo>さっき入れた{autoUndo.count}か所を元に戻す</Button>}</div>
+                      <p className="mt-2 text-xs leading-6 text-blue-900">いくつかの質問（最低人数・連勤など）に答えると、「こんなシフトになります」と言葉で確認してから、足りない日に出勤を足す案を作ります。使うかどうかは、案を見てから選べます。今入っている勤務は変えません。</p>
                     </div>}
-                    {autoPlan && <AutoAssignDialog plan={autoPlan} displayShift={value => displayShift(value, workTimes, shiftDisplayMode)} onApply={applyAutoPlan} onClose={() => setAutoPlan(null)} />}
+                    {wizardOpen && <ShiftWizard rules={staffingRules} roles={roles} employees={dashboardEmployees} periodLabel={`${format(dateRange[0], "M/d")}〜${format(dateRange[dateRange.length - 1], "M/d")}`} leaveCount={leaveRequests.filter(item => ["申請中", "承認", "対応済み"].includes(item.status) && ["有給希望", "休み希望", "午前休希望", "午後休希望"].includes(item.type) && dateRange.some(d => getDateStr(d) === item.date)).length} makePlan={makeAutoPlan} displayShift={value => displayShift(value, workTimes, shiftDisplayMode)} onApply={applyAutoPlan} onClose={() => setWizardOpen(false)} />}
                     {staffingWarnings && staffingWarnings.list.length > 0 && appSession.role === "admin" && <details data-staffing-warnings className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"><summary className="cursor-pointer font-bold">⚠ 確認が必要なところが{staffingWarnings.list.length}件あります（押すと一覧）</summary><ul className="mt-2 list-disc space-y-1 pl-5 text-xs">{staffingWarnings.list.map((line, index) => <li key={index}>{line}</li>)}</ul><p className="mt-2 text-[11px] text-amber-800">基準は「設定 → シフトマスタ → 人数・連勤のチェック」で変えられます。</p></details>}
                     <div className="dashboard-table-wrap overflow-x-auto" onScroll={event => { const el = event.currentTarget; if (window.innerWidth < 768 && el.scrollTop > 0 && el.getBoundingClientRect().top > 8) el.scrollIntoView({ block: "start" }); }}>
                       <Table className="dashboard-table text-[13px]">
