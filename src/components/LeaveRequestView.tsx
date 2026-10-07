@@ -233,7 +233,7 @@ export function LeaveRequestView({ employees, dates, requests, remarks, locked, 
           <li>提出ノートの内容を確認し、「このノートを提出」を押してください。</li>
         </ol>
         <p>確定済みの日は「訂正依頼」を選び、コメントに変更内容を入力してください。</p>
-        <label><input type="checkbox" checked={dismissHelp} onChange={event => setDismissHelp(event.target.checked)} />次回から表示しない</label>
+        <label className="flex min-h-10 items-center gap-2"><input type="checkbox" checked={dismissHelp} onChange={event => setDismissHelp(event.target.checked)} />次回から表示しない</label>
         <Button className="w-full" onClick={() => { if (dismissHelp) templateStorage.setItem(HELP_STORAGE_KEY, "yes"); setShowHelp(false); }}>使い始める</Button>
       </div>
     </div>}

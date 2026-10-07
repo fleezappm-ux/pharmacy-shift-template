@@ -124,7 +124,7 @@ export function ShiftToolGuide({ role, initialSection = "home", onClose }: { rol
         </>}
       </div>
       <footer className="flex flex-col gap-3 rounded-b-2xl border-t bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium"><input type="checkbox" checked={hideNextTime} onChange={event => setHideNextTime(event.target.checked)} className="h-4 w-4 accent-blue-600" />次回からこの説明書を自動表示しない</label>
+        <label className="flex min-h-10 cursor-pointer items-center gap-2 text-sm font-medium"><input type="checkbox" checked={hideNextTime} onChange={event => setHideNextTime(event.target.checked)} className="h-4 w-4 accent-blue-600" />次回からこの説明書を自動表示しない</label>
         <button type="button" className="rounded-xl bg-blue-600 px-6 py-3 text-sm font-bold text-white" onClick={() => onClose(hideNextTime)}>使い始める</button>
       </footer>
     </section>
