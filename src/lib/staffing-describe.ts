@@ -35,6 +35,10 @@ export function describeRules(opts: { rules: StaffingRules; roleNames: Record<st
     const text = perDayText(item.min);
     if (text) lines.push(`${roleNames[item.roleId] || "この役職"}は、${text.replace(/は(\d+)人/g, "に最低$1人")}必ず入れます。`);
   });
+  const always = (rules.alwaysRoles || []).map(id => roleNames[id]).filter(Boolean);
+  const hourGroups = new Map<string, number[]>();
+  ORDER.forEach(d => { const h = rules.hours?.[d]; if (h) hourGroups.set(`${h.open}〜${h.close}`, [...(hourGroups.get(`${h.open}〜${h.close}`) || []), d]); });
+  if (always.length && hourGroups.size) lines.push(`営業時間（${[...hourGroups.entries()].map(([t, days]) => `${daysText(days)} ${t}`).join("、")}）のあいだ、${always.join("・")}がいつもいるようにします。`);
   lines.push(rules.maxConsecutive > 0 ? `続けて出勤するのは最大${rules.maxConsecutive}日までにします。` : "連勤の制限はありません。");
   Object.entries(rules.people).forEach(([id, p]) => {
     const parts = [] as string[];

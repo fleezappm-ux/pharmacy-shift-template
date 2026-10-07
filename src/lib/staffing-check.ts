@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import { Employee, SpecialDayRule, StaffingRules } from "../types";
 import { findSpecialDayRule } from "./special-day-utils";
+import { formatMinutes, parseShiftRange, toMinutes, uncoveredGaps } from "./shift-time";
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
 export const isWorkingShift = (shift?: string) => !!shift && shift !== "休み" && shift !== "有休" && shift !== "none";
@@ -15,7 +16,7 @@ export interface StaffingWarnings {
 }
 
 export function hasAnyStaffingRule(rules: StaffingRules) {
-  return rules.minTotal.some(n => n > 0) || rules.roleMins.some(r => r.min.some(n => n > 0)) || rules.maxConsecutive > 0 || Object.keys(rules.people).length > 0;
+  return rules.minTotal.some(n => n > 0) || rules.roleMins.some(r => r.min.some(n => n > 0)) || rules.maxConsecutive > 0 || Object.keys(rules.people).length > 0 || ((rules.alwaysRoles || []).length > 0 && (rules.hours || []).some(Boolean));
 }
 
 /**
@@ -42,6 +43,18 @@ export function checkStaffing(opts: { dates: Date[]; employees: Employee[]; rule
     if (total > 0 && working.length < total) {
       const msg = `出勤が${working.length}人（必要${total}人）`;
       addDate(key, msg); out.list.push(`${label(date)} ${msg}`);
+    }
+    const hours = rules.hours?.[wd];
+    if (hours && (rules.alwaysRoles || []).length) {
+      (rules.alwaysRoles || []).forEach(roleId => {
+        const same = working.filter(emp => emp.roleId === roleId);
+        const ranges = same.map(emp => parseShiftRange(emp.shifts?.find(s => s.date.startsWith(key))));
+        if (ranges.some(range => !range)) return; // 時間が読めない勤務がある日は、判定しない（誤報を避ける）
+        uncoveredGaps(toMinutes(hours.open), toMinutes(hours.close), ranges as [number, number][]).forEach(([from, to]) => {
+          const msg = `${roleNames[roleId] || "この役職"}が ${formatMinutes(from)}〜${formatMinutes(to)} にいません`;
+          addDate(key, msg); out.list.push(`${label(date)} ${msg}`);
+        });
+      });
     }
     rules.roleMins.forEach(rule => {
       const need = rule.min[wd] || 0;

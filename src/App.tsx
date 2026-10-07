@@ -77,6 +77,7 @@ import { checkStaffing, hasAnyStaffingRule } from "./lib/staffing-check";
 import { StaffingRulesSettings } from "./components/StaffingRulesSettings";
 import { AutoPlan } from "./components/AutoAssignDialog";
 import { ShiftWizard } from "./components/ShiftWizard";
+import { BusinessHoursSettings } from "./components/BusinessHoursSettings";
 import { buildAutoAssign } from "./lib/auto-assign";
 import { buildDisplayRemarks, colorForRemark, DEFAULT_SPECIAL_DAY_RULES, withDefaultSpecialDayRules, shouldRestOnDate } from "./lib/special-day-utils";
 import { CalendarPeriodSettings, fetchCalendarPeriodSettings, saveCalendarPeriodSettings } from "./lib/calendar-period-sync";
@@ -2394,7 +2395,7 @@ export default function App() {
               <TemplateResetSettings onBack={() => goSettings("menu")} onProgress={setResetProgress} />
             ) : activeTab === "admin" && settingsPage === "store" ? (
               <motion.div key="settings-store" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-                <SettingsHead title="店舗マスタ" description="店舗全体の基本ルール" backLabel="設定へ戻る" onBack={() => goSettings("menu")} /><Card><CardContent className="p-6 space-y-5"><StoreMasterSettings master={storeMaster} onMasterChange={setStoreMaster} period={calendarPeriodSettings} periodDraft={calendarPeriodDraft} saving={calendarPeriodSaving} onPeriodDraftChange={setCalendarPeriodDraft} onSavePeriod={handleSaveCalendarPeriod} onSaveStore={async settings => { const saved = await saveStoreSettings(settings); markSetupSeen("store-saved"); setStoreMaster(current => { const next = { ...current, ...saved }; templateStorage.setItem("store_master_settings", JSON.stringify(next)); return next; }); }} onOpenBandSettings={() => goSettings("special")} /></CardContent></Card>
+                <SettingsHead title="店舗マスタ" description="店舗全体の基本ルール" backLabel="設定へ戻る" onBack={() => goSettings("menu")} /><Card><CardContent className="p-6 space-y-5"><StoreMasterSettings master={storeMaster} onMasterChange={setStoreMaster} period={calendarPeriodSettings} periodDraft={calendarPeriodDraft} saving={calendarPeriodSaving} onPeriodDraftChange={setCalendarPeriodDraft} onSavePeriod={handleSaveCalendarPeriod} onSaveStore={async settings => { const saved = await saveStoreSettings(settings); markSetupSeen("store-saved"); setStoreMaster(current => { const next = { ...current, ...saved }; templateStorage.setItem("store_master_settings", JSON.stringify(next)); return next; }); }} onOpenBandSettings={() => goSettings("special")} /><BusinessHoursSettings rules={staffingRules} roles={roles} saving={staffingSaving} onSave={handleSaveStaffingRules} /></CardContent></Card>
               </motion.div>
             ) : activeTab === "admin" && settingsPage === "board" ? (
               <motion.div key="settings-board" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">

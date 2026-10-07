@@ -13,4 +13,6 @@ assert.ok(lines.includes("続けて出勤するのは最大5日までにしま�
 assert.ok(lines.includes("田中さんは、日曜は入れない・週4日まで。"));
 assert.ok(lines.includes("休み希望・有給希望（2件）は、必ず守ります。"));
 assert.ok(describeRules({ rules: { minTotal: [0,0,0,0,0,0,0], roleMins: [], maxConsecutive: 0, people: {} }, roleNames: {}, personNames: {}, leaveCount: 0 })[0].includes("決まっていません"));
+const h = describeRules({ rules: { minTotal: [0,0,0,0,0,0,0], roleMins: [], maxConsecutive: 0, people: {}, hours: [null, { open: "9:00", close: "18:00" }, { open: "9:00", close: "18:00" }, { open: "9:00", close: "18:00" }, null, null, { open: "9:00", close: "13:00" }], alwaysRoles: ["ph"] }, roleNames: { ph: "薬剤師" }, personNames: {}, leaveCount: 0 });
+assert.ok(h.includes("営業時間（月〜水 9:00〜18:00、土 9:00〜13:00）のあいだ、薬剤師がいつもいるようにします。"), JSON.stringify(h));
 console.log("staffing-describe ok");

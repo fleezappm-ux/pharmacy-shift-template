@@ -99,4 +99,8 @@ export interface StaffingRules {
   roleMins: { roleId: string; min: number[] }[];
   maxConsecutive: number;
   people: Record<string, { maxPerWeek: number; ngWeekdays: number[] }>;
+  /** 曜日ごとの営業時間（日〜土の7つ）。null は「決めない／休み」 */
+  hours?: ({ open: string; close: string } | null)[];
+  /** 営業時間のあいだ、ずっといてほしい役職 */
+  alwaysRoles?: string[];
 }

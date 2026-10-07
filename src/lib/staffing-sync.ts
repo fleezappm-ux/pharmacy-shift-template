@@ -2,7 +2,7 @@ import { gasFetch } from "./gas-fetch";
 import { StaffingRules } from "../types";
 import { getManagementApiKey, getShiftSession } from "./auth-sync";
 
-export const EMPTY_STAFFING_RULES: StaffingRules = { minTotal: [0, 0, 0, 0, 0, 0, 0], roleMins: [], maxConsecutive: 0, people: {} };
+export const EMPTY_STAFFING_RULES: StaffingRules = { minTotal: [0, 0, 0, 0, 0, 0, 0], roleMins: [], maxConsecutive: 0, people: {}, hours: [null, null, null, null, null, null, null], alwaysRoles: [] };
 
 async function call(action: string, extra: Record<string, unknown> = {}) {
   const response = await gasFetch({ method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ action, sessionToken: getShiftSession()?.token || "", ...extra }) });

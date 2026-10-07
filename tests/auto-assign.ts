@@ -52,3 +52,30 @@ const want: LeaveRequest[] = [{ id: "w", employeeId: "a", employeeName: "a", dat
 r = run([mk("a", "ph")], { ...base, minTotal: [0, 0, 0, 0, 0, 0, 0], roleMins: [{ roleId: "ph", min: [0, 0, 0, 0, 0, 1, 0] }] }, want);
 assert.ok(r.changes.some(c => c.date === iso(9) && c.shift === "10:00～15:00"));
 console.log("auto-assign ok");
+
+// ---- 営業時間と「ずっといてほしい役職」 ----
+{
+  const hoursRules: StaffingRules = { ...base, hours: [null, { open: "9:00", close: "18:00" }, { open: "9:00", close: "18:00" }, { open: "9:00", close: "18:00" }, { open: "9:00", close: "18:00" }, { open: "9:00", close: "18:00" }, null], alwaysRoles: ["ph"] };
+  const part = (id: string, shift: string) => ({ ...mk(id, "ph"), shifts: dates.map((_, i) => ({ date: iso(i + 1), shift: [0, 6].includes(new Date(2026, 9, i + 1).getDay()) ? "休み" : shift, breakTime: "", workTime: "", comment: "" })) });
+  // 午前だけの人しかいない → 午後（13:00〜18:00）がすき間。チェックは警告を出す
+  const am = [part("a", "9:00～13:00")];
+  const warn = checkStaffing({ dates, employees: am, rules: hoursRules, roleNames: { ph: "薬剤師" }, specialDayRules: [] });
+  assert.ok(warn.byDate["2026-10-01"]?.[0].includes("薬剤師が 13:00〜18:00 にいません"), JSON.stringify(warn.byDate["2026-10-01"]));
+  // 午前の人と午後の人がそろえば警告なし
+  assert.equal(Object.keys(checkStaffing({ dates, employees: [part("a", "9:00～13:00"), part("b", "13:00～18:00")], rules: hoursRules, roleNames: {}, specialDayRules: [] }).byDate).length, 0);
+  // 自動案：すき間をうめる。いつもの勤務（9:00～18:00）がすき間を含むなら、それを使う
+  const r2 = run([part("a", "9:00～13:00"), mk("b", "ph")], hoursRules);
+  assert.equal(r2.unresolved.length, 0);
+  assert.ok(r2.changes.length > 0 && r2.changes.every(c => c.employeeId === "b" && c.shift === "9:00～18:00"), JSON.stringify(r2.changes.slice(0, 2)));
+  // いつもの勤務がすき間を含まない人は、すき間ぴったりの時間で入れる
+  const shortB = { ...mk("b", "ph"), shifts: [{ date: "2026-09-30", shift: "9:00～12:00", breakTime: "", workTime: "", comment: "" }, ...mk("b", "ph").shifts] };
+  const r4 = run([part("a", "9:00～13:00"), shortB], hoursRules);
+  assert.ok(r4.changes.length > 0 && r4.changes.every(c => c.shift === "13:00～18:00"), JSON.stringify(r4.changes.slice(0, 2)));
+  assert.equal(r4.unresolved.length, 0);
+  // 候補がいなければ、理由つきで報告
+  const r3 = run([part("a", "9:00～13:00")], hoursRules);
+  assert.ok(r3.unresolved.some(u => /13:00〜18:00 にいません/.test(u.message)));
+  // 営業時間が決まっていなければ何もしない
+  assert.equal(run([part("a", "9:00～13:00")], { ...base, alwaysRoles: ["ph"] }).changes.length, 0);
+}
+console.log("auto-assign hours ok");

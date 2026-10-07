@@ -34,7 +34,7 @@ export function ShiftWizard({ rules, roles, employees, periodLabel, leaveCount, 
   const person = (id: string) => draft.people[id] || { maxPerWeek: 0, ngWeekdays: [] };
   const setPerson = (id: string, value: { maxPerWeek: number; ngWeekdays: number[] }) => setDraft(d => ({ ...d, people: { ...d.people, [id]: value } }));
   const cleanRules = (): StaffingRules => ({ ...draft, roleMins: draft.roleMins.filter(r => r.min.some(n => n > 0)), people: Object.fromEntries((Object.entries(draft.people) as [string, { maxPerWeek: number; ngWeekdays: number[] }][]).filter(([, p]) => p.maxPerWeek > 0 || p.ngWeekdays.length)) });
-  const noNeed = !draft.minTotal.some(n => n > 0) && !draft.roleMins.some(r => r.min.some(n => n > 0));
+  const noNeed = !draft.minTotal.some(n => n > 0) && !draft.roleMins.some(r => r.min.some(n => n > 0)) && !((draft.alwaysRoles || []).length > 0 && (draft.hours || []).some(Boolean));
   const visibleSteps = usedRoles.length ? STEPS : STEPS.filter(s => s !== "役職");
   const name = visibleSteps[step];
   const last = step === visibleSteps.length - 1;

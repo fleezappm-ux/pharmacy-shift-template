@@ -1833,7 +1833,19 @@ function normalizeShiftStaffingRules_(input) {
     var ng = (Array.isArray(item.ngWeekdays) ? item.ngWeekdays : []).map(Number).filter(function(d, i, list) { return d >= 0 && d <= 6 && Math.floor(d) === d && list.indexOf(d) === i; });
     if (cleanId && (maxPerWeek || ng.length)) { people[cleanId] = { maxPerWeek: maxPerWeek, ngWeekdays: ng }; count++; }
   });
-  return { minTotal: days(src.minTotal), roleMins: roleMins, maxConsecutive: maxConsecutive, people: people };
+  var hours = [];
+  for (var h = 0; h < 7; h++) {
+    var item = Array.isArray(src.hours) ? src.hours[h] : null;
+    var ok = item && /^\d{1,2}:\d{2}$/.test(String(item.open)) && /^\d{1,2}:\d{2}$/.test(String(item.close));
+    if (ok) {
+      var o = String(item.open).split(":"), c = String(item.close).split(":");
+      var om = Number(o[0]) * 60 + Number(o[1]), cm = Number(c[0]) * 60 + Number(c[1]);
+      ok = Number(o[0]) < 24 && Number(c[0]) <= 24 && Number(o[1]) < 60 && Number(c[1]) < 60 && cm > om;
+    }
+    hours.push(ok ? { open: String(item.open), close: String(item.close) } : null);
+  }
+  var alwaysRoles = (Array.isArray(src.alwaysRoles) ? src.alwaysRoles : []).slice(0, 20).map(function(id) { return sanitizeText(id, 100); }).filter(function(id, i, list) { return !!id && list.indexOf(id) === i; });
+  return { minTotal: days(src.minTotal), roleMins: roleMins, maxConsecutive: maxConsecutive, people: people, hours: hours, alwaysRoles: alwaysRoles };
 }
 
 function getShiftStaffingRules() {
