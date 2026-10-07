@@ -321,6 +321,7 @@ export default function App() {
   const [correctionPopup, setCorrectionPopup] = useState<{ request: LeaveRequest; shiftText: string } | null>(null);
   const [overviewEditing, setOverviewEditing] = useState(false);
   const [creationHintHidden, setCreationHintHidden] = useState(() => templateStorage.getItem("creation_hint_hidden") === "1");
+  const [creationHintOpen, setCreationHintOpen] = useState(false);
   const inCreation = isFromAdmin && activeTab === "dashboard" && appSession?.role === "admin";
 
   const [overviewCell, setOverviewCell] = useState<{ employeeId: string; date: string } | null>(null);
@@ -1830,7 +1831,7 @@ export default function App() {
     catch { window.prompt("この内容をコピーして管理者へお伝えください。", detail); }
   };
   const renderSyncStatus = () => <span className={`creation-save-status status-${syncState}`} role="status"><i aria-hidden="true" />{syncState === "loading" ? "読込中…" : syncState === "saving" ? "保存中…" : syncState === "dirty" ? "まもなく自動保存します…" : syncState === "offline" ? "保存できていません" : syncState === "read-error" ? needsReLogin ? "再ログインが必要" : "読込失敗" : "✓ 自動保存ずみ"}</span>;
-  const renderAutoSaveNote = () => <p className="mx-3 my-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">入力した内容は「案」として自動で保存されます（保存ボタンはありません）。ただし、「シフトを確定」を押すまでは確定シフトになりません。従業員には「案」として見えます。</p>;
+  const renderAutoSaveNote = () => <p className="mx-3 my-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">入力は「案」として自動で保存されます（保存ボタンなし）。「シフトを確定」を押すまで、従業員には「案」として見えます。</p>;
   const renderSyncFailure = () => (syncState === "offline" || syncState === "read-error") && <div className="creation-sync-error" role="alert">
     <strong>{needsReLogin ? "再ログインしてください。未保存の編集内容は保持します。" : syncState === "read-error" ? "共有データを読み込めませんでした。" : "保存できませんでした。編集内容は端末に残っています。"}</strong>
     <p>{syncFailure?.message || initialReadError}</p>
@@ -2119,8 +2120,8 @@ export default function App() {
                         </div>
                       </div>
                       {appSession.role === "admin" && !creationHintHidden && <div className="creation-hint mt-3 rounded-xl bg-white p-3 text-xs leading-6 text-slate-800">
-                        <div className="flex items-start justify-between gap-3"><strong className="text-sm text-blue-900">ここでシフトを作ります</strong><button type="button" className="min-h-10 shrink-0 rounded-md border px-3 py-2 text-[11px] font-bold text-slate-600" onClick={() => { templateStorage.setItem("creation_hint_hidden", "1"); setCreationHintHidden(true); }}>閉じる</button></div>
-                        {isLocked ? <p>この期間は「確定」されているので、いまは見るだけです。直したいときは右上の「確定を解除」を押します。</p> : overviewEditing ? <ol className="mt-1 list-decimal space-y-0.5 pl-4"><li>表のマス目（人と日付の交わるところ）をタップして、勤務を選びます。</li><li>1人ずつ入れたいときは、上の「全体編集」の欄から名前を選びます。</li><li>できあがったら、右上の「シフトを確定」を押します。確定するとみんなに公開されます。</li></ol> : <p>いまは「閲覧」モードで、見るだけです。入力するには、左上の「編集」を押してください。</p>}
+                        <div className="flex items-center justify-between gap-2"><strong className="text-sm text-blue-900">ここでシフトを作ります</strong><div className="flex shrink-0 gap-1.5"><button type="button" aria-expanded={creationHintOpen} className="min-h-10 rounded-md border px-3 py-2 text-[11px] font-bold text-blue-800" onClick={() => setCreationHintOpen(value => !value)}>{creationHintOpen ? "たたむ" : "くわしく"}</button><button type="button" className="min-h-10 rounded-md border px-3 py-2 text-[11px] font-bold text-slate-600" onClick={() => { templateStorage.setItem("creation_hint_hidden", "1"); setCreationHintHidden(true); }}>閉じる</button></div></div>
+                        {!creationHintOpen ? <p className="mt-0.5">{isLocked ? "この期間は確定済みで、いまは見るだけです。" : overviewEditing ? "マス目をタップして勤務を選び、できたら「シフトを確定」を押します。" : "いまは見るだけです。入力するには「編集」を押します。"}</p> : isLocked ? <p>この期間は「確定」されているので、いまは見るだけです。直したいときは右上の「確定を解除」を押します。</p> : overviewEditing ? <ol className="mt-1 list-decimal space-y-0.5 pl-4"><li>表のマス目（人と日付の交わるところ）をタップして、勤務を選びます。</li><li>1人ずつ入れたいときは、上の「全体編集」の欄から名前を選びます。</li><li>できあがったら、右上の「シフトを確定」を押します。確定するとみんなに公開されます。</li></ol> : <p>いまは「閲覧」モードで、見るだけです。入力するには、左上の「編集」を押してください。</p>}
                       </div>}
                       {appSession.role === "admin" && renderAutoSaveNote()}
                     </div>}
