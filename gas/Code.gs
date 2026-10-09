@@ -40,7 +40,7 @@ function dispatchShiftAction_(data) {
     // 公開ログイン操作以外は、ルーティング時に必ずセッションを検証する。
     // 各関数内の本人・接続キー・管理者チェックも引き続き適用する。
     var publicActions = ["loginShift", "getShiftLoginEmployees", "getShiftResetEpoch"];
-    var adminActions = ["previewTemplateReset", "getTemplateResetStatus", "runTemplateReset", "clearTemplateShiftRemarks", "saveShiftEmployeeMaster", "resetShiftEmployeePin", "saveShiftRoleMaster", "saveShiftHomeLayout", "saveShiftAdminNotice", "deleteShiftAdminNotice", "saveShiftAdminNoticeVisibility", "saveShiftWorkTimeMaster", "saveShiftCycleMaster", "saveShiftAutoDraftSettings", "saveShiftStoreBoardVisibility", "saveShiftCorrectionVisibility", "updateShiftLeaveRequestStatus", "deleteShiftLeaveRequest", "saveShiftSpecialDayRules", "saveShiftCalendarPeriodSettings", "saveShiftPeriodStatus", "saveShiftStoreSettings", "checkShiftApiKey", "saveShiftMonth", "flushShiftPending", "getShiftErrorLog", "clearShiftErrorLog"];
+    var adminActions = ["previewTemplateReset", "getTemplateResetStatus", "runTemplateReset", "clearTemplateShiftRemarks", "saveShiftEmployeeMaster", "resetShiftEmployeePin", "saveShiftRoleMaster", "saveShiftHomeLayout", "saveShiftAdminNotice", "deleteShiftAdminNotice", "saveShiftAdminNoticeVisibility", "saveShiftWorkTimeMaster", "saveShiftCycleMaster", "saveShiftAutoDraftSettings", "saveShiftStoreBoardVisibility", "saveShiftCorrectionVisibility", "updateShiftLeaveRequestStatus", "deleteShiftLeaveRequest", "saveShiftSpecialDayRules", "saveShiftStaffingRules", "saveShiftCalendarPeriodSettings", "saveShiftPeriodStatus", "saveShiftStoreSettings", "checkShiftApiKey", "saveShiftMonth", "flushShiftPending", "getShiftErrorLog", "clearShiftErrorLog"];
     if (publicActions.indexOf(data.action) < 0) requireShiftSession(data.sessionToken, adminActions.indexOf(data.action) >= 0 ? "admin" : null);
     if (data.action === "previewTemplateReset") return previewTemplateReset(data);
     if (data.action === "getTemplateResetStatus") return getTemplateResetStatus(data);
@@ -86,6 +86,8 @@ function dispatchShiftAction_(data) {
     if (data.action === "deleteShiftLeaveRequest") return deleteShiftLeaveRequest(data);
     if (data.action === "getShiftSpecialDayRules") return getShiftSpecialDayRules(data);
     if (data.action === "saveShiftSpecialDayRules") return saveShiftSpecialDayRules(data);
+    if (data.action === "getShiftStaffingRules") return getShiftStaffingRules(data);
+    if (data.action === "saveShiftStaffingRules") return saveShiftStaffingRules(data);
     if (data.action === "getShiftCalendarPeriodSettings") return getShiftCalendarPeriodSettings(data);
     if (data.action === "saveShiftCalendarPeriodSettings") return saveShiftCalendarPeriodSettings(data);
     if (data.action === "getShiftPeriodStatus") return getShiftPeriodStatus(data);
@@ -1807,6 +1809,70 @@ function saveShiftSpecialDayRules(data) {
 
 
 
+/** 人数・連勤・個人ごとの条件。シフト表で「足りない日」「連勤」などの警告を出すための基準です。 */
+function normalizeShiftStaffingRules_(input) {
+  var src = input || {};
+  var days = function(list) {
+    var out = [0, 0, 0, 0, 0, 0, 0];
+    if (Array.isArray(list)) for (var i = 0; i < 7; i++) { var n = Math.floor(Number(list[i])); out[i] = (isFinite(n) && n >= 0 && n <= 99) ? n : 0; }
+    return out;
+  };
+  var roleMins = (Array.isArray(src.roleMins) ? src.roleMins : []).slice(0, 20).map(function(item) {
+    return { roleId: sanitizeText(item && item.roleId, 100), min: days(item && item.min) };
+  }).filter(function(item) { return !!item.roleId; });
+  var maxConsecutive = Math.floor(Number(src.maxConsecutive));
+  if (!isFinite(maxConsecutive) || maxConsecutive < 0 || maxConsecutive > 31) maxConsecutive = 0;
+  var people = {};
+  var count = 0;
+  var srcPeople = src.people && typeof src.people === "object" ? src.people : {};
+  Object.keys(srcPeople).forEach(function(id) {
+    if (count >= 100) return;
+    var cleanId = sanitizeText(id, 100); var item = srcPeople[id] || {};
+    var maxPerWeek = Math.floor(Number(item.maxPerWeek));
+    if (!isFinite(maxPerWeek) || maxPerWeek < 0 || maxPerWeek > 7) maxPerWeek = 0;
+    var ng = (Array.isArray(item.ngWeekdays) ? item.ngWeekdays : []).map(Number).filter(function(d, i, list) { return d >= 0 && d <= 6 && Math.floor(d) === d && list.indexOf(d) === i; });
+    var weeklyDays = Math.floor(Number(item.weeklyDays));
+    if (!isFinite(weeklyDays) || weeklyDays < 0 || weeklyDays > 7) weeklyDays = 0;
+    var shiftPref = ["early", "late", "any"].indexOf(item.shiftPref) >= 0 ? item.shiftPref : "";
+    if (cleanId && (maxPerWeek || ng.length || weeklyDays || (shiftPref && shiftPref !== "any"))) { people[cleanId] = { maxPerWeek: maxPerWeek, ngWeekdays: ng, weeklyDays: weeklyDays, shiftPref: shiftPref || "any" }; count++; }
+  });
+  var hours = [];
+  for (var h = 0; h < 7; h++) {
+    var item = Array.isArray(src.hours) ? src.hours[h] : null;
+    var ok = item && /^\d{1,2}:\d{2}$/.test(String(item.open)) && /^\d{1,2}:\d{2}$/.test(String(item.close));
+    if (ok) {
+      var o = String(item.open).split(":"), c = String(item.close).split(":");
+      var om = Number(o[0]) * 60 + Number(o[1]), cm = Number(c[0]) * 60 + Number(c[1]);
+      ok = Number(o[0]) < 24 && Number(c[0]) <= 24 && Number(o[1]) < 60 && Number(c[1]) < 60 && cm > om;
+    }
+    hours.push(ok ? { open: String(item.open), close: String(item.close) } : null);
+  }
+  var alwaysRoles = (Array.isArray(src.alwaysRoles) ? src.alwaysRoles : []).slice(0, 20).map(function(id) { return sanitizeText(id, 100); }).filter(function(id, i, list) { return !!id && list.indexOf(id) === i; });
+  return { minTotal: days(src.minTotal), roleMins: roleMins, maxConsecutive: maxConsecutive, people: people, hours: hours, alwaysRoles: alwaysRoles };
+}
+
+function getShiftStaffingRules() {
+  try {
+    var raw = PropertiesService.getScriptProperties().getProperty("SHIFT_STAFFING_RULES_JSON");
+    var rules = normalizeShiftStaffingRules_(raw ? JSON.parse(raw) : {});
+    return createJsonDataResponse({ success: true, rules: rules });
+  } catch (error) { return createJsonResponse(false, error.message || "人数の設定を取得できませんでした。"); }
+}
+
+function saveShiftStaffingRules(data) {
+  var lock = shiftLockHandle_();
+  try {
+    verifyShiftApiKey(data.shiftApiKey);
+    if (!lock.tryLock(10000)) throw new Error("別の保存を処理中です。");
+    var rules = normalizeShiftStaffingRules_(data.rules);
+    safeSetProperty_("SHIFT_STAFFING_RULES_JSON", JSON.stringify(rules));
+    return createJsonDataResponse({ success: true, rules: rules });
+  } catch (error) { return createJsonResponse(false, error.message || "人数の設定を保存できませんでした。"); }
+  finally { try { lock.releaseLock(); } catch (_) {} }
+}
+
+
+
 /** 店舗共通の月次シフト期間。開始日を決めると終了日は前日へ自動設定します。 */
 function getShiftCalendarPeriodSettings() {
   try {
@@ -2481,7 +2547,7 @@ function runTemplateReset(data) {
       return createJsonDataResponse({ success: true, done: false, archived: archived });
     }
     var businessKeys = [
-      "SHIFT_CYCLE_MASTER_JSON", "SHIFT_AUTO_DRAFT_SETTINGS_JSON", "SHIFT_SPECIAL_DAY_RULES_JSON",
+      "SHIFT_CYCLE_MASTER_JSON", "SHIFT_AUTO_DRAFT_SETTINGS_JSON", "SHIFT_SPECIAL_DAY_RULES_JSON", "SHIFT_STAFFING_RULES_JSON",
       "SHIFT_WORK_TIME_MASTER_" + getStoreId(),
       "SHIFT_CALENDAR_PERIOD_JSON", "SHIFT_PERIOD_STATUSES_JSON", "SHIFT_PAID_LEAVE_BALANCES_JSON",
       "SHIFT_PAID_LEAVE_LEDGER_JSON", "SHIFT_AUDIT_LOG_JSON", "SHIFT_PENDING_JSON", "SHIFT_ERROR_LOG_JSON",
